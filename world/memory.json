@@ -1,10 +1,18 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-14T15:54:33.970Z",
+  "updatedAt": "2026-07-14T15:57:28.219Z",
   "events": [
     {
       "timestamp": "2026-07-14T15:54:33.970Z",
       "summary": "Cloudflare?Notion?GitHub ? KV ????????",
+      "version": "0.3.0",
+      "type": "engine_milestone"
+    },
+    {
+      "timestamp": "2026-07-14T15:57:28.219Z",
+      "summary": "Cloudflare、Notion、GitHub 與 KV 核心鏈路驗證完成",
+      "supersedesCommit": "a3439047060139ff9cd2a20416e4f8c6013b2619",
+      "encoding": "utf-8",
       "version": "0.3.0",
       "type": "engine_milestone"
     }
