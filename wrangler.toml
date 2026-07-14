@@ -1,3 +1,17 @@
-name="xuanche-notion-mcp"
-main="worker.js"
-compatibility_date="2026-07-14"
+name = "xuanche-engine"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "XUANCHE_CACHE"
+id = "e2502cec2f274e4b8cd2c8c8ecc2224b"
+
+[vars]
+GH_OWNER = "YOUR_GITHUB_USERNAME"
+GH_REPO = "xuanche-engine"
+GH_BRANCH = "main"
+NOTION_WORLD_DB_ID = "YOUR_NOTION_DB_ID"
+
+# 用 wrangler secret put 設定：
+# wrangler secret put NOTION_TOKEN
+# wrangler secret put GITHUB_TOKEN
