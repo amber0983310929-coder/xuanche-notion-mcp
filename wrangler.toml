@@ -1,17 +1,15 @@
 name = "xuanche-engine"
 main = "worker.js"
-compatibility_date = "2024-01-01"
-
-[[kv_namespaces]]
-binding = "XUANCHE_CACHE"
-id = "e2502cec2f274e4b8cd2c8c8ecc2224b"
+compatibility_date = "2026-07-14"
 
 [vars]
-GH_OWNER = "YOUR_GITHUB_USERNAME"
-GH_REPO = "xuanche-engine"
-GH_BRANCH = "main"
-NOTION_WORLD_DB_ID = "YOUR_NOTION_DB_ID"
+NOTION_VERSION = "2022-06-28"
+HOME_PAGE_ID = "5f4c8de4a4c246478a4658d1ebc2a1a2"
+NOTION_HOME_PAGE_ID = "5f4c8de4a4c246478a4658d1ebc2a1a2"
+GITHUB_BRANCH = "main"
+CACHE_TTL_SECONDS = "300"
 
-# 用 wrangler secret put 設定：
-# wrangler secret put NOTION_TOKEN
-# wrangler secret put GITHUB_TOKEN
+# Secrets are configured with `wrangler secret put` and never committed:
+# NOTION_TOKEN, GITHUB_TOKEN, XUANCHE_API_KEY
+# Set GITHUB_OWNER and GITHUB_REPO as Worker variables after creating the repo.
+# Optional KV binding name: XUANCHE_CACHE

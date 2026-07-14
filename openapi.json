@@ -1,0 +1,135 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Xuanche Engine API",
+    "version": "0.3.0",
+    "description": "Cloudflare Worker bridge for recursive Notion world loading and GitHub-backed memory."
+  },
+  "servers": [
+    {
+      "url": "https://YOUR-WORKER.workers.dev"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      },
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Service status"
+      }
+    },
+    "/home": {
+      "get": {
+        "summary": "Read the configured Notion home page"
+      }
+    },
+    "/tree": {
+      "get": {
+        "summary": "Recursively read a Notion page tree",
+        "parameters": [
+          {
+            "name": "pageId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20,
+              "default": 6
+            }
+          }
+        ]
+      }
+    },
+    "/world/load": {
+      "post": {
+        "summary": "Load all configured world pages",
+        "security": [
+          {
+            "apiKey": []
+          },
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/notion/pages": {
+      "post": {
+        "summary": "Create a child Notion page",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ]
+      }
+    },
+    "/notion/blocks/{id}/children": {
+      "post": {
+        "summary": "Append blocks to a Notion page or block",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ]
+      }
+    },
+    "/notion/pages/{id}": {
+      "patch": {
+        "summary": "Update Notion page properties",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ]
+      }
+    },
+    "/world/update": {
+      "post": {
+        "summary": "Append a Notion update and synchronize GitHub memory/cache",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ]
+      }
+    },
+    "/github/tree": {
+      "get": {
+        "summary": "List the configured repository tree",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ]
+      }
+    },
+    "/github/file": {
+      "get": {
+        "summary": "Read a GitHub-backed world file",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ]
+      }
+    }
+  }
+}

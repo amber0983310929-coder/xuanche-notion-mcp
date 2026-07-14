@@ -1,8 +1,9 @@
+import { createRouter } from "./src/router.js";
+
+const router = createRouter();
+
 export default {
-  async fetch(request, env) {
-    return new Response(JSON.stringify({
-      message:"Starter project. Replace with full implementation.",
-      endpoints:["GET /home","GET /page?id=","GET /children?id="]
-    },null,2),{headers:{"content-type":"application/json"}});
-  }
-}
+  async fetch(request, env, ctx) {
+    return router(request, env, ctx);
+  },
+};
