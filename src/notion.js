@@ -5,7 +5,9 @@ export class NotionClient {
     this.token = env.NOTION_TOKEN;
     this.version = env.NOTION_VERSION || "2022-06-28";
     this.baseUrl = env.NOTION_API_BASE_URL || "https://api.notion.com/v1";
-    this.fetch = fetchImpl;
+    // Workerd runtime functions can require their original global receiver.
+    // Always invoke fetch with globalThis instead of treating it as a client method.
+    this.fetch = (...args) => Reflect.apply(fetchImpl, globalThis, args);
   }
 
   get configured() {

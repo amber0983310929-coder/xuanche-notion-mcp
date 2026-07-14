@@ -7,7 +7,9 @@ export class GitHubClient {
     this.repo = env.GITHUB_REPO;
     this.branch = env.GITHUB_BRANCH || "main";
     this.baseUrl = env.GITHUB_API_BASE_URL || "https://api.github.com";
-    this.fetch = fetchImpl;
+    // Workerd runtime functions can require their original global receiver.
+    // Always invoke fetch with globalThis instead of treating it as a client method.
+    this.fetch = (...args) => Reflect.apply(fetchImpl, globalThis, args);
     this.committer = {
       name: env.GITHUB_COMMITTER_NAME || "Xuanche Engine",
       email: env.GITHUB_COMMITTER_EMAIL || "xuanche-engine@users.noreply.github.com",

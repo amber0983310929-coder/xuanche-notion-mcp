@@ -166,6 +166,14 @@ export function createRouter(dependencies = {}) {
 
       throw new ApiError(404, "Route not found");
     } catch (error) {
+      if (!(error instanceof ApiError) || error.status >= 500) {
+        console.error("xuanche_request_failed", {
+          requestId: id,
+          name: error?.name || "Error",
+          message: error?.message || String(error),
+          status: error?.status || 500,
+        });
+      }
       if (ctx?.waitUntil && error?.backgroundTask) ctx.waitUntil(error.backgroundTask);
       return errorJson(error, id);
     }
