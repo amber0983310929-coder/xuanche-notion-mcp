@@ -30,7 +30,7 @@ export function createRouter(dependencies = {}) {
         return json({
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.0",
+          version: "0.5.1",
           protectedReads: readsRequireApiKey(env),
           endpoints: ["/health", "/home", "/tree", "/world/load", "/world/update", "/openapi.json"],
         });
@@ -44,7 +44,7 @@ export function createRouter(dependencies = {}) {
         const result = {
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.0",
+          version: "0.5.1",
           integrations: {
             notion: notion.configured ? "configured" : "missing",
             github: github.configured ? "configured" : "missing",

@@ -1,5 +1,11 @@
 const apiKeySecurity = [{ apiKey: [] }];
 
+const freeformObject = {
+  type: "object",
+  properties: {},
+  additionalProperties: true,
+};
+
 const depthParameter = {
   name: "depth",
   in: "query",
@@ -30,7 +36,7 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.0",
+      version: "0.5.1",
       description: "Secure Cloudflare Worker bridge for loading and updating the Xuanche Notion world with GitHub-backed long-term memory and KV snapshots.",
     },
     servers: [{ url: new URL(origin).origin }],
@@ -48,8 +54,8 @@ export function buildOpenApi(origin) {
           type: "object",
           required: ["ok"],
           properties: {
-            ok: { type: "boolean", const: true },
-            data: { description: "Endpoint-specific result" },
+            ok: { type: "boolean", enum: [true] },
+            data: { ...freeformObject, description: "Endpoint-specific result" },
             requestId: { type: "string" },
           },
           additionalProperties: true,
@@ -58,10 +64,10 @@ export function buildOpenApi(origin) {
           type: "object",
           required: ["ok", "error", "requestId"],
           properties: {
-            ok: { type: "boolean", const: false },
+            ok: { type: "boolean", enum: [false] },
             error: { type: "string" },
             requestId: { type: "string" },
-            details: { description: "Optional upstream error details" },
+            details: { ...freeformObject, description: "Optional upstream error details" },
           },
         },
         NotionId: {
@@ -71,7 +77,17 @@ export function buildOpenApi(origin) {
         },
         BlockInput: {
           description: "A string becomes a paragraph block; an object is passed as a Notion block.",
-          oneOf: [{ type: "string" }, { type: "object", additionalProperties: true }],
+          oneOf: [
+            { type: "string" },
+            {
+              type: "object",
+              properties: {
+                object: { type: "string", example: "block" },
+                type: { type: "string", example: "paragraph" },
+              },
+              additionalProperties: true,
+            },
+          ],
         },
         WorldLoadRequest: {
           type: "object",
@@ -97,9 +113,22 @@ export function buildOpenApi(origin) {
             after: { $ref: "#/components/schemas/NotionId" },
             memoryEvent: {
               description: "String summary or structured append-only long-term-memory event.",
-              oneOf: [{ type: "string" }, { type: "object", additionalProperties: true }],
+              oneOf: [
+                { type: "string" },
+                {
+                  type: "object",
+                  properties: {
+                    type: { type: "string" },
+                    summary: { type: "string" },
+                    version: { type: "string" },
+                    encoding: { type: "string" },
+                    supersedesCommit: { type: "string" },
+                  },
+                  additionalProperties: true,
+                },
+              ],
             },
-            cachePatch: { type: "object", additionalProperties: true },
+            cachePatch: { ...freeformObject },
             commitMessage: { type: "string", maxLength: 256 },
           },
         },
@@ -109,10 +138,10 @@ export function buildOpenApi(origin) {
           properties: {
             parentPageId: { $ref: "#/components/schemas/NotionId" },
             title: { type: "string" },
-            properties: { type: "object", additionalProperties: true },
+            properties: { ...freeformObject },
             children: { type: "array", maxItems: 100, items: { $ref: "#/components/schemas/BlockInput" } },
-            icon: { type: "object", additionalProperties: true },
-            cover: { type: "object", additionalProperties: true },
+            icon: { ...freeformObject },
+            cover: { ...freeformObject },
           },
         },
         AppendBlocksRequest: {
@@ -127,9 +156,9 @@ export function buildOpenApi(origin) {
           type: "object",
           description: "Notion page fields supported by the engine.",
           properties: {
-            properties: { type: "object", additionalProperties: true },
-            icon: { type: ["object", "null"], additionalProperties: true },
-            cover: { type: ["object", "null"], additionalProperties: true },
+            properties: { ...freeformObject },
+            icon: { ...freeformObject, nullable: true },
+            cover: { ...freeformObject, nullable: true },
             archived: { type: "boolean" },
             in_trash: { type: "boolean" },
           },
