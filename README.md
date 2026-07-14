@@ -1,4 +1,4 @@
-# Xuanche Engine v0.5.1
+# Xuanche Engine v0.5.2
 
 Xuanche Engine is a Cloudflare Worker that connects GPT-facing HTTP endpoints to Notion world data and GitHub-backed code, memory, configuration, and cached snapshots.
 
@@ -45,19 +45,39 @@ npm run dev
 
 Do not place tokens in `.dev.vars` unless that file remains untracked. The repository should keep only placeholders and public page IDs.
 
+## Free Cloudflare Pages gateway
+
+GPT Actions can fail before reaching a public `workers.dev` hostname even when
+the Worker is healthy. The `gateway/` directory provides a free `pages.dev`
+front door while keeping the existing Worker as the only service that holds
+Notion, GitHub, KV, and API-key configuration.
+
+1. In Cloudflare, create a Pages project from this repository.
+2. Use project name `xuanche-engine-gateway`, production branch `main`, root
+   directory `gateway`, no build command, and output directory `public`.
+3. After the first deployment, open **Settings > Bindings**, add a production
+   **Service binding** named `XUANCHE_ENGINE`, and select
+   `plain-dew-5810xuanche-api` as the service.
+4. Redeploy, then verify `https://YOUR-PROJECT.pages.dev/health`.
+
+The gateway forwards the incoming request unchanged through Cloudflare's
+internal Service Binding. It contains no secret and the downstream Worker still
+enforces `X-API-Key`.
+
 ## GPT Action setup
 
-1. Deploy the Worker, then open `https://YOUR-WORKER.workers.dev/openapi.json` and confirm that its version is `0.5.1`.
-2. In the GPT editor, open **Actions**, choose **Create new action**, and import that `/openapi.json` URL.
+1. Deploy the Worker and Pages gateway, then open `https://YOUR-PROJECT.pages.dev/openapi.json` and confirm that its version is `0.5.2` and its server URL uses the same Pages origin.
+2. In the GPT editor, open **Actions**, choose **Create new action**, and import the gateway `/openapi.json` URL.
 3. Set authentication to **API key**, choose **Custom header**, enter header name `X-API-Key`, then save the same value stored in the Cloudflare `XUANCHE_API_KEY` secret.
-4. In Preview, first call `getEngineHealth`, then call `loadWorldProfile` with `profile: "continue"` and `refresh: false`.
+4. Save the GPT as **Only me** and test it in a fresh normal GPT conversation. The editor Preview tester can return a client error even when normal GPT Actions work.
+5. First call `getEngineHealth`, then call `loadWorldProfile` with `profile: "continue"` and `refresh: false`.
 
 The runtime OpenAPI document uses the current Worker origin automatically and provides a unique `operationId` plus request schema for every action.
 
 ## Example recursive load
 
 ```bash
-curl -X POST "https://YOUR-WORKER.workers.dev/world/load" \
+curl -X POST "https://YOUR-PROJECT.pages.dev/world/load" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{"profile":"continue","refresh":true,"persist":true,"maxDepth":6,"maxNodes":5000}'
@@ -68,7 +88,7 @@ Available profiles are `base`, `continue`, `cultivation`, `combat`, `npc`, `expl
 ## Example atomic world update
 
 ```bash
-curl -X POST "https://YOUR-WORKER.workers.dev/world/update" \
+curl -X POST "https://YOUR-PROJECT.pages.dev/world/update" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{
@@ -95,3 +115,4 @@ The Notion write is performed first. If the later GitHub commit fails, the endpo
 - The OpenAPI 3.1 schema now includes all read, load, update, Notion, and GitHub operations with validation metadata suitable for GPT Actions.
 - Cloudflare `nodejs_compat` is enabled for compatibility with current Worker tooling and libraries.
 - v0.5.1 adds explicit `properties` declarations to every object schema for compatibility with the stricter GPT Actions validator.
+- v0.5.2 adds a zero-secret Cloudflare Pages gateway that reaches the existing Worker through a Service Binding and avoids the incompatible `workers.dev` GPT Actions entry path.
