@@ -34,6 +34,17 @@ test("recursive Notion reader follows pagination and nested children", async () 
   assert.ok(calls.some((url) => url.includes("start_cursor=next")));
 });
 
+test("Notion client invokes fetch with the Cloudflare global receiver", async () => {
+  let receiver;
+  const receiverAwareFetch = function () {
+    receiver = this;
+    return response({ results: [], has_more: false });
+  };
+  const notion = new NotionClient({ NOTION_TOKEN: "test" }, receiverAwareFetch);
+  await notion.listBlockChildren(PAGE);
+  assert.equal(receiver, globalThis);
+});
+
 function response(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
