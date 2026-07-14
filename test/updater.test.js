@@ -22,3 +22,23 @@ test("world update validates GitHub storage before mutating Notion", async () =>
   );
   assert.equal(notionWrites, 0);
 });
+
+test("world update invalidates every cached world profile", async () => {
+  const invalidated = [];
+  const result = await updateWorld({}, {
+    pageId: "11111111111111111111111111111111",
+    children: ["save"],
+  }, {
+    notion: { appendBlocks: async () => ({ results: [] }) },
+    github: { configured: false },
+    cache: {
+      async deletePrefix(prefix) {
+        invalidated.push(prefix);
+        return 3;
+      },
+    },
+  });
+
+  assert.deepEqual(invalidated, ["world:"]);
+  assert.equal(result.cacheEntriesInvalidated, 3);
+});
