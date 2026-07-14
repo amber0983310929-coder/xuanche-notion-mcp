@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "updatedAt": null,
-  "pages": {},
-  "meta": {
-    "status": "empty",
-    "note": "Populated by POST /world/load with persist=true or POST /world/update."
-  }
-}
