@@ -1,4 +1,4 @@
-# Xuanche Engine v0.3.0
+# Xuanche Engine v0.4.0
 
 Xuanche Engine is a Cloudflare Worker that connects GPT-facing HTTP endpoints to Notion world data and GitHub-backed code, memory, configuration, and cached snapshots.
 
@@ -70,4 +70,9 @@ curl -X POST "https://YOUR-WORKER.workers.dev/world/update" \
 ```
 
 The Notion write is performed first. If the later GitHub commit fails, the endpoint returns the failure so callers can retry synchronization without pretending the whole operation succeeded.
- - Cloudflare Workers Builds connected
+
+## v0.4 cache behavior
+
+- The home page is loaded at `homeMaxDepth` (default `0`) so profile loads do not recursively duplicate all 00-29 modules.
+- A KV cache hit can be persisted to `world/cache.json` without re-reading Notion.
+- Every `/world/update` invalidates all cached `world:*` profiles, rather than one obsolete fixed cache key.
