@@ -1,4 +1,4 @@
-# Xuanche Engine v0.5.0
+# Xuanche Engine v0.5.1
 
 Xuanche Engine is a Cloudflare Worker that connects GPT-facing HTTP endpoints to Notion world data and GitHub-backed code, memory, configuration, and cached snapshots.
 
@@ -47,7 +47,7 @@ Do not place tokens in `.dev.vars` unless that file remains untracked. The repos
 
 ## GPT Action setup
 
-1. Deploy the Worker, then open `https://YOUR-WORKER.workers.dev/openapi.json` and confirm that its version is `0.5.0`.
+1. Deploy the Worker, then open `https://YOUR-WORKER.workers.dev/openapi.json` and confirm that its version is `0.5.1`.
 2. In the GPT editor, open **Actions**, choose **Create new action**, and import that `/openapi.json` URL.
 3. Set authentication to **API key**, choose **Custom header**, enter header name `X-API-Key`, then save the same value stored in the Cloudflare `XUANCHE_API_KEY` secret.
 4. In Preview, first call `getEngineHealth`, then call `loadWorldProfile` with `profile: "continue"` and `refresh: false`.
@@ -94,3 +94,4 @@ The Notion write is performed first. If the later GitHub commit fails, the endpo
 - Basic `/health` and `/openapi.json` remain public; `/health?deep=1` remains protected.
 - The OpenAPI 3.1 schema now includes all read, load, update, Notion, and GitHub operations with validation metadata suitable for GPT Actions.
 - Cloudflare `nodejs_compat` is enabled for compatibility with current Worker tooling and libraries.
+- v0.5.1 adds explicit `properties` declarations to every object schema for compatibility with the stricter GPT Actions validator.
