@@ -1,4 +1,3 @@
-name = "xuanche-notion-mcp"
-main = "src/index.js"
-compatibility_date = "2026-07-14"
-workers_dev = true
+name="xuanche-notion-mcp"
+main="worker.js"
+compatibility_date="2026-07-14"

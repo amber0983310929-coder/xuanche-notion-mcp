@@ -1,9 +1,5 @@
 {
-  "name": "xuanche-notion-mcp",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@notionhq/client": "^2.2.15"
-  }
+  "name":"xuanche-notion-mcp",
+  "private":true,
+  "scripts":{"deploy":"wrangler deploy"}
 }
