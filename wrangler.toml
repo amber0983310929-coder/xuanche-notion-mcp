@@ -13,3 +13,4 @@ CACHE_TTL_SECONDS = "300"
 # NOTION_TOKEN, GITHUB_TOKEN, XUANCHE_API_KEY
 # Set GITHUB_OWNER and GITHUB_REPO as Worker variables after creating the repo.
 # Optional KV binding name: XUANCHE_CACHE
+id = "2a1fc809e225428a929517fd46e6bcfa"
