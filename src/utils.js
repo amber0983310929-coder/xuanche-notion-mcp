@@ -83,6 +83,14 @@ export function requireApiKey(request, env) {
   }
 }
 
+export function readsRequireApiKey(env) {
+  return ["1", "true", "yes", "on"].includes(String(env.PROTECT_READS || "false").trim().toLowerCase());
+}
+
+export function requireReadApiKey(request, env) {
+  if (readsRequireApiKey(env)) requireApiKey(request, env);
+}
+
 function constantTimeEqual(left, right) {
   const a = new TextEncoder().encode(String(left));
   const b = new TextEncoder().encode(String(right));
