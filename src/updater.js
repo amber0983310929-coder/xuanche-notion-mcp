@@ -46,6 +46,6 @@ export async function updateWorld(env, input, dependencies = {}) {
     output.cacheCommit = saved.commit?.sha;
   }
 
-  await cache.delete("world:6:5000");
+  output.cacheEntriesInvalidated = await cache.deletePrefix("world:");
   return output;
 }

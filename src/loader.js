@@ -4,7 +4,7 @@ import { NotionClient } from "./notion.js";
 import { ApiError, mapLimit, mergeDeep, normalizeNotionId, nowIso } from "./utils.js";
 
 export const DEFAULT_WORLD_CONFIG = {
-  version: 2,
+  version: 3,
   homePageId: "5f4c8de4a4c246478a4658d1ebc2a1a2",
   catalog: [
     { key: "home", title: "修真世界（首頁）", id: "5f4c8de4a4c246478a4658d1ebc2a1a2" },
@@ -51,6 +51,7 @@ export const DEFAULT_WORLD_CONFIG = {
   loader: {
     defaultProfile: "continue",
     maxDepth: 6,
+    homeMaxDepth: 0,
     maxNodesPerPage: 5_000,
     concurrency: 2,
     cacheTtlSeconds: 300,
@@ -78,17 +79,24 @@ export async function loadWorld(env, options = {}) {
   const profile = options.profile || config.loader.defaultProfile || "continue";
   const selectedPages = selectWorldPages(config, profile, options.pageKeys);
   const maxDepth = Number(options.maxDepth ?? config.loader.maxDepth);
+  const homeMaxDepth = Number(config.loader.homeMaxDepth ?? 0);
   const maxNodes = Number(options.maxNodes ?? config.loader.maxNodesPerPage);
-  const cacheKey = `world:${profile}:${selectedPages.map((page) => page.key).join(",")}:${maxDepth}:${maxNodes}`;
+  const cacheKey = worldCacheKey(profile, selectedPages, maxDepth, maxNodes, homeMaxDepth);
+  const persist = options.persist ?? config.loader.persistSnapshotToGitHub;
 
   if (!options.refresh) {
     const cached = await cache.get(cacheKey);
-    if (cached) return { ...cached, meta: { ...cached.meta, cache: "hit" } };
+    if (cached) {
+      const snapshot = { ...cached, meta: { ...cached.meta, cache: "hit" } };
+      if (persist) snapshot.meta.githubCommit = await persistSnapshot(github, snapshot);
+      return snapshot;
+    }
   }
 
   if (!notion.configured) throw new ApiError(503, "NOTION_TOKEN is not configured");
   const pages = await mapLimit(selectedPages, Number(config.loader.concurrency || 2), async (entry) => {
-    const tree = await notion.getPageTree(entry.id, { maxDepth, maxNodes, concurrency: 3 });
+    const pageDepth = entry.key === "home" ? homeMaxDepth : maxDepth;
+    const tree = await notion.getPageTree(entry.id, { maxDepth: pageDepth, maxNodes, concurrency: 3 });
     return { key: entry.key, title: entry.title, ...tree };
   });
   const snapshot = {
@@ -111,15 +119,27 @@ export async function loadWorld(env, options = {}) {
   const ttl = Number(env.CACHE_TTL_SECONDS || config.loader.cacheTtlSeconds || 300);
   await cache.put(cacheKey, snapshot, ttl);
 
-  const persist = options.persist ?? config.loader.persistSnapshotToGitHub;
   if (persist) {
-    if (!github.configured) throw new ApiError(503, "GitHub storage is required when persist=true");
-    const saved = await github.putJson("world/cache.json", snapshot, {
-      message: `chore(world): refresh Notion snapshot ${snapshot.loadedAt}`,
-    });
-    snapshot.meta.githubCommit = saved.commit?.sha;
+    snapshot.meta.githubCommit = await persistSnapshot(github, snapshot);
   }
   return snapshot;
+}
+
+export function worldCacheKey(profile, selectedPages, maxDepth, maxNodes, homeMaxDepth) {
+  return `world:${profile}:${selectedPages.map((page) => page.key).join(",")}:${maxDepth}:${maxNodes}:home:${homeMaxDepth}`;
+}
+
+async function persistSnapshot(github, snapshot) {
+  if (!github.configured) throw new ApiError(503, "GitHub storage is required when persist=true");
+  const persisted = {
+    ...snapshot,
+    meta: { ...snapshot.meta },
+  };
+  delete persisted.meta.githubCommit;
+  const saved = await github.putJson("world/cache.json", persisted, {
+    message: `chore(world): refresh Notion snapshot ${snapshot.loadedAt}`,
+  });
+  return saved.commit?.sha;
 }
 
 export function selectWorldPages(config, profile, extraPageKeys = []) {

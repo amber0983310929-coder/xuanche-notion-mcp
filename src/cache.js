@@ -43,4 +43,28 @@ export class CacheStore {
     if (this.kv) return this.kv.delete(fullKey);
     memoryCache.delete(fullKey);
   }
+
+  async deletePrefix(prefix) {
+    const fullPrefix = this.key(prefix);
+    if (this.kv) {
+      let cursor;
+      let deleted = 0;
+      do {
+        const page = await this.kv.list({ prefix: fullPrefix, cursor });
+        const keys = page.keys || [];
+        await Promise.all(keys.map(({ name }) => this.kv.delete(name)));
+        deleted += keys.length;
+        cursor = page.list_complete ? undefined : page.cursor;
+      } while (cursor);
+      return deleted;
+    }
+
+    let deleted = 0;
+    for (const key of memoryCache.keys()) {
+      if (!key.startsWith(fullPrefix)) continue;
+      memoryCache.delete(key);
+      deleted += 1;
+    }
+    return deleted;
+  }
 }

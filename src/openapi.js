@@ -3,7 +3,7 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.3.0",
+      version: "0.4.0",
       description: "Cloudflare Worker bridge for recursive Notion world loading and GitHub-backed memory.",
     },
     servers: [{ url: new URL(origin).origin }],
