@@ -41,6 +41,36 @@ test("home retains the existing shallow block-children behavior and HOME_PAGE_ID
   assert.equal(body.data.object, "list");
 });
 
+test("protected read endpoints reject a missing API key", async () => {
+  const notion = {
+    configured: true,
+    listBlockChildren: async () => ({ object: "list", results: [] }),
+  };
+  const route = createRouter({ notion });
+  const response = await route(new Request("https://example.test/home"), {
+    HOME_PAGE_ID: "11111111111111111111111111111111",
+    PROTECT_READS: "true",
+    XUANCHE_API_KEY: "required",
+  });
+  assert.equal(response.status, 401);
+});
+
+test("protected read endpoints accept X-API-Key", async () => {
+  const notion = {
+    configured: true,
+    listBlockChildren: async (id) => ({ object: "list", id, results: [] }),
+  };
+  const route = createRouter({ notion });
+  const response = await route(new Request("https://example.test/home", {
+    headers: { "X-API-Key": "required" },
+  }), {
+    HOME_PAGE_ID: "11111111111111111111111111111111",
+    PROTECT_READS: "true",
+    XUANCHE_API_KEY: "required",
+  });
+  assert.equal(response.status, 200);
+});
+
 test("legacy /page?id route remains available", async () => {
   const notion = {
     configured: true,
