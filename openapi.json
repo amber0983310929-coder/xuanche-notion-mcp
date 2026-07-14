@@ -2,12 +2,12 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Xuanche Engine API",
-    "version": "0.4.0",
-    "description": "Cloudflare Worker bridge for recursive Notion world loading and GitHub-backed memory."
+    "version": "0.5.0",
+    "description": "Secure Cloudflare Worker bridge for loading and updating the Xuanche Notion world with GitHub-backed long-term memory and KV snapshots."
   },
   "servers": [
     {
-      "url": "https://YOUR-WORKER.workers.dev"
+      "url": "https://plain-dew-5810xuanche-api.amber0983310929.workers.dev"
     }
   ],
   "components": {
@@ -15,120 +15,952 @@
       "apiKey": {
         "type": "apiKey",
         "in": "header",
-        "name": "X-API-Key"
+        "name": "X-API-Key",
+        "description": "Set this to the Cloudflare XUANCHE_API_KEY secret."
+      }
+    },
+    "schemas": {
+      "SuccessEnvelope": {
+        "type": "object",
+        "required": [
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "description": "Endpoint-specific result"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
       },
-      "bearer": {
-        "type": "http",
-        "scheme": "bearer"
+      "ErrorEnvelope": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error",
+          "requestId"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": false
+          },
+          "error": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "details": {
+            "description": "Optional upstream error details"
+          }
+        }
+      },
+      "NotionId": {
+        "type": "string",
+        "description": "Notion page or block ID, with or without hyphens.",
+        "pattern": "^[0-9a-fA-F-]{32,36}$"
+      },
+      "BlockInput": {
+        "description": "A string becomes a paragraph block; an object is passed as a Notion block.",
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "additionalProperties": true
+          }
+        ]
+      },
+      "WorldLoadRequest": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "type": "string",
+            "enum": [
+              "base",
+              "continue",
+              "cultivation",
+              "combat",
+              "npc",
+              "exploration",
+              "full"
+            ],
+            "default": "continue"
+          },
+          "refresh": {
+            "type": "boolean",
+            "default": true,
+            "description": "Read Notion instead of using an unexpired KV snapshot."
+          },
+          "persist": {
+            "type": "boolean",
+            "default": false,
+            "description": "Commit the loaded snapshot to world/cache.json in GitHub."
+          },
+          "maxDepth": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 20
+          },
+          "maxNodes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20000
+          },
+          "pageKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        }
+      },
+      "WorldUpdateRequest": {
+        "type": "object",
+        "required": [
+          "pageId",
+          "children"
+        ],
+        "properties": {
+          "pageId": {
+            "$ref": "#/components/schemas/NotionId"
+          },
+          "children": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/BlockInput"
+            }
+          },
+          "after": {
+            "$ref": "#/components/schemas/NotionId"
+          },
+          "memoryEvent": {
+            "description": "String summary or structured append-only long-term-memory event.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "additionalProperties": true
+              }
+            ]
+          },
+          "cachePatch": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "commitMessage": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      },
+      "CreatePageRequest": {
+        "type": "object",
+        "required": [
+          "parentPageId"
+        ],
+        "properties": {
+          "parentPageId": {
+            "$ref": "#/components/schemas/NotionId"
+          },
+          "title": {
+            "type": "string"
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "children": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/BlockInput"
+            }
+          },
+          "icon": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "cover": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "AppendBlocksRequest": {
+        "type": "object",
+        "required": [
+          "children"
+        ],
+        "properties": {
+          "children": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/BlockInput"
+            }
+          },
+          "after": {
+            "$ref": "#/components/schemas/NotionId"
+          }
+        }
+      },
+      "UpdatePageRequest": {
+        "type": "object",
+        "description": "Notion page fields supported by the engine.",
+        "properties": {
+          "properties": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "icon": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "cover": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "in_trash": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Invalid request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Invalid or missing API key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "The requested Notion tree exceeded a safety limit",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "ServerError": {
+        "description": "Worker or upstream service error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
       }
     }
   },
   "paths": {
     "/health": {
       "get": {
-        "summary": "Service status"
+        "operationId": "getEngineHealth",
+        "summary": "Check service and integration configuration",
+        "description": "The basic check is public. deep=1 also verifies Notion and GitHub and requires X-API-Key.",
+        "parameters": [
+          {
+            "name": "deep",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ],
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
       }
     },
     "/home": {
       "get": {
-        "summary": "Read the configured Notion home page"
+        "operationId": "getWorldHome",
+        "summary": "Read the configured Notion world home",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "depth",
+            "in": "query",
+            "description": "Recursive block depth. Use 0 for only direct children.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20,
+              "default": 0
+            }
+          },
+          {
+            "name": "maxNodes",
+            "in": "query",
+            "description": "Maximum number of Notion blocks returned as a safety limit.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20000,
+              "default": 5000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
       }
     },
     "/tree": {
       "get": {
+        "operationId": "getNotionTree",
         "summary": "Recursively read a Notion page tree",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
         "parameters": [
           {
             "name": "pageId",
             "in": "query",
+            "description": "Defaults to the configured world home page.",
             "schema": {
-              "type": "string"
+              "$ref": "#/components/schemas/NotionId"
             }
           },
           {
             "name": "depth",
             "in": "query",
+            "description": "Recursive block depth. Use 0 for only direct children.",
             "schema": {
               "type": "integer",
               "minimum": 0,
               "maximum": 20,
               "default": 6
             }
+          },
+          {
+            "name": "maxNodes",
+            "in": "query",
+            "description": "Maximum number of Notion blocks returned as a safety limit.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20000,
+              "default": 5000
+            }
+          },
+          {
+            "name": "concurrency",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 8,
+              "default": 3
+            }
           }
-        ]
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/page": {
+      "get": {
+        "operationId": "getNotionPage",
+        "summary": "Read one Notion page or block",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NotionId"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "description": "Recursive block depth. Use 0 for only direct children.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20,
+              "default": 0
+            }
+          },
+          {
+            "name": "maxNodes",
+            "in": "query",
+            "description": "Maximum number of Notion blocks returned as a safety limit.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20000,
+              "default": 5000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/page/{id}": {
+      "get": {
+        "operationId": "getNotionPageTreeById",
+        "summary": "Recursively read one Notion page by path ID",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NotionId"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "description": "Recursive block depth. Use 0 for only direct children.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 20,
+              "default": 6
+            }
+          },
+          {
+            "name": "maxNodes",
+            "in": "query",
+            "description": "Maximum number of Notion blocks returned as a safety limit.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20000,
+              "default": 5000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
       }
     },
     "/world/load": {
       "post": {
-        "summary": "Load all configured world pages",
+        "operationId": "loadWorldProfile",
+        "summary": "Load a configured world profile and optionally persist its snapshot",
         "security": [
           {
             "apiKey": []
-          },
-          {
-            "bearer": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorldLoadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/world/update": {
+      "post": {
+        "operationId": "updateWorldState",
+        "summary": "Append a Notion update and synchronize GitHub memory or cache",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorldUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
       }
     },
     "/notion/pages": {
       "post": {
+        "operationId": "createNotionPage",
         "summary": "Create a child Notion page",
         "security": [
           {
             "apiKey": []
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
       }
     },
     "/notion/blocks/{id}/children": {
       "post": {
+        "operationId": "appendNotionBlocks",
         "summary": "Append blocks to a Notion page or block",
         "security": [
           {
             "apiKey": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NotionId"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppendBlocksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
       }
     },
     "/notion/pages/{id}": {
       "patch": {
-        "summary": "Update Notion page properties",
+        "operationId": "updateNotionPage",
+        "summary": "Update supported Notion page properties",
         "security": [
           {
             "apiKey": []
           }
-        ]
-      }
-    },
-    "/world/update": {
-      "post": {
-        "summary": "Append a Notion update and synchronize GitHub memory/cache",
-        "security": [
+        ],
+        "parameters": [
           {
-            "apiKey": []
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NotionId"
+            }
           }
-        ]
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePageRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
       }
     },
     "/github/tree": {
       "get": {
-        "summary": "List the configured repository tree",
+        "operationId": "listGitHubWorldTree",
+        "summary": "List the configured GitHub repository tree",
         "security": [
           {
             "apiKey": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "ref",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "main"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
       }
     },
     "/github/file": {
       "get": {
-        "summary": "Read a GitHub-backed world file",
+        "operationId": "getGitHubWorldFile",
+        "summary": "Read one GitHub-backed world file as UTF-8 text",
         "security": [
           {
             "apiKey": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "world/config.json"
+            }
+          },
+          {
+            "name": "ref",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "main"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
       }
     }
   }

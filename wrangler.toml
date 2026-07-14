@@ -1,6 +1,7 @@
 name = "plain-dew-5810xuanche-api"
 main = "worker.js"
 compatibility_date = "2026-07-14"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 NOTION_VERSION = "2022-06-28"
@@ -8,6 +9,7 @@ HOME_PAGE_ID = "5f4c8de4a4c246478a4658d1ebc2a1a2"
 NOTION_HOME_PAGE_ID = "5f4c8de4a4c246478a4658d1ebc2a1a2"
 GITHUB_BRANCH = "main"
 CACHE_TTL_SECONDS = "300"
+PROTECT_READS = "true"
 
 # Secrets are configured with `wrangler secret put` and never committed:
 # NOTION_TOKEN, GITHUB_TOKEN, XUANCHE_API_KEY
