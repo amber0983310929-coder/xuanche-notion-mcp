@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "homePageId": "5f4c8de4a4c246478a4658d1ebc2a1a2",
   "catalog": [
     { "key": "home", "title": "修真世界（首頁）", "id": "5f4c8de4a4c246478a4658d1ebc2a1a2" },
@@ -46,6 +46,7 @@
   "loader": {
     "defaultProfile": "continue",
     "maxDepth": 6,
+    "homeMaxDepth": 0,
     "maxNodesPerPage": 5000,
     "concurrency": 2,
     "cacheTtlSeconds": 300,
