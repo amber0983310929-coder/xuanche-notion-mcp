@@ -5,7 +5,7 @@ import { buildOpenApi } from "../src/openapi.js";
 test("OpenAPI is bound to the deployed origin and exposes unique operation IDs", () => {
   const document = buildOpenApi("https://worker.example/openapi.json");
   assert.equal(document.openapi, "3.1.0");
-  assert.equal(document.info.version, "0.5.0");
+  assert.equal(document.info.version, "0.5.1");
   assert.equal(document.servers[0].url, "https://worker.example");
 
   const operationIds = Object.values(document.paths)
@@ -13,6 +13,24 @@ test("OpenAPI is bound to the deployed origin and exposes unique operation IDs",
     .map((operation) => operation.operationId);
   assert.equal(new Set(operationIds).size, operationIds.length);
   assert.equal(operationIds.every(Boolean), true);
+});
+
+test("every OpenAPI object schema declares properties for GPT Actions", () => {
+  const document = buildOpenApi("https://worker.example/openapi.json");
+  const missing = [];
+
+  const visit = (value, path = "root") => {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, `${path}[${index}]`));
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    if (value.type === "object" && !Object.hasOwn(value, "properties")) missing.push(path);
+    Object.entries(value).forEach(([key, child]) => visit(child, `${path}.${key}`));
+  };
+
+  visit(document);
+  assert.deepEqual(missing, []);
 });
 
 test("OpenAPI protects world reads and defines GPT Action request bodies", () => {
