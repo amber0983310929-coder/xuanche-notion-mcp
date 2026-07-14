@@ -70,3 +70,4 @@ curl -X POST "https://YOUR-WORKER.workers.dev/world/update" \
 ```
 
 The Notion write is performed first. If the later GitHub commit fails, the endpoint returns the failure so callers can retry synchronization without pretending the whole operation succeeded.
+ - Cloudflare Workers Builds connected
