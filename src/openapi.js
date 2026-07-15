@@ -20,6 +20,13 @@ const maxNodesParameter = {
   schema: { type: "integer", minimum: 1, maximum: 20_000, default: 5_000 },
 };
 
+const cursorParameter = {
+  name: "cursor",
+  in: "query",
+  description: "Pagination cursor for requesting the next batch of nodes.",
+  schema: { type: "string" },
+};
+
 const standardResponses = {
   200: {
     description: "Successful Xuanche Engine response",
@@ -186,7 +193,7 @@ export function buildOpenApi(origin) {
           operationId: "getWorldHome",
           summary: "Read the configured Notion world home",
           security: apiKeySecurity,
-          parameters: [{ ...depthParameter, schema: { ...depthParameter.schema, default: 0 } }, maxNodesParameter],
+          parameters: [{ ...depthParameter, schema: { ...depthParameter.schema, default: 0 } }, maxNodesParameter, cursorParameter],
           responses: standardResponses,
         },
       },
@@ -199,6 +206,7 @@ export function buildOpenApi(origin) {
             { name: "pageId", in: "query", description: "Defaults to the configured world home page.", schema: { $ref: "#/components/schemas/NotionId" } },
             { ...depthParameter, schema: { ...depthParameter.schema, default: 6 } },
             maxNodesParameter,
+            cursorParameter,
             { name: "concurrency", in: "query", schema: { type: "integer", minimum: 1, maximum: 8, default: 3 } },
           ],
           responses: standardResponses,
@@ -213,6 +221,7 @@ export function buildOpenApi(origin) {
             { name: "id", in: "query", required: true, schema: { $ref: "#/components/schemas/NotionId" } },
             { ...depthParameter, schema: { ...depthParameter.schema, default: 0 } },
             maxNodesParameter,
+            cursorParameter,
           ],
           responses: standardResponses,
         },
@@ -226,6 +235,7 @@ export function buildOpenApi(origin) {
             { name: "id", in: "path", required: true, schema: { $ref: "#/components/schemas/NotionId" } },
             { ...depthParameter, schema: { ...depthParameter.schema, default: 6 } },
             maxNodesParameter,
+            cursorParameter,
           ],
           responses: standardResponses,
         },
