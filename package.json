@@ -1,9 +1,24 @@
 {
-  "name": "xuanche-engine-gateway",
-  "version": "0.5.3",
+  "name": "xuanche-engine",
+  "version": "0.5.2",
   "private": true,
   "type": "module",
+  "description": "Cloudflare Worker bridge for the Xuanche cultivation world in Notion and GitHub.",
   "scripts": {
-    "test": "node --test"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test",
+    "check": "node --check worker.js && node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4.24.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "sharp@0.34.5": true,
+    "workerd@1.20260708.1": true
   }
 }
