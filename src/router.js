@@ -70,9 +70,10 @@ export function createRouter(dependencies = {}) {
         const homeId = env.NOTION_HOME_PAGE_ID || env.HOME_PAGE_ID;
         if (!homeId) throw new ApiError(503, "HOME_PAGE_ID or NOTION_HOME_PAGE_ID is not configured");
         const depth = clampInteger(url.searchParams.get("depth"), 0, 0, 20);
+        const cursor = url.searchParams.get("cursor");
         const data = depth > 0
           ? await notion.getPageTree(homeId, { maxDepth: depth, maxNodes: clampInteger(url.searchParams.get("maxNodes"), 5_000, 1, 20_000) })
-          : await notion.listBlockChildren(homeId);
+          : await notion.listBlockChildren(homeId, { startCursor: cursor });
         return json({ ok: true, data, requestId: id });
       }
 
@@ -151,10 +152,14 @@ export function createRouter(dependencies = {}) {
       if (request.method === "GET" && url.pathname.startsWith("/page/")) {
         requireReadApiKey(request, env);
         const pageId = normalizeNotionId(decodeURIComponent(url.pathname.slice(6)));
-        const data = await notion.getPageTree(pageId, {
-          maxDepth: clampInteger(url.searchParams.get("depth"), 6, 0, 20),
-          maxNodes: clampInteger(url.searchParams.get("maxNodes"), 5_000, 1, 20_000),
-        });
+        const depth = clampInteger(url.searchParams.get("depth"), 6, 0, 20);
+        const cursor = url.searchParams.get("cursor");
+        const data = depth > 0
+          ? await notion.getPageTree(pageId, {
+            maxDepth: depth,
+            maxNodes: clampInteger(url.searchParams.get("maxNodes"), 5_000, 1, 20_000),
+          })
+          : await notion.listBlockChildren(pageId, { startCursor: cursor });
         return json({ ok: true, data, requestId: id });
       }
 
@@ -163,12 +168,13 @@ export function createRouter(dependencies = {}) {
         const pageId = url.searchParams.get("id");
         if (!pageId) throw new ApiError(400, "missing id");
         const depth = clampInteger(url.searchParams.get("depth"), 0, 0, 20);
+        const cursor = url.searchParams.get("cursor");
         const data = depth > 0
           ? await notion.getPageTree(pageId, {
             maxDepth: depth,
             maxNodes: clampInteger(url.searchParams.get("maxNodes"), 5_000, 1, 20_000),
           })
-          : await notion.listBlockChildren(pageId);
+          : await notion.listBlockChildren(pageId, { startCursor: cursor });
         return json({ ok: true, data, requestId: id });
       }
 
