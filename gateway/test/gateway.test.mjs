@@ -30,6 +30,10 @@ test("compacts raw Notion blocks and removes noisy metadata", () => {
   const result = compactActionResponse(payload, { maxChars: 20_000, limit: 30 });
 
   assert.equal(result.data.blocks[0].text, "玄澈修真世界");
+  assert.equal(result.data.result_count, 1);
+  assert.equal(result.data.has_content, true);
+  assert.equal(result.data.content_text, "玄澈修真世界");
+  assert.equal(result.data.content_text_complete, true);
   assert.equal(result.data.blocks[0].created_time, undefined);
   assert.equal(result.data.blocks[0].parent, undefined);
   assert.equal(result._gateway.compact, true);
@@ -163,5 +167,8 @@ test("full Pages handler compacts a large module response before returning it to
   assert.equal(response.headers.get("X-Xuanche-Compacted"), "true");
   assert.equal(response.headers.get("X-Xuanche-Page-Batch-Sizing"), "true");
   assert.ok(body.length < 72_000);
+  assert.equal(parsed.data.result_count, 50);
+  assert.equal(parsed.data.has_content, true);
+  assert.match(parsed.data.content_text, /規則段落 0/);
   assert.equal(parsed.cursor, "batch-2");
 });
