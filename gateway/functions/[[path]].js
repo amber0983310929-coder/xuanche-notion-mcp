@@ -5,8 +5,8 @@ const DEFAULT_PAGE_SIZE = 30;
 const MAX_PAGE_SIZE = 80;
 const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
-const DEFAULT_PAGE_NODES = 50;
-const MAX_PAGE_NODES = 100;
+const DEFAULT_PAGE_NODES = 10;
+const MAX_PAGE_NODES = 20;
 
 const COMPACT_PATHS = new Set([
   "/home",
@@ -408,13 +408,14 @@ export function buildUpstreamRequest(request) {
 function corsHeaders(headers = new Headers()) {
   headers.set("Access-Control-Allow-Origin", "*");
   headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Key");
-  headers.set("Access-Control-Expose-Headers", "X-Xuanche-Gateway, X-Xuanche-Gateway-Version, X-Xuanche-Page-Batch-Sizing, X-Xuanche-Readable-Page-Payload");
+  headers.set("Access-Control-Expose-Headers", "X-Xuanche-Gateway, X-Xuanche-Gateway-Version, X-Xuanche-Page-Batch-Sizing, X-Xuanche-Page-Batch-Limit, X-Xuanche-Readable-Page-Payload");
   headers.set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
   headers.set("Access-Control-Max-Age", "86400");
   headers.set("Cache-Control", "no-store");
   headers.set("X-Xuanche-Gateway", "cloudflare-pages");
   headers.set("X-Xuanche-Gateway-Version", "0.5.3");
   headers.set("X-Xuanche-Page-Batch-Sizing", "true");
+  headers.set("X-Xuanche-Page-Batch-Limit", "20");
   headers.set("X-Xuanche-Readable-Page-Payload", "true");
   return headers;
 }
