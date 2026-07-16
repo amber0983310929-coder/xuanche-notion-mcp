@@ -274,7 +274,7 @@ export function compactActionResponse(payload, options = {}) {
   addPageReadabilityFields(compacted);
 
   compacted._gateway = {
-    version: "0.5.3",
+    version: "0.5.4",
     compact: true,
     openAiActionHardLimit: OPENAI_ACTION_HARD_LIMIT,
     maxChars,
@@ -302,7 +302,7 @@ function addOrReplaceParameter(parameters, parameter) {
 
 export function patchOpenApi(spec, origin) {
   const patched = structuredClone(spec);
-  patched.info = { ...patched.info, version: "0.5.3" };
+  patched.info = { ...patched.info, version: "0.5.4" };
   patched.servers = [{ url: origin }];
 
   const tree = patched.paths?.["/tree"]?.get;
@@ -354,7 +354,7 @@ export function patchOpenApi(spec, origin) {
     if (maxNodes?.schema) {
       maxNodes.schema.default = DEFAULT_PAGE_NODES;
       maxNodes.schema.maximum = MAX_PAGE_NODES;
-      maxNodes.description = "Blocks per page batch. Gateway clamps this to 100; use cursor for the next batch.";
+      maxNodes.description = "Blocks per page batch. Gateway defaults to 10 and clamps every request to 20; when cursor is returned, call getNotionPage again with the same page id and that cursor.";
     }
 
     addOrReplaceParameter(page.parameters, {
@@ -413,7 +413,7 @@ function corsHeaders(headers = new Headers()) {
   headers.set("Access-Control-Max-Age", "86400");
   headers.set("Cache-Control", "no-store");
   headers.set("X-Xuanche-Gateway", "cloudflare-pages");
-  headers.set("X-Xuanche-Gateway-Version", "0.5.3");
+  headers.set("X-Xuanche-Gateway-Version", "0.5.4");
   headers.set("X-Xuanche-Page-Batch-Sizing", "true");
   headers.set("X-Xuanche-Page-Batch-Limit", "20");
   headers.set("X-Xuanche-Readable-Page-Payload", "true");
