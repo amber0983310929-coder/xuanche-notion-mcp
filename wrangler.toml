@@ -1,5 +1,6 @@
 name = "plain-dew-5810xuanche-api"
 main = "worker.js"
+keep_vars = true
 compatibility_date = "2026-07-14"
 compatibility_flags = ["nodejs_compat"]
 
