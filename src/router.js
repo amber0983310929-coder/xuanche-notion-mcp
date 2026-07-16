@@ -73,7 +73,10 @@ export function createRouter(dependencies = {}) {
         const cursor = url.searchParams.get("cursor");
         const data = depth > 0
           ? await notion.getPageTree(homeId, { maxDepth: depth, maxNodes: clampInteger(url.searchParams.get("maxNodes"), 5_000, 1, 20_000) })
-          : await notion.listBlockChildren(homeId, { startCursor: cursor });
+          : await notion.listBlockChildren(homeId, {
+            startCursor: cursor,
+            pageSize: clampInteger(url.searchParams.get("maxNodes"), 100, 1, 100),
+          });
         return json({ ok: true, data, requestId: id });
       }
 
@@ -159,7 +162,10 @@ export function createRouter(dependencies = {}) {
             maxDepth: depth,
             maxNodes: clampInteger(url.searchParams.get("maxNodes"), 5_000, 1, 20_000),
           })
-          : await notion.listBlockChildren(pageId, { startCursor: cursor });
+          : await notion.listBlockChildren(pageId, {
+            startCursor: cursor,
+            pageSize: clampInteger(url.searchParams.get("maxNodes"), 100, 1, 100),
+          });
         return json({ ok: true, data, requestId: id });
       }
 
@@ -174,7 +180,10 @@ export function createRouter(dependencies = {}) {
             maxDepth: depth,
             maxNodes: clampInteger(url.searchParams.get("maxNodes"), 5_000, 1, 20_000),
           })
-          : await notion.listBlockChildren(pageId, { startCursor: cursor });
+          : await notion.listBlockChildren(pageId, {
+            startCursor: cursor,
+            pageSize: clampInteger(url.searchParams.get("maxNodes"), 100, 1, 100),
+          });
         return json({ ok: true, data, requestId: id });
       }
 
