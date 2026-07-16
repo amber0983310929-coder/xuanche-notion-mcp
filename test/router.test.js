@@ -14,6 +14,7 @@ test("health reports integrations without exposing secrets", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.integrations.notion, "configured");
   assert.equal(body.integrations.github, "configured");
+  assert.equal(body.capabilities.shallowPageBatchSizing, true);
   assert.equal(JSON.stringify(body).includes("secret"), false);
 });
 
