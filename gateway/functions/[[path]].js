@@ -246,6 +246,22 @@ function fitToBudget(root, maxChars) {
   return { value: fallback, truncated: true, returnedChars: fallbackText.length };
 }
 
+function addPageReadabilityFields(root) {
+  const results = root?.data?.results;
+  if (!Array.isArray(results)) return;
+
+  const text = results
+    .map((block) => block?.text ?? block?.title ?? block?.caption ?? "")
+    .filter(Boolean)
+    .join("\n");
+  const maxTextChars = 24_000;
+
+  root.data.result_count = results.length;
+  root.data.has_content = results.length > 0;
+  root.data.content_text = text.slice(0, maxTextChars);
+  root.data.content_text_complete = text.length <= maxTextChars;
+}
+
 export function compactActionResponse(payload, options = {}) {
   const maxChars = integerParam(options.maxChars, DEFAULT_MAX_CHARS, 5_000, HARD_MAX_CHARS);
   const offset = integerParam(options.offset, 0, 0, 20_000);
@@ -254,6 +270,8 @@ export function compactActionResponse(payload, options = {}) {
   const state = { nodes: 0, truncatedStrings: 0 };
   const compacted = compactAny(payload, state);
   const pagination = applyPagination(compacted, offset, limit);
+
+  addPageReadabilityFields(compacted);
 
   compacted._gateway = {
     version: "0.5.3",
