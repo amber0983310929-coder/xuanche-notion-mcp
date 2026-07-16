@@ -1,4 +1,4 @@
-# Xuanche Engine v0.5.2
+# Xuanche Engine v0.5.3
 
 Xuanche Engine is a Cloudflare Worker that connects GPT-facing HTTP endpoints to Notion world data and GitHub-backed code, memory, configuration, and cached snapshots.
 
@@ -66,7 +66,7 @@ enforces `X-API-Key`.
 
 ## GPT Action setup
 
-1. Deploy the Worker and Pages gateway, then open `https://YOUR-PROJECT.pages.dev/openapi.json` and confirm that its version is `0.5.2` and its server URL uses the same Pages origin.
+1. Deploy the Worker and Pages gateway, then open `https://YOUR-PROJECT.pages.dev/openapi.json` and confirm that its version is `0.5.3` and its server URL uses the same Pages origin.
 2. In the GPT editor, open **Actions**, choose **Create new action**, and import the gateway `/openapi.json` URL.
 3. Set authentication to **API key**, choose **Custom header**, enter header name `X-API-Key`, then save the same value stored in the Cloudflare `XUANCHE_API_KEY` secret.
 4. Save the GPT as **Only me** and test it in a fresh normal GPT conversation. The editor Preview tester can return a client error even when normal GPT Actions work.
@@ -116,3 +116,4 @@ The Notion write is performed first. If the later GitHub commit fails, the endpo
 - Cloudflare `nodejs_compat` is enabled for compatibility with current Worker tooling and libraries.
 - v0.5.1 adds explicit `properties` declarations to every object schema for compatibility with the stricter GPT Actions validator.
 - v0.5.2 adds a zero-secret Cloudflare Pages gateway that reaches the existing Worker through a Service Binding and avoids the incompatible `workers.dev` GPT Actions entry path.
+- v0.5.3 moves every load profile to the active 02/03/04 pages, removes deleted legacy 05-11 pages, includes cultivation and persistence rules in normal continuation, rejects archived Notion pages, and versions KV cache keys by the selected page identities.
