@@ -82,3 +82,40 @@ test("legacy /page?id route remains available", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.data.object, "list");
 });
+
+test("shallow page reads honor maxNodes as the Notion page size", async () => {
+  let received;
+  const notion = {
+    configured: true,
+    listBlockChildren: async (id, options) => {
+      received = { id, options };
+      return { object: "list", results: [] };
+    },
+  };
+  const route = createRouter({ notion });
+  const response = await route(new Request(
+    "https://example.test/page?id=11111111111111111111111111111111&depth=0&maxNodes=10&cursor=next-page",
+  ), {});
+
+  assert.equal(response.status, 200);
+  assert.equal(received.id, "11111111111111111111111111111111");
+  assert.deepEqual(received.options, { startCursor: "next-page", pageSize: 10 });
+});
+
+test("shallow page reads clamp maxNodes to Notion's 100-block limit", async () => {
+  let pageSize;
+  const notion = {
+    configured: true,
+    listBlockChildren: async (_id, options) => {
+      pageSize = options.pageSize;
+      return { object: "list", results: [] };
+    },
+  };
+  const route = createRouter({ notion });
+  const response = await route(new Request(
+    "https://example.test/page/11111111111111111111111111111111?depth=0&maxNodes=5000",
+  ), {});
+
+  assert.equal(response.status, 200);
+  assert.equal(pageSize, 100);
+});
