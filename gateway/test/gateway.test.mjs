@@ -86,7 +86,7 @@ test("clamps page batches while preserving the native Notion cursor", () => {
   const upstream = buildUpstreamRequest(request);
   const url = new URL(upstream.url);
 
-  assert.equal(url.searchParams.get("maxNodes"), "100");
+  assert.equal(url.searchParams.get("maxNodes"), "20");
   assert.equal(url.searchParams.get("cursor"), "next-batch");
   assert.equal(url.searchParams.get("maxChars"), null);
 });
@@ -132,8 +132,8 @@ test("patches the live OpenAPI tree operation for safe defaults", () => {
   assert.ok(parameters.some((item) => item.name === "maxChars"));
 
   const pageParameters = patched.paths["/page"].get.parameters;
-  assert.equal(pageParameters.find((item) => item.name === "maxNodes").schema.default, 50);
-  assert.equal(pageParameters.find((item) => item.name === "maxNodes").schema.maximum, 100);
+  assert.equal(pageParameters.find((item) => item.name === "maxNodes").schema.default, 10);
+  assert.equal(pageParameters.find((item) => item.name === "maxNodes").schema.maximum, 20);
   assert.ok(pageParameters.some((item) => item.name === "maxChars"));
   assert.match(patched.paths["/world/load"].post.description, /Do not use/);
 });
@@ -163,12 +163,13 @@ test("full Pages handler compacts a large module response before returning it to
   const body = await response.text();
   const parsed = JSON.parse(body);
 
-  assert.equal(new URL(upstreamUrl).searchParams.get("maxNodes"), "100");
+  assert.equal(new URL(upstreamUrl).searchParams.get("maxNodes"), "20");
   assert.equal(response.headers.get("X-Xuanche-Compacted"), "true");
   assert.equal(response.headers.get("X-Xuanche-Page-Batch-Sizing"), "true");
+  assert.equal(response.headers.get("X-Xuanche-Page-Batch-Limit"), "20");
   assert.equal(response.headers.get("X-Xuanche-Readable-Page-Payload"), "true");
   assert.ok(body.length < 72_000);
-  assert.equal(parsed.data.result_count, 50);
+  assert.equal(parsed.data.result_count, 10);
   assert.equal(parsed.data.has_content, true);
   assert.match(parsed.data.content_text, /規則段落 0/);
   assert.equal(parsed.cursor, "batch-2");
