@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-14T15:57:28.219Z",
+  "updatedAt": "2026-07-16T08:25:23.239Z",
   "events": [
     {
       "timestamp": "2026-07-14T15:54:33.970Z",
@@ -15,6 +15,12 @@
       "encoding": "utf-8",
       "version": "0.3.0",
       "type": "engine_milestone"
+    },
+    {
+      "timestamp": "2026-07-16T08:25:23.239Z",
+      "type": "new_game",
+      "summary": "建立沐劍英新世界：15歲赤髮少年，由沐雲撫養，與蕭瀟青梅竹馬；目標是保護家人與村民，隱藏天賦與身世。開局青溪村。",
+      "version": "1"
     }
   ]
 }
