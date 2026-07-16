@@ -161,6 +161,7 @@ test("full Pages handler compacts a large module response before returning it to
 
   assert.equal(new URL(upstreamUrl).searchParams.get("maxNodes"), "100");
   assert.equal(response.headers.get("X-Xuanche-Compacted"), "true");
+  assert.equal(response.headers.get("X-Xuanche-Page-Batch-Sizing"), "true");
   assert.ok(body.length < 72_000);
   assert.equal(parsed.cursor, "batch-2");
 });
