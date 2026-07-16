@@ -123,7 +123,7 @@ test("patches the live OpenAPI tree operation for safe defaults", () => {
   const patched = patchOpenApi(spec, "https://xuanche-engine-gateway.pages.dev");
   const parameters = patched.paths["/tree"].get.parameters;
 
-  assert.equal(patched.info.version, "0.5.3");
+  assert.equal(patched.info.version, "0.5.4");
   assert.equal(parameters.find((item) => item.name === "depth").schema.default, 0);
   assert.equal(parameters.find((item) => item.name === "maxNodes").schema.default, 60);
   assert.equal(parameters.find((item) => item.name === "maxNodes").schema.maximum, 250);
@@ -134,6 +134,8 @@ test("patches the live OpenAPI tree operation for safe defaults", () => {
   const pageParameters = patched.paths["/page"].get.parameters;
   assert.equal(pageParameters.find((item) => item.name === "maxNodes").schema.default, 10);
   assert.equal(pageParameters.find((item) => item.name === "maxNodes").schema.maximum, 20);
+  assert.match(pageParameters.find((item) => item.name === "maxNodes").description, /defaults to 10/);
+  assert.match(pageParameters.find((item) => item.name === "maxNodes").description, /clamps every request to 20/);
   assert.ok(pageParameters.some((item) => item.name === "maxChars"));
   assert.match(patched.paths["/world/load"].post.description, /Do not use/);
 });
