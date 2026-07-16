@@ -1,29 +1,51 @@
-# Xuanche Engine Gateway v0.5.3 Hotfix
+# Xuanche Engine Gateway v0.5.5
 
-This package fixes `ResponseTooLargeError` from GPT Actions without changing the
-Notion world, Worker secrets, GitHub memory, or KV data.
+This Cloudflare Pages gateway keeps GPT Action responses below the payload
+limit and publishes a safety-scoped OpenAPI contract. Deploying this package
+does not by itself migrate or rewrite the Notion world, Worker secrets, GitHub
+memory, or KV data.
 
-## Root cause
+## Public GPT Action contract
 
-`depth=0` disables recursive descent, but `/tree` still returned full Notion block
-objects. The live v0.5.2 OpenAPI also defaulted `maxNodes` to 5000. GPT Actions
-requires each request and response payload to contain fewer than 100,000
-characters.
+`/openapi.json` exposes only these operations:
 
-## What changes
+- `getEngineHealth`
+- `getNotionTree`
+- `getNotionPage`
+- `createNotionPage`
+- `appendNotionBlocks`
+- `updateNotionPage`
+- `listGitHubWorldTree`
+- `getGitHubWorldFile`
 
-- Proxies every request through the existing `XUANCHE_ENGINE` Service binding.
-- Compacts `/home`, `/tree`, `/page`, `/world/load`, and `/load` JSON responses.
-- Removes redundant Notion metadata and converts rich text objects to plain text.
-- Adds `offset`, `limit`, and `maxChars` pagination controls to `/tree`.
-- Clamps `/tree` and `/home` upstream `maxNodes` to 250.
-- Clamps `/page` to 50 blocks by default and 100 maximum, while preserving the
-  existing Notion `cursor` for the next batch.
-- Tells GPT Actions to use `getNotionPage` once per 12–29 module instead of using
-  `/world/load` to combine all rule modules.
-- Enforces an 85,000-character hard response cap (72,000 by default).
-- Dynamically patches `/openapi.json` to version 0.5.3 while keeping the existing
-  `getNotionTree` operation ID and authentication scheme.
+High-risk batch operations are not present in the GPT Action schema:
+
+- `getWorldHome`
+- `getNotionPageTreeById`
+- `loadWorldProfile`
+- `updateWorldState`
+
+The gateway still proxies their existing routes for backward compatibility;
+removing them from the public schema does not remove or rename backend routes.
+
+## Safe page-by-page reads
+
+- `/page` always sends `depth=0` upstream.
+- `maxNodes` defaults to 10 and is clamped to 20.
+- `maxChars` defaults to 72,000 and is capped at 85,000.
+- Each call reads exactly one page. This includes pages and modules 00–31,
+  individual 30-x narrative submodules, and selected 31 experience cards.
+- Continue the same page with `data.cursor` until `data.has_more` is false.
+- The stable page payload uses `data.items`, `data.has_more`, `data.cursor`, and
+  `data.truncated`; `_gateway.truncated` reports gateway budget reduction.
+
+`getNotionTree` is limited to a lightweight direct-child index. The gateway
+forces `depth=0`; module bodies must be read with `getNotionPage`, one page at a
+time.
+
+The gateway compacts raw Notion block metadata and enforces the response budget.
+It preserves the native Notion cursor and aligns local pagination with the
+clamped `maxNodes` value so no blocks are skipped between batches.
 
 ## Cloudflare Pages settings
 
@@ -37,19 +59,12 @@ After deployment, re-import this URL into the GPT Action editor:
 
 `https://xuanche-engine-gateway.pages.dev/openapi.json`
 
-Test with:
+Set the GPT Action privacy policy URL to:
 
-- `depth=0`
-- `maxNodes=60`
-- `offset=0`
-- `limit=30`
-- `maxChars=72000`
+`https://xuanche-engine-gateway.pages.dev/privacy`
 
-If `_gateway.pagination.hasMore` is true, repeat with the returned `nextOffset`.
-
-For module pages 12–29, call `getNotionPage` with `depth=0` and `maxNodes=50`.
-When the response reports `has_more=true`, repeat the same page ID with the
-returned `cursor` until `has_more=false`.
+Confirm that the OpenAPI document reports version `0.5.5` and lists exactly the
+eight operations above.
 
 ## Local verification
 
