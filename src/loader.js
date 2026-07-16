@@ -4,22 +4,15 @@ import { NotionClient } from "./notion.js";
 import { ApiError, mapLimit, mergeDeep, normalizeNotionId, nowIso } from "./utils.js";
 
 export const DEFAULT_WORLD_CONFIG = {
-  version: 3,
+  version: 4,
   homePageId: "5f4c8de4a4c246478a4658d1ebc2a1a2",
   catalog: [
     { key: "home", title: "修真世界（首頁）", id: "5f4c8de4a4c246478a4658d1ebc2a1a2" },
     { key: "route", title: "AI 載入入口", id: "39cc845007ae8184b97dd0e8c0122768" },
     { key: "rules", title: "修真世界規則", id: "af1900844075472583e7f30d90a9a7a7" },
-    { key: "save", title: "世界存檔", id: "c2915aef9e5f4c8fbcb1800809ea1592" },
-    { key: "wiki", title: "世界資料庫", id: "1c2c113806424108897b16bdf35c1484" },
-    { key: "timeline", title: "世界時間線", id: "d39e967d2ef14de69adf9c5a1f15d7dc" },
-    { key: "knowledge", title: "知識圖鑑", id: "30e7c014b5974e11844b2ae6cc3cb3d9" },
-    { key: "reputation", title: "NPC 名聲", id: "2ce808c3d4ed4740a1d077ad5af901d5" },
-    { key: "karma", title: "因果", id: "efb8dff0ffc942f494c413cae44cc520" },
-    { key: "foreshadowing", title: "伏筆", id: "11ecce398770417dac2ef36635bf85b0" },
-    { key: "events", title: "世界事件", id: "069863ba9288442b948bca74ab339a3a" },
-    { key: "changelog", title: "更新日誌", id: "4a0284a974d441e99df4849070576cf0" },
-    { key: "director", title: "導演筆記", id: "ab8dbe6cf9054c2c85457869b3022efe" },
+    { key: "save", title: "02｜最新存檔｜玄澈", id: "39ec845007ae819e90a7f675f42acb08" },
+    { key: "character", title: "03｜角色狀態｜玄澈", id: "39ec845007ae81399d4ede3a1863497a" },
+    { key: "timeline", title: "04｜世界時間線｜玄澈", id: "39ec845007ae818585e7ef27954f563f" },
     { key: "flow", title: "遊戲流程與回合規則", id: "39cc845007ae81e7a357c7d4b3a5d6de" },
     { key: "npc", title: "角色、NPC 與對話規則", id: "39cc845007ae811595cae2aa37672243" },
     { key: "cultivation", title: "修煉、境界與極境體系", id: "39cc845007ae81439c24d6854fc3f352" },
@@ -40,12 +33,12 @@ export const DEFAULT_WORLD_CONFIG = {
     { key: "factions", title: "NPC 目標、派系演化與世界脈動", id: "39cc845007ae81b483e5c8a095ceb409" }
   ],
   profiles: {
-    base: ["home", "route", "rules", "save", "timeline"],
-    continue: ["home", "route", "rules", "save", "timeline", "flow", "npc", "protagonist", "world", "hud"],
-    cultivation: ["home", "route", "rules", "save", "timeline", "cultivation", "skills", "protagonist", "hud", "wiki"],
-    combat: ["home", "route", "rules", "save", "timeline", "combat", "hud", "wiki", "reputation", "karma", "events"],
-    npc: ["home", "route", "rules", "save", "timeline", "npc", "reputation", "karma", "wiki", "protagonist"],
-    exploration: ["home", "route", "rules", "save", "timeline", "world", "wiki", "knowledge", "foreshadowing", "events", "regions", "ecology", "intelligence"],
+    base: ["home", "route", "rules", "save", "character", "timeline", "persistence"],
+    continue: ["home", "route", "rules", "save", "character", "timeline", "flow", "cultivation", "skills", "npc", "protagonist", "world", "hud", "persistence"],
+    cultivation: ["home", "route", "rules", "save", "character", "timeline", "flow", "cultivation", "skills", "protagonist", "hud", "persistence", "economy"],
+    combat: ["home", "route", "rules", "save", "character", "timeline", "flow", "combat", "protagonist", "hud", "persistence", "equipment"],
+    npc: ["home", "route", "rules", "save", "character", "timeline", "flow", "npc", "protagonist", "world", "hud", "persistence"],
+    exploration: ["home", "route", "rules", "save", "character", "timeline", "flow", "world", "regions", "ecology", "intelligence", "hud", "persistence"],
     full: ["*"]
   },
   loader: {
@@ -81,7 +74,7 @@ export async function loadWorld(env, options = {}) {
   const maxDepth = Number(options.maxDepth ?? config.loader.maxDepth);
   const homeMaxDepth = Number(config.loader.homeMaxDepth ?? 0);
   const maxNodes = Number(options.maxNodes ?? config.loader.maxNodesPerPage);
-  const cacheKey = worldCacheKey(profile, selectedPages, maxDepth, maxNodes, homeMaxDepth);
+  const cacheKey = worldCacheKey(profile, selectedPages, maxDepth, maxNodes, homeMaxDepth, config.version);
   const persist = options.persist ?? config.loader.persistSnapshotToGitHub;
 
   if (!options.refresh) {
@@ -97,6 +90,7 @@ export async function loadWorld(env, options = {}) {
   const pages = await mapLimit(selectedPages, Number(config.loader.concurrency || 2), async (entry) => {
     const pageDepth = entry.key === "home" ? homeMaxDepth : maxDepth;
     const tree = await notion.getPageTree(entry.id, { maxDepth: pageDepth, maxNodes, concurrency: 3 });
+    assertActivePage(entry, tree.page);
     return { key: entry.key, title: entry.title, ...tree };
   });
   const snapshot = {
@@ -125,8 +119,26 @@ export async function loadWorld(env, options = {}) {
   return snapshot;
 }
 
-export function worldCacheKey(profile, selectedPages, maxDepth, maxNodes, homeMaxDepth) {
-  return `world:${profile}:${selectedPages.map((page) => page.key).join(",")}:${maxDepth}:${maxNodes}:home:${homeMaxDepth}`;
+export function worldCacheKey(profile, selectedPages, maxDepth, maxNodes, homeMaxDepth, configVersion = 0) {
+  const selection = selectedPages.map((page) => `${page.key}:${normalizeNotionId(page.id)}`).join("|");
+  return `world:v${configVersion}:${profile}:${stableHash(selection)}:${maxDepth}:${maxNodes}:home:${homeMaxDepth}`;
+}
+
+function assertActivePage(entry, page) {
+  if (page?.archived !== true && page?.in_trash !== true) return;
+  throw new ApiError(409, `Configured Notion page is archived or in trash: ${entry.key}`, {
+    key: entry.key,
+    pageId: normalizeNotionId(entry.id),
+  });
+}
+
+function stableHash(value) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 async function persistSnapshot(github, snapshot) {
