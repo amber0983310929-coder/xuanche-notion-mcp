@@ -166,6 +166,7 @@ test("full Pages handler compacts a large module response before returning it to
   assert.equal(new URL(upstreamUrl).searchParams.get("maxNodes"), "100");
   assert.equal(response.headers.get("X-Xuanche-Compacted"), "true");
   assert.equal(response.headers.get("X-Xuanche-Page-Batch-Sizing"), "true");
+  assert.equal(response.headers.get("X-Xuanche-Readable-Page-Payload"), "true");
   assert.ok(body.length < 72_000);
   assert.equal(parsed.data.result_count, 50);
   assert.equal(parsed.data.has_content, true);
