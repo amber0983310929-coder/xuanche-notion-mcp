@@ -50,6 +50,9 @@ export function createRouter(dependencies = {}) {
             github: github.configured ? "configured" : "missing",
             kv: env.XUANCHE_CACHE ? "configured" : "memory-fallback",
           },
+          capabilities: {
+            shallowPageBatchSizing: true,
+          },
           protectedReads: readsRequireApiKey(env),
           requestId: id,
         };
