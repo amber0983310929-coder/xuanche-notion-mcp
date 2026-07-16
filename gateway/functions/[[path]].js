@@ -1,3 +1,5 @@
+import { PRIVACY_POLICY_HTML } from "./privacy.js";
+
 const OPENAI_ACTION_HARD_LIMIT = 100_000;
 const DEFAULT_MAX_CHARS = 72_000;
 const HARD_MAX_CHARS = 85_000;
@@ -7,6 +9,18 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
+const GATEWAY_VERSION = "0.5.5";
+
+const SAFE_PUBLIC_OPERATIONS = [
+  { path: "/health", method: "get", operationId: "getEngineHealth" },
+  { path: "/tree", method: "get", operationId: "getNotionTree" },
+  { path: "/page", method: "get", operationId: "getNotionPage" },
+  { path: "/notion/pages", method: "post", operationId: "createNotionPage" },
+  { path: "/notion/blocks/{id}/children", method: "post", operationId: "appendNotionBlocks" },
+  { path: "/notion/pages/{id}", method: "patch", operationId: "updateNotionPage" },
+  { path: "/github/tree", method: "get", operationId: "listGitHubWorldTree" },
+  { path: "/github/file", method: "get", operationId: "getGitHubWorldFile" },
+];
 
 const COMPACT_PATHS = new Set([
   "/home",
@@ -108,7 +122,12 @@ function compactAny(value, state, keyHint = "") {
     return value.map((item) => compactAny(item, state, keyHint));
   }
 
-  if (typeof value.type === "string" && value[value.type] && typeof value[value.type] === "object") {
+  if (
+    value.object === "block" &&
+    typeof value.type === "string" &&
+    value[value.type] &&
+    typeof value[value.type] === "object"
+  ) {
     return compactNotionBlock(value, state);
   }
 
@@ -246,9 +265,33 @@ function fitToBudget(root, maxChars) {
   return { value: fallback, truncated: true, returnedChars: fallbackText.length };
 }
 
+function normalizePageBatch(root) {
+  const data = root?.data;
+  if (!data || typeof data !== "object" || Array.isArray(data)) return;
+
+  const items = [data.items, data.results, data.blocks, data.children]
+    .find((candidate) => Array.isArray(candidate)) ?? [];
+  const hasMore = data.has_more ?? root.has_more ?? false;
+  const cursor = data.cursor ?? data.next_cursor ?? root.cursor ?? null;
+
+  data.items = items;
+  data.has_more = hasMore === true;
+  data.cursor = data.has_more && typeof cursor === "string" && cursor.length > 0
+    ? cursor
+    : null;
+
+  delete data.results;
+  delete data.blocks;
+  delete data.children;
+  delete data.next_cursor;
+  delete root.has_more;
+  delete root.cursor;
+}
+
 function addPageReadabilityFields(root) {
-  const results = root?.data?.results;
-  if (!Array.isArray(results)) return;
+  const results = [root?.data?.items, root?.data?.results, root?.data?.blocks]
+    .find((candidate) => Array.isArray(candidate));
+  if (!results) return;
 
   const text = results
     .map((block) => block?.text ?? block?.title ?? block?.caption ?? "")
@@ -271,10 +314,11 @@ export function compactActionResponse(payload, options = {}) {
   const compacted = compactAny(payload, state);
   const pagination = applyPagination(compacted, offset, limit);
 
+  if (options.pageBatch === true) normalizePageBatch(compacted);
   addPageReadabilityFields(compacted);
 
   compacted._gateway = {
-    version: "0.5.4",
+    version: GATEWAY_VERSION,
     compact: true,
     openAiActionHardLimit: OPENAI_ACTION_HARD_LIMIT,
     maxChars,
@@ -287,9 +331,21 @@ export function compactActionResponse(payload, options = {}) {
   // Reserve room for the final gateway metadata added below so the serialized
   // response remains strictly inside the requested budget.
   const fitted = fitToBudget(compacted, Math.max(1_000, maxChars - 512));
+  const responseTruncated = fitted.truncated || state.truncatedStrings > 0;
   if (!fitted.value._gateway) fitted.value._gateway = {};
-  fitted.value._gateway.truncated = fitted.truncated;
-  fitted.value._gateway.returnedChars = JSON.stringify(fitted.value).length;
+  fitted.value._gateway.truncated = responseTruncated;
+  if (options.pageBatch === true && fitted.value.data && typeof fitted.value.data === "object") {
+    if (!Array.isArray(fitted.value.data.items)) fitted.value.data.items = [];
+    if (typeof fitted.value.data.has_more !== "boolean") fitted.value.data.has_more = false;
+    if (!Object.hasOwn(fitted.value.data, "cursor")) fitted.value.data.cursor = null;
+    fitted.value.data.truncated = responseTruncated;
+  }
+  fitted.value._gateway.returnedChars = 0;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const returnedChars = JSON.stringify(fitted.value).length;
+    if (fitted.value._gateway.returnedChars === returnedChars) break;
+    fitted.value._gateway.returnedChars = returnedChars;
+  }
 
   return fitted.value;
 }
@@ -300,19 +356,125 @@ function addOrReplaceParameter(parameters, parameter) {
   else parameters.push(parameter);
 }
 
+function filterPublicPaths(paths = {}) {
+  const filtered = {};
+
+  for (const { path, method, operationId } of SAFE_PUBLIC_OPERATIONS) {
+    const sourcePath = paths[path];
+    const sourceOperation = sourcePath?.[method];
+    if (sourceOperation?.operationId !== operationId) continue;
+
+    const targetPath = filtered[path] ?? {};
+    if (Array.isArray(sourcePath.parameters)) targetPath.parameters = sourcePath.parameters;
+    targetPath[method] = sourceOperation;
+    filtered[path] = targetPath;
+  }
+
+  return filtered;
+}
+
+function pageBatchResponseSchema() {
+  return {
+    type: "object",
+    required: ["ok", "data", "_gateway"],
+    properties: {
+      ok: { type: "boolean", enum: [true] },
+      data: {
+        type: "object",
+        required: ["items", "has_more", "cursor", "truncated"],
+        properties: {
+          items: {
+            type: "array",
+            description: "Compact blocks from exactly one Notion page batch.",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                type: { type: "string" },
+                text: { type: "string" },
+                title: { type: "string" },
+                caption: { type: "string" },
+                hasChildren: { type: "boolean" },
+              },
+              additionalProperties: true,
+            },
+          },
+          has_more: {
+            type: "boolean",
+            description: "True when Notion has another native batch for this same page.",
+          },
+          cursor: {
+            type: "string",
+            nullable: true,
+            description: "Pass this cursor to the next getNotionPage call for the same page; null when has_more is false.",
+          },
+          truncated: {
+            type: "boolean",
+            description: "True when the gateway reduced this response to stay within maxChars.",
+          },
+          result_count: { type: "integer", minimum: 0 },
+          has_content: { type: "boolean" },
+          content_text: { type: "string" },
+          content_text_complete: {
+            type: "boolean",
+            description: "False when only the convenience content_text field was shortened.",
+          },
+        },
+        additionalProperties: true,
+      },
+      requestId: { type: "string" },
+      _gateway: {
+        type: "object",
+        required: ["version", "truncated"],
+        properties: {
+          version: { type: "string", enum: [GATEWAY_VERSION] },
+          truncated: {
+            type: "boolean",
+            description: "True when any response content was reduced to satisfy the character budget.",
+          },
+          truncatedStrings: { type: "integer", minimum: 0 },
+          returnedChars: { type: "integer", minimum: 0 },
+        },
+        additionalProperties: true,
+      },
+    },
+    additionalProperties: true,
+  };
+}
+
 export function patchOpenApi(spec, origin) {
   const patched = structuredClone(spec);
-  patched.info = { ...patched.info, version: "0.5.4" };
+  const privacyPolicyUrl = new URL("/privacy", origin).href;
+  patched.info = {
+    ...patched.info,
+    version: GATEWAY_VERSION,
+    description: `Safety-scoped GPT Actions gateway for page-by-page Xuanche Notion reads, granular Notion writes, and read-only GitHub memory. Privacy policy: ${privacyPolicyUrl}`,
+  };
   patched.servers = [{ url: origin }];
+  patched.externalDocs = {
+    description: "玄澈引擎 Gateway 隱私權政策",
+    url: privacyPolicyUrl,
+  };
+  patched.paths = filterPublicPaths(patched.paths);
+  patched.components = patched.components ?? {};
+  patched.components.schemas = patched.components.schemas ?? {};
+  patched.components.schemas.PageBatchResponse = pageBatchResponseSchema();
+  delete patched.components.schemas.WorldLoadRequest;
+  delete patched.components.schemas.WorldUpdateRequest;
 
   const tree = patched.paths?.["/tree"]?.get;
   if (tree) {
     tree.summary = "Read a compact, paginated Notion page tree for GPT Actions";
-    tree.description = "Gateway compacts raw Notion blocks and keeps every response below the GPT Actions payload limit.";
+    tree.description = "Use only as a lightweight direct-child index. The gateway forces depth 0; read every module body with getNotionPage, one page at a time.";
     tree.parameters = Array.isArray(tree.parameters) ? tree.parameters : [];
 
     const depth = tree.parameters.find((item) => item?.name === "depth" && item?.in === "query");
-    if (depth?.schema) depth.schema.default = 0;
+    if (depth?.schema) {
+      depth.schema.minimum = 0;
+      depth.schema.maximum = 0;
+      depth.schema.default = 0;
+      depth.description = "Direct children only. The gateway always sends depth 0 upstream.";
+    }
 
     const maxNodes = tree.parameters.find((item) => item?.name === "maxNodes" && item?.in === "query");
     if (maxNodes?.schema) {
@@ -344,11 +506,16 @@ export function patchOpenApi(spec, origin) {
   const page = patched.paths?.["/page"]?.get;
   if (page) {
     page.summary = "Read one compact Notion page batch for GPT Actions";
-    page.description = "Use this operation once per 12–29 module. Follow the returned cursor until has_more is false; do not combine modules into one request.";
+    page.description = "Read exactly one Notion page per call. This applies to every page and module, including 00–31, each 30-x narrative submodule, and each selected 31 experience card. Never combine modules in one request. Follow data.cursor for the same page until data.has_more is false.";
     page.parameters = Array.isArray(page.parameters) ? page.parameters : [];
 
     const depth = page.parameters.find((item) => item?.name === "depth" && item?.in === "query");
-    if (depth?.schema) depth.schema.default = 0;
+    if (depth?.schema) {
+      depth.schema.minimum = 0;
+      depth.schema.maximum = 0;
+      depth.schema.default = 0;
+      depth.description = "Direct blocks only. The gateway always sends depth 0 upstream.";
+    }
 
     const maxNodes = page.parameters.find((item) => item?.name === "maxNodes" && item?.in === "query");
     if (maxNodes?.schema) {
@@ -363,11 +530,30 @@ export function patchOpenApi(spec, origin) {
       description: "Maximum compact JSON response characters; gateway hard cap is 85000.",
       schema: { type: "integer", minimum: 5_000, maximum: HARD_MAX_CHARS, default: DEFAULT_MAX_CHARS },
     });
+    page.responses = page.responses ?? {};
+    page.responses["200"] = {
+      description: "One compact, cursor-paginated Notion page batch",
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/PageBatchResponse" },
+        },
+      },
+    };
   }
 
-  const worldLoad = patched.paths?.["/world/load"]?.post;
-  if (worldLoad) {
-    worldLoad.description = "Loads a bounded world profile. Do not use this operation to read all 12–29 rules; call getNotionPage once per module and follow cursor pagination.";
+  const createPage = patched.paths?.["/notion/pages"]?.post;
+  if (createPage) {
+    createPage.description = "Create only a genuinely new child page. Do not recreate existing 02–11 state pages or any existing module; preserve their page IDs.";
+  }
+
+  const appendBlocks = patched.paths?.["/notion/blocks/{id}/children"]?.post;
+  if (appendBlocks) {
+    appendBlocks.description = "Append only the changed blocks to an existing page or block. Use small incremental writes and read the affected page back afterward.";
+  }
+
+  const updatePage = patched.paths?.["/notion/pages/{id}"]?.patch;
+  if (updatePage) {
+    updatePage.description = "Update only supported fields on an existing page while preserving its page ID. Archiving or trashing requires explicit user authorization.";
   }
 
   return patched;
@@ -388,7 +574,11 @@ export function buildUpstreamRequest(request) {
       isPage ? MAX_PAGE_NODES : MAX_UPSTREAM_NODES,
     );
     upstream.searchParams.set("maxNodes", String(requestedNodes));
-    if (!upstream.searchParams.has("depth")) upstream.searchParams.set("depth", "0");
+    if (incoming.pathname === "/tree" || incoming.pathname === "/page") {
+      upstream.searchParams.set("depth", "0");
+    } else if (!upstream.searchParams.has("depth")) {
+      upstream.searchParams.set("depth", "0");
+    }
   }
 
   upstream.searchParams.delete("offset");
@@ -413,7 +603,7 @@ function corsHeaders(headers = new Headers()) {
   headers.set("Access-Control-Max-Age", "86400");
   headers.set("Cache-Control", "no-store");
   headers.set("X-Xuanche-Gateway", "cloudflare-pages");
-  headers.set("X-Xuanche-Gateway-Version", "0.5.4");
+  headers.set("X-Xuanche-Gateway-Version", GATEWAY_VERSION);
   headers.set("X-Xuanche-Page-Batch-Sizing", "true");
   headers.set("X-Xuanche-Page-Batch-Limit", "20");
   headers.set("X-Xuanche-Readable-Page-Payload", "true");
@@ -423,6 +613,16 @@ function corsHeaders(headers = new Headers()) {
 function jsonResponse(value, status = 200, headers = new Headers()) {
   headers.set("Content-Type", "application/json; charset=utf-8");
   return new Response(JSON.stringify(value), { status, headers: corsHeaders(headers) });
+}
+
+function privacyResponse(method) {
+  const headers = corsHeaders(new Headers({
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+  }));
+  return new Response(method === "HEAD" ? null : PRIVACY_POLICY_HTML, { status: 200, headers });
 }
 
 async function fetchUpstream(context, request) {
@@ -443,6 +643,13 @@ export async function onRequest(context) {
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
 
+  if (
+    (request.method === "GET" || request.method === "HEAD") &&
+    ["/privacy", "/privacy/", "/privacy.html"].includes(incoming.pathname)
+  ) {
+    return privacyResponse(request.method);
+  }
+
   const upstreamRequest = buildUpstreamRequest(request);
   const upstreamResponse = await fetchUpstream(context, upstreamRequest);
 
@@ -460,9 +667,15 @@ export async function onRequest(context) {
     const compacted = compactActionResponse(payload, {
       offset: incoming.searchParams.get("offset"),
       limit: incoming.pathname === "/page"
-        ? (incoming.searchParams.get("limit") ?? String(DEFAULT_PAGE_NODES))
+        ? String(integerParam(
+          incoming.searchParams.get("maxNodes"),
+          DEFAULT_PAGE_NODES,
+          1,
+          MAX_PAGE_NODES,
+        ))
         : incoming.searchParams.get("limit"),
       maxChars: incoming.searchParams.get("maxChars"),
+      pageBatch: incoming.pathname === "/page",
     });
     const headers = new Headers(upstreamResponse.headers);
     headers.set("X-Xuanche-Compacted", "true");
