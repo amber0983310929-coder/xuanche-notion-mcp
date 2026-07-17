@@ -1,119 +1,76 @@
-# Xuanche Engine v0.5.3
+# Xuanche Engine v0.5.6
 
-Xuanche Engine is a Cloudflare Worker that connects GPT-facing HTTP endpoints to Notion world data and GitHub-backed code, memory, configuration, and cached snapshots.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.6 implements SAVE_V3.2 and TURN_PRELOAD_V1.
 
-## Implemented API
+## Safety model
 
-- `GET /health` — configuration status; add `?deep=1` with an API key to verify upstream services.
-- `GET /home` — fetch the configured Notion home page; `?depth=N` includes recursive blocks.
-- `GET /tree?pageId=...&depth=6&maxNodes=5000` — paginated, bounded recursive Notion reader.
-- `GET /page/:id` and `GET /page?id=...` — compatibility page routes.
-- `POST /world/load` (alias `/load`) — load a task profile from the configured world pages; `persist: true` commits `world/cache.json`.
-- `POST /notion/pages` — create a child page.
-- `POST /notion/blocks/:id/children` — append up to 100 Notion blocks; strings become paragraph blocks.
-- `PATCH /notion/pages/:id` — update properties, icon, cover, archive, or trash state.
-- `POST /world/update` — write Notion first, then append long-term memory and/or merge cache in GitHub.
-- `GET /github/tree` and `GET /github/file?path=world/config.json` — inspect GitHub storage.
-- `GET /openapi.json` — runtime API description.
+- Notion pages 02–09, 11, and 31 are the only world-state pages accepted by the safe update endpoint.
+- Every update requires WORLD_ID, WORLD_STATE, and a unique SAVE_KEY. Retrying the same SAVE_KEY is idempotent.
+- Optional block updates verify that every block belongs to the declared fixed page and support optimistic expected-text checks.
+- Public raw page creation, arbitrary block append, and page metadata mutation are disabled by default. They exist only behind ALLOW_RAW_NOTION_WRITES=true and are never advertised by OpenAPI.
+- World loads reject archived pages and mixed save identities.
+- A failed GitHub mirror is reported as pending after the authoritative Notion write; it does not make a completed Notion write look rolled back.
 
-All mutation and GitHub read routes require `X-API-Key` or `Authorization: Bearer ...`. When `PROTECT_READS=true`, `/home`, `/tree`, and both `/page` routes require the same key. The repository configuration enables this protection by default.
+## Main API
 
-## Secrets and variables
+- GET /health
+- GET /home
+- GET /tree
+- GET /page and GET /page/:id
+- POST /world/load
+- POST /world/update
+- GET /github/tree
+- GET /github/file
+- GET /openapi.json
 
-```bash
-npx wrangler secret put NOTION_TOKEN
-npx wrangler secret put GITHUB_TOKEN
-npx wrangler secret put XUANCHE_API_KEY
-npx wrangler deploy
-```
+All mutations and GitHub reads require X-API-Key. Production should also set PROTECT_READS=true.
 
-Configure `GITHUB_OWNER` and `GITHUB_REPO` in Cloudflare Worker variables. The GitHub token needs repository content read/write permission only for the Xuanche Engine repository.
+## Dynamic turn preload
 
-`PROTECT_READS` is a non-secret Worker variable. Keep it set to `true` in production so world content is never exposed by a keyless browser request.
+After the player replies, load turn_core and exactly one relevant profile:
 
-The Notion integration must be connected to the home page and all child pages the engine reads or updates.
+- turn_combat
+- turn_dialogue
+- turn_exploration
+- turn_cultivation
+- turn_trade
+- turn_travel
 
-For durable low-latency caching, create a Workers KV namespace and bind it as `XUANCHE_CACHE`. Without KV the Worker uses a best-effort isolate memory cache.
+Resolve due public events from page 09 and private actor actions from page 11 before resolving the player action. Do not prewrite a player choice.
 
-## Local verification
+## Safe world update fields
 
-```bash
-npm install
-npm test
-npm run dev
-```
+Required:
 
-Do not place tokens in `.dev.vars` unless that file remains untracked. The repository should keep only placeholders and public page IDs.
+- pageId
+- saveKey
+- expectedWorldId
+- expectedWorldState
+- at least one of children or blockUpdates
 
-## Free Cloudflare Pages gateway
+Optional:
 
-GPT Actions can fail before reaching a public `workers.dev` hostname even when
-the Worker is healthy. The `gateway/` directory provides a free `pages.dev`
-front door while keeping the existing Worker as the only service that holds
-Notion, GitHub, KV, and API-key configuration.
+- expectedRevision
+- memoryEvent
+- cachePatch
+- commitMessage
 
-1. In Cloudflare, create a Pages project from this repository.
-2. Use project name `xuanche-engine-gateway`, production branch `main`, root
-   directory `gateway`, no build command, and output directory `public`.
-3. After the first deployment, open **Settings > Bindings**, add a production
-   **Service binding** named `XUANCHE_ENGINE`, and select
-   `plain-dew-5810xuanche-api` as the service.
-4. Redeploy, then verify `https://YOUR-PROJECT.pages.dev/health`.
+The service appends the SAVE_KEY marker automatically and invalidates all cached world profiles.
 
-The gateway forwards the incoming request unchanged through Cloudflare's
-internal Service Binding. It contains no secret and the downstream Worker still
-enforces `X-API-Key`.
+## Deployment
 
-## GPT Action setup
+Store NOTION_TOKEN, GITHUB_TOKEN, and XUANCHE_API_KEY as Cloudflare secrets. Keep compatibility_date current, keep observability enabled, and bind XUANCHE_CACHE when durable low-latency snapshots are needed.
 
-1. Deploy the Worker and Pages gateway, then open `https://YOUR-PROJECT.pages.dev/openapi.json` and confirm that its version is `0.5.3` and its server URL uses the same Pages origin.
-2. In the GPT editor, open **Actions**, choose **Create new action**, and import the gateway `/openapi.json` URL.
-3. Set authentication to **API key**, choose **Custom header**, enter header name `X-API-Key`, then save the same value stored in the Cloudflare `XUANCHE_API_KEY` secret.
-4. Save the GPT as **Only me** and test it in a fresh normal GPT conversation. The editor Preview tester can return a client error even when normal GPT Actions work.
-5. First call `getEngineHealth`, then call `loadWorldProfile` with `profile: "continue"` and `refresh: false`.
+The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and import the gateway /openapi.json into GPT Actions. The gateway exposes bounded reads, safe profile loads, safe world updates, and read-only GitHub inspection.
 
-The runtime OpenAPI document uses the current Worker origin automatically and provides a unique `operationId` plus request schema for every action.
+## Verification
 
-## Example recursive load
+Run npm test at the repository root. The same test suite includes the gateway tests.
 
-```bash
-curl -X POST "https://YOUR-PROJECT.pages.dev/world/load" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -d '{"profile":"continue","refresh":true,"persist":true,"maxDepth":6,"maxNodes":5000}'
-```
+## Version 0.5.6
 
-Available profiles are `base`, `continue`, `cultivation`, `combat`, `npc`, `exploration`, and `full`. Add extra modules without changing the profile using `pageKeys`, for example `{"profile":"continue","pageKeys":["equipment","economy"]}`.
-
-## Example atomic world update
-
-```bash
-curl -X POST "https://YOUR-PROJECT.pages.dev/world/update" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -d '{
-    "pageId":"NOTION_SAVE_PAGE_ID",
-    "children":["最新續存檔內容"],
-    "memoryEvent":{"type":"save","summary":"完成重大事件同步"},
-    "cachePatch":{"latestSave":"完成重大事件同步"},
-    "commitMessage":"chore(world): sync latest save"
-  }'
-```
-
-The Notion write is performed first. If the later GitHub commit fails, the endpoint returns the failure so callers can retry synchronization without pretending the whole operation succeeded.
-
-## v0.4 cache behavior
-
-- The home page is loaded at `homeMaxDepth` (default `0`) so profile loads do not recursively duplicate all 00-29 modules.
-- A KV cache hit can be persisted to `world/cache.json` without re-reading Notion.
-- Every `/world/update` invalidates all cached `world:*` profiles, rather than one obsolete fixed cache key.
-
-## v0.5 security and actions
-
-- Configurable API-key protection covers every endpoint that exposes Notion world content.
-- Basic `/health` and `/openapi.json` remain public; `/health?deep=1` remains protected.
-- The OpenAPI 3.1 schema now includes all read, load, update, Notion, and GitHub operations with validation metadata suitable for GPT Actions.
-- Cloudflare `nodejs_compat` is enabled for compatibility with current Worker tooling and libraries.
-- v0.5.1 adds explicit `properties` declarations to every object schema for compatibility with the stricter GPT Actions validator.
-- v0.5.2 adds a zero-secret Cloudflare Pages gateway that reaches the existing Worker through a Service Binding and avoids the incompatible `workers.dev` GPT Actions entry path.
-- v0.5.3 moves every load profile to the active 02/03/04 pages, removes deleted legacy 05-11 pages, includes cultivation and persistence rules in normal continuation, rejects archived Notion pages, and versions KV cache keys by the selected page identities.
+- Added SAVE_V3.2 world identity validation and TURN_PRELOAD_V1 profiles.
+- Added fixed-page write allowlisting, SAVE_KEY idempotency, block ancestry checks, and optimistic block updates.
+- Removed arbitrary Notion writes from the public OpenAPI and GPT Action contract.
+- Reset GitHub memory and cache metadata to PURGE-2026-07-17-FULL-SAVE-RESET without retaining gameplay history.
+- Added CI and Cloudflare observability configuration.

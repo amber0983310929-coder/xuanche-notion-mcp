@@ -2,10 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_WORLD_CONFIG, loadWorld, resolveWorldConfig, selectWorldPages, worldCacheKey } from "../src/loader.js";
 
+function worldMarkers(worldState = "EMPTY", worldId = "PENDING") {
+  return [
+    { type: "paragraph", paragraph: { rich_text: [{ plain_text: "WORLD_STATE：" + worldState }] } },
+    { type: "paragraph", paragraph: { rich_text: [{ plain_text: "WORLD_ID：" + worldId }] } },
+  ];
+}
+
 test("continue profile follows the active-world core route", () => {
   const pages = selectWorldPages(DEFAULT_WORLD_CONFIG, "continue");
   assert.deepEqual(pages.map((page) => page.key), [
-    "home", "route", "rules", "save", "timeline", "flow", "npc", "protagonist", "world", "hud", "persistence"
+    "home", "route", "rules", "save", "character", "timeline", "knowledge", "relationships",
+    "causality", "clues", "events", "director", "flow", "npc", "protagonist", "world",
+    "hud", "persistence", "factions"
   ]);
 });
 
@@ -32,13 +41,13 @@ test("unknown profiles fail with available choices", () => {
   assert.throws(() => selectWorldPages(DEFAULT_WORLD_CONFIG, "missing"), /Unknown world load profile/);
 });
 
-test("world loader keeps the home page shallow while loading selected modules deeply", async () => {
+test("world loader keeps the home page shallow and bounds selected modules to one nested level", async () => {
   const depths = new Map();
   const notion = {
     configured: true,
     async getPageTree(id, options) {
       depths.set(id, options.maxDepth);
-      return { page: { id }, children: [], meta: { nodeCount: 0, maxDepth: options.maxDepth } };
+      return { page: { id }, children: worldMarkers(), meta: { nodeCount: 2, maxDepth: options.maxDepth } };
     }
   };
   const result = await loadWorld({}, {
@@ -54,8 +63,10 @@ test("world loader keeps the home page shallow while loading selected modules de
   const home = result.pages.find((page) => page.key === "home");
   const rules = result.pages.find((page) => page.key === "rules");
   assert.equal(depths.get(home.page.id), 0);
-  assert.equal(depths.get(rules.page.id), 4);
+  assert.equal(depths.get(rules.page.id), 1);
   assert.equal(result.meta.pageCount, 6);
+  assert.equal(result.meta.world.worldState, "EMPTY");
+  assert.equal(result.meta.world.worldId, "PENDING");
 });
 
 test("current-state catalog points at the fixed clean-slate pages", () => {
@@ -126,6 +137,27 @@ test("world loader rejects archived configured pages", async () => {
     maxDepth: 0,
     maxNodes: 100
   }), /archived or in trash/);
+});
+
+test("world loader rejects mixed world identities before returning a snapshot", async () => {
+  const timelineId = DEFAULT_WORLD_CONFIG.catalog.find((page) => page.key === "timeline").id;
+  const notion = {
+    configured: true,
+    async getPageTree(id, options) {
+      const children = id.replaceAll("-", "") === timelineId.replaceAll("-", "")
+        ? worldMarkers("ACTIVE", "OTHER-WORLD")
+        : worldMarkers();
+      return { page: { id }, children, meta: { nodeCount: 2, maxDepth: options.maxDepth } };
+    },
+  };
+  await assert.rejects(loadWorld({}, {
+    notion,
+    github: { configured: false },
+    cache: { put: async () => undefined },
+    profile: "base",
+    refresh: true,
+    persist: false,
+  }), /mixed save identities/);
 });
 
 test("a KV cache hit can still be persisted to GitHub", async () => {

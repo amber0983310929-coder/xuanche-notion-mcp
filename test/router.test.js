@@ -20,12 +20,22 @@ test("health reports integrations without exposing secrets", async () => {
 
 test("mutation endpoints reject missing API keys", async () => {
   const route = createRouter();
-  const response = await route(new Request("https://example.test/notion/pages", {
+  const response = await route(new Request("https://example.test/world/update", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ parentPageId: "11111111111111111111111111111111", title: "test" }),
+    body: JSON.stringify({}),
   }), { NOTION_TOKEN: "test", XUANCHE_API_KEY: "required" });
   assert.equal(response.status, 401);
+});
+
+test("raw Notion mutation routes are disabled by default", async () => {
+  const route = createRouter();
+  const response = await route(new Request("https://example.test/notion/pages", {
+    method: "POST",
+    headers: { "content-type": "application/json", "X-API-Key": "required" },
+    body: JSON.stringify({ parentPageId: "11111111111111111111111111111111", title: "test" }),
+  }), { NOTION_TOKEN: "test", XUANCHE_API_KEY: "required" });
+  assert.equal(response.status, 404);
 });
 
 test("home retains the existing shallow block-children behavior and HOME_PAGE_ID alias", async () => {

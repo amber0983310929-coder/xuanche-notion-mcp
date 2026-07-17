@@ -9,15 +9,14 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
-const GATEWAY_VERSION = "0.5.5";
+const GATEWAY_VERSION = "0.5.6";
 
 const SAFE_PUBLIC_OPERATIONS = [
   { path: "/health", method: "get", operationId: "getEngineHealth" },
   { path: "/tree", method: "get", operationId: "getNotionTree" },
   { path: "/page", method: "get", operationId: "getNotionPage" },
-  { path: "/notion/pages", method: "post", operationId: "createNotionPage" },
-  { path: "/notion/blocks/{id}/children", method: "post", operationId: "appendNotionBlocks" },
-  { path: "/notion/pages/{id}", method: "patch", operationId: "updateNotionPage" },
+  { path: "/world/load", method: "post", operationId: "loadWorldProfile" },
+  { path: "/world/update", method: "post", operationId: "updateWorldState" },
   { path: "/github/tree", method: "get", operationId: "listGitHubWorldTree" },
   { path: "/github/file", method: "get", operationId: "getGitHubWorldFile" },
 ];
@@ -448,7 +447,7 @@ export function patchOpenApi(spec, origin) {
   patched.info = {
     ...patched.info,
     version: GATEWAY_VERSION,
-    description: `Safety-scoped GPT Actions gateway for page-by-page Xuanche Notion reads, granular Notion writes, and read-only GitHub memory. Privacy policy: ${privacyPolicyUrl}`,
+    description: `Safety-scoped GPT Actions gateway for bounded reads, TURN_PRELOAD_V1 profile loads, idempotent SAVE_V3.2 updates, and read-only GitHub memory. Privacy policy: ${privacyPolicyUrl}`,
   };
   patched.servers = [{ url: origin }];
   patched.externalDocs = {
@@ -459,8 +458,6 @@ export function patchOpenApi(spec, origin) {
   patched.components = patched.components ?? {};
   patched.components.schemas = patched.components.schemas ?? {};
   patched.components.schemas.PageBatchResponse = pageBatchResponseSchema();
-  delete patched.components.schemas.WorldLoadRequest;
-  delete patched.components.schemas.WorldUpdateRequest;
 
   const tree = patched.paths?.["/tree"]?.get;
   if (tree) {
@@ -541,19 +538,14 @@ export function patchOpenApi(spec, origin) {
     };
   }
 
-  const createPage = patched.paths?.["/notion/pages"]?.post;
-  if (createPage) {
-    createPage.description = "Create only a genuinely new child page. Do not recreate existing 02–11 state pages or any existing module; preserve their page IDs.";
+  const loadWorld = patched.paths?.["/world/load"]?.post;
+  if (loadWorld) {
+    loadWorld.description = "Use turn_core after each player reply, then add exactly one action-specific TURN_PRELOAD_V1 profile. The gateway compacts oversized snapshots.";
   }
 
-  const appendBlocks = patched.paths?.["/notion/blocks/{id}/children"]?.post;
-  if (appendBlocks) {
-    appendBlocks.description = "Append only the changed blocks to an existing page or block. Use small incremental writes and read the affected page back afterward.";
-  }
-
-  const updatePage = patched.paths?.["/notion/pages/{id}"]?.patch;
-  if (updatePage) {
-    updatePage.description = "Update only supported fields on an existing page while preserving its page ID. Archiving or trashing requires explicit user authorization.";
+  const updateWorld = patched.paths?.["/world/update"]?.post;
+  if (updateWorld) {
+    updateWorld.description = "Only fixed 02–09, 11, and 31 page IDs are writable. Every call must include expected world identity and a unique SAVE_KEY.";
   }
 
   return patched;

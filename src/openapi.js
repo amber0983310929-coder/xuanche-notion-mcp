@@ -10,7 +10,7 @@ const depthParameter = {
   name: "depth",
   in: "query",
   description: "Recursive block depth. Use 0 for only direct children.",
-  schema: { type: "integer", minimum: 0, maximum: 20 },
+  schema: { type: "integer", minimum: 0, maximum: 1 },
 };
 
 const maxNodesParameter = {
@@ -43,8 +43,8 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.3",
-      description: "Secure Cloudflare Worker bridge for loading and updating the Xuanche Notion world with GitHub-backed long-term memory, KV snapshots, and an optional Pages gateway.",
+      version: "0.5.6",
+      description: "Fail-closed Cloudflare Worker bridge for SAVE_V3.2 world loads, TURN_PRELOAD_V1 profiles, and idempotent allowlisted Notion updates.",
     },
     servers: [{ url: new URL(origin).origin }],
     components: {
@@ -103,6 +103,7 @@ export function buildOpenApi(origin) {
               type: "string",
               enum: [
                 "base",
+                "state_check",
                 "continue",
                 "new_game",
                 "character_creation",
@@ -112,23 +113,40 @@ export function buildOpenApi(origin) {
                 "npc",
                 "exploration",
                 "save",
+                "turn_core",
+                "turn_combat",
+                "turn_dialogue",
+                "turn_exploration",
+                "turn_cultivation",
+                "turn_trade",
+                "turn_travel",
                 "full",
               ],
               default: "continue",
             },
             refresh: { type: "boolean", default: true, description: "Read Notion instead of using an unexpired KV snapshot." },
             persist: { type: "boolean", default: false, description: "Commit the loaded snapshot to world/cache.json in GitHub." },
-            maxDepth: { type: "integer", minimum: 0, maximum: 20 },
+            maxDepth: { type: "integer", minimum: 0, maximum: 1 },
             maxNodes: { type: "integer", minimum: 1, maximum: 20_000 },
             pageKeys: { type: "array", items: { type: "string" }, uniqueItems: true },
           },
         },
         WorldUpdateRequest: {
           type: "object",
-          required: ["pageId", "children"],
+          required: ["pageId", "saveKey", "expectedWorldId", "expectedWorldState"],
           properties: {
             pageId: { $ref: "#/components/schemas/NotionId" },
-            children: { type: "array", minItems: 1, maxItems: 100, items: { $ref: "#/components/schemas/BlockInput" } },
+            saveKey: { type: "string", minLength: 1, maxLength: 200, description: "Unique idempotency key written to the target world page." },
+            expectedWorldId: { type: "string", minLength: 1 },
+            expectedWorldState: { type: "string", enum: ["EMPTY", "ACTIVE", "WORLD_CONFLICT"] },
+            expectedRevision: { type: "integer", minimum: 0 },
+            children: { type: "array", minItems: 1, maxItems: 99, items: { $ref: "#/components/schemas/BlockInput" } },
+            blockUpdates: {
+              type: "array",
+              minItems: 1,
+              maxItems: 50,
+              items: { $ref: "#/components/schemas/BlockUpdate" },
+            },
             after: { $ref: "#/components/schemas/NotionId" },
             memoryEvent: {
               description: "String summary or structured append-only long-term-memory event.",
@@ -150,36 +168,24 @@ export function buildOpenApi(origin) {
             cachePatch: { ...freeformObject },
             commitMessage: { type: "string", maxLength: 256 },
           },
+          anyOf: [
+            { required: ["children"] },
+            { required: ["blockUpdates"] },
+          ],
         },
-        CreatePageRequest: {
+        BlockUpdate: {
           type: "object",
-          required: ["parentPageId"],
+          required: ["blockId", "type"],
           properties: {
-            parentPageId: { $ref: "#/components/schemas/NotionId" },
-            title: { type: "string" },
-            properties: { ...freeformObject },
-            children: { type: "array", maxItems: 100, items: { $ref: "#/components/schemas/BlockInput" } },
-            icon: { ...freeformObject },
-            cover: { ...freeformObject },
-          },
-        },
-        AppendBlocksRequest: {
-          type: "object",
-          required: ["children"],
-          properties: {
-            children: { type: "array", minItems: 1, maxItems: 100, items: { $ref: "#/components/schemas/BlockInput" } },
-            after: { $ref: "#/components/schemas/NotionId" },
-          },
-        },
-        UpdatePageRequest: {
-          type: "object",
-          description: "Notion page fields supported by the engine.",
-          properties: {
-            properties: { ...freeformObject },
-            icon: { ...freeformObject, nullable: true },
-            cover: { ...freeformObject, nullable: true },
-            archived: { type: "boolean" },
-            in_trash: { type: "boolean" },
+            blockId: { $ref: "#/components/schemas/NotionId" },
+            type: {
+              type: "string",
+              enum: ["paragraph", "callout", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote", "toggle", "to_do", "table_row"],
+            },
+            text: { type: "string" },
+            cells: { type: "array", minItems: 1, items: { oneOf: [{ type: "string" }, { type: "array", items: { type: "string" } }] } },
+            checked: { type: "boolean" },
+            expectedText: { type: "string", description: "Optional optimistic-concurrency check." },
           },
         },
       },
@@ -216,7 +222,7 @@ export function buildOpenApi(origin) {
           security: apiKeySecurity,
           parameters: [
             { name: "pageId", in: "query", description: "Defaults to the configured world home page.", schema: { $ref: "#/components/schemas/NotionId" } },
-            { ...depthParameter, schema: { ...depthParameter.schema, default: 6 } },
+            { ...depthParameter, schema: { ...depthParameter.schema, default: 0 } },
             maxNodesParameter,
             cursorParameter,
             { name: "concurrency", in: "query", schema: { type: "integer", minimum: 1, maximum: 8, default: 3 } },
@@ -245,7 +251,7 @@ export function buildOpenApi(origin) {
           security: apiKeySecurity,
           parameters: [
             { name: "id", in: "path", required: true, schema: { $ref: "#/components/schemas/NotionId" } },
-            { ...depthParameter, schema: { ...depthParameter.schema, default: 6 } },
+            { ...depthParameter, schema: { ...depthParameter.schema, default: 0 } },
             maxNodesParameter,
             cursorParameter,
           ],
@@ -264,38 +270,9 @@ export function buildOpenApi(origin) {
       "/world/update": {
         post: {
           operationId: "updateWorldState",
-          summary: "Append a Notion update and synchronize GitHub memory or cache",
+          summary: "Apply an idempotent, allowlisted SAVE_V3.2 world update",
           security: apiKeySecurity,
           requestBody: jsonBody("#/components/schemas/WorldUpdateRequest", true),
-          responses: standardResponses,
-        },
-      },
-      "/notion/pages": {
-        post: {
-          operationId: "createNotionPage",
-          summary: "Create a child Notion page",
-          security: apiKeySecurity,
-          requestBody: jsonBody("#/components/schemas/CreatePageRequest", true),
-          responses: { ...standardResponses, 201: standardResponses[200] },
-        },
-      },
-      "/notion/blocks/{id}/children": {
-        post: {
-          operationId: "appendNotionBlocks",
-          summary: "Append blocks to a Notion page or block",
-          security: apiKeySecurity,
-          parameters: [{ name: "id", in: "path", required: true, schema: { $ref: "#/components/schemas/NotionId" } }],
-          requestBody: jsonBody("#/components/schemas/AppendBlocksRequest", true),
-          responses: standardResponses,
-        },
-      },
-      "/notion/pages/{id}": {
-        patch: {
-          operationId: "updateNotionPage",
-          summary: "Update supported Notion page properties",
-          security: apiKeySecurity,
-          parameters: [{ name: "id", in: "path", required: true, schema: { $ref: "#/components/schemas/NotionId" } }],
-          requestBody: jsonBody("#/components/schemas/UpdatePageRequest", true),
           responses: standardResponses,
         },
       },

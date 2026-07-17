@@ -5,7 +5,7 @@ import { buildOpenApi } from "../src/openapi.js";
 test("OpenAPI is bound to the deployed origin and exposes unique operation IDs", () => {
   const document = buildOpenApi("https://worker.example/openapi.json");
   assert.equal(document.openapi, "3.1.0");
-  assert.equal(document.info.version, "0.5.3");
+  assert.equal(document.info.version, "0.5.6");
   assert.equal(document.servers[0].url, "https://worker.example");
 
   const operationIds = Object.values(document.paths)
@@ -51,6 +51,7 @@ test("WorldLoadRequest exposes all clean-slate loader profiles", () => {
   const document = buildOpenApi("https://worker.example/openapi.json");
   assert.deepEqual(document.components.schemas.WorldLoadRequest.properties.profile.enum, [
     "base",
+    "state_check",
     "continue",
     "new_game",
     "character_creation",
@@ -60,6 +61,27 @@ test("WorldLoadRequest exposes all clean-slate loader profiles", () => {
     "npc",
     "exploration",
     "save",
+    "turn_core",
+    "turn_combat",
+    "turn_dialogue",
+    "turn_exploration",
+    "turn_cultivation",
+    "turn_trade",
+    "turn_travel",
     "full",
   ]);
+});
+
+test("OpenAPI exposes only the safe world mutation route", () => {
+  const document = buildOpenApi("https://worker.example/openapi.json");
+  assert.equal(document.paths["/notion/pages"], undefined);
+  assert.equal(document.paths["/notion/blocks/{id}/children"], undefined);
+  assert.equal(document.paths["/notion/pages/{id}"], undefined);
+  assert.deepEqual(document.components.schemas.WorldUpdateRequest.required, [
+    "pageId",
+    "saveKey",
+    "expectedWorldId",
+    "expectedWorldState",
+  ]);
+  assert.ok(document.components.schemas.WorldUpdateRequest.properties.blockUpdates);
 });

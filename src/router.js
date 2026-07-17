@@ -30,7 +30,7 @@ export function createRouter(dependencies = {}) {
         return json({
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.3",
+          version: "0.5.6",
           protectedReads: readsRequireApiKey(env),
           endpoints: ["/health", "/home", "/tree", "/world/load", "/world/update", "/openapi.json"],
         });
@@ -44,7 +44,7 @@ export function createRouter(dependencies = {}) {
         const result = {
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.3",
+          version: "0.5.6",
           integrations: {
             notion: notion.configured ? "configured" : "missing",
             github: github.configured ? "configured" : "missing",
@@ -52,6 +52,10 @@ export function createRouter(dependencies = {}) {
           },
           capabilities: {
             shallowPageBatchSizing: true,
+            saveSchema: "SAVE_V3.2",
+            dynamicTurnPreload: "TURN_PRELOAD_V1",
+            idempotentWorldUpdates: true,
+            fixedWorldWriteAllowlist: true,
           },
           protectedReads: readsRequireApiKey(env),
           requestId: id,
@@ -72,7 +76,7 @@ export function createRouter(dependencies = {}) {
         requireReadApiKey(request, env);
         const homeId = env.NOTION_HOME_PAGE_ID || env.HOME_PAGE_ID;
         if (!homeId) throw new ApiError(503, "HOME_PAGE_ID or NOTION_HOME_PAGE_ID is not configured");
-        const depth = clampInteger(url.searchParams.get("depth"), 0, 0, 20);
+        const depth = clampInteger(url.searchParams.get("depth"), 0, 0, 1);
         const cursor = url.searchParams.get("cursor");
         const data = depth > 0
           ? await notion.getPageTree(homeId, { maxDepth: depth, maxNodes: clampInteger(url.searchParams.get("maxNodes"), 5_000, 1, 20_000) })
@@ -88,7 +92,7 @@ export function createRouter(dependencies = {}) {
         const pageId = url.searchParams.get("pageId") || env.NOTION_HOME_PAGE_ID || env.HOME_PAGE_ID;
         if (!pageId) throw new ApiError(400, "pageId is required when no home page is configured");
         const data = await notion.getPageTree(pageId, {
-          maxDepth: clampInteger(url.searchParams.get("depth"), 6, 0, 20),
+          maxDepth: clampInteger(url.searchParams.get("depth"), 0, 0, 1),
           maxNodes: clampInteger(url.searchParams.get("maxNodes"), 5_000, 1, 20_000),
           concurrency: clampInteger(url.searchParams.get("concurrency"), 3, 1, 8),
         });
@@ -105,14 +109,14 @@ export function createRouter(dependencies = {}) {
           persist: body.persist === true,
           profile: body.profile,
           pageKeys: body.pageKeys,
-          maxDepth: clampInteger(body.maxDepth, undefined, 0, 20),
+          maxDepth: clampInteger(body.maxDepth, undefined, 0, 1),
           maxNodes: clampInteger(body.maxNodes, undefined, 1, 20_000),
           cache: dependencies.cache,
         });
         return json({ ok: true, data, requestId: id });
       }
 
-      if (request.method === "POST" && url.pathname === "/notion/pages") {
+      if (env.ALLOW_RAW_NOTION_WRITES === "true" && request.method === "POST" && url.pathname === "/notion/pages") {
         requireApiKey(request, env);
         const body = await readJson(request);
         const data = await notion.createChildPage(body.parentPageId, body);
@@ -120,7 +124,7 @@ export function createRouter(dependencies = {}) {
       }
 
       const blockChildren = url.pathname.match(/^\/notion\/blocks\/([^/]+)\/children$/);
-      if (request.method === "POST" && blockChildren) {
+      if (env.ALLOW_RAW_NOTION_WRITES === "true" && request.method === "POST" && blockChildren) {
         requireApiKey(request, env);
         const body = await readJson(request);
         const data = await notion.appendBlocks(decodeURIComponent(blockChildren[1]), body.children, body.after);
@@ -128,7 +132,7 @@ export function createRouter(dependencies = {}) {
       }
 
       const notionPage = url.pathname.match(/^\/notion\/pages\/([^/]+)$/);
-      if (request.method === "PATCH" && notionPage) {
+      if (env.ALLOW_RAW_NOTION_WRITES === "true" && request.method === "PATCH" && notionPage) {
         requireApiKey(request, env);
         const body = await readJson(request);
         const data = await notion.updatePage(decodeURIComponent(notionPage[1]), body);
@@ -158,7 +162,7 @@ export function createRouter(dependencies = {}) {
       if (request.method === "GET" && url.pathname.startsWith("/page/")) {
         requireReadApiKey(request, env);
         const pageId = normalizeNotionId(decodeURIComponent(url.pathname.slice(6)));
-        const depth = clampInteger(url.searchParams.get("depth"), 6, 0, 20);
+        const depth = clampInteger(url.searchParams.get("depth"), 0, 0, 1);
         const cursor = url.searchParams.get("cursor");
         const data = depth > 0
           ? await notion.getPageTree(pageId, {
@@ -176,7 +180,7 @@ export function createRouter(dependencies = {}) {
         requireReadApiKey(request, env);
         const pageId = url.searchParams.get("id");
         if (!pageId) throw new ApiError(400, "missing id");
-        const depth = clampInteger(url.searchParams.get("depth"), 0, 0, 20);
+        const depth = clampInteger(url.searchParams.get("depth"), 0, 0, 1);
         const cursor = url.searchParams.get("cursor");
         const data = depth > 0
           ? await notion.getPageTree(pageId, {

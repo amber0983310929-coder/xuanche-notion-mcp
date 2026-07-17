@@ -1,8 +1,10 @@
 {
-  "version": 2,
-  "invalidatedAt": "2026-07-17T05:54:38.528Z",
-  "purgeId": "PURGE-2026-07-17-CLEAN-SLATE",
+  "version": 3,
+  "schema": "SAVE_V3.2",
+  "invalidatedAt": "2026-07-17T00:00:00.000+08:00",
+  "purgeId": "PURGE-2026-07-17-FULL-SAVE-RESET",
   "worldState": "EMPTY",
   "worldId": "PENDING",
+  "simTick": 0,
   "snapshot": null
 }
