@@ -79,6 +79,7 @@ Run npm test at the repository root. The same test suite includes the gateway te
 - Added staged writes, canonical-save-last activation, readback validation, compensation, and idempotent retries.
 - Fixed full-width `｜` world-marker parsing, which could misread an EMPTY page as an unknown state.
 - Added gateway backend gating so initializeWorld is never advertised against a pre-0.5.7 Worker.
+- Synced Notion CHARACTER_CONFIRM_AUTORUN_V1 rules so explicit confirmation invokes initialization in the same assistant turn.
 
 ## Version 0.5.6
 
