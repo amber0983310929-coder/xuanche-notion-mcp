@@ -43,7 +43,7 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.7",
+      version: "0.5.8",
       description: "Fail-closed Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, TURN_PRELOAD_V1 profile loads, and idempotent allowlisted Notion updates.",
     },
     servers: [{ url: new URL(origin).origin }],
@@ -317,7 +317,7 @@ export function buildOpenApi(origin) {
         post: {
           operationId: "initializeWorld",
           summary: "Initialize every fixed SAVE_V3.2 page after explicit character confirmation",
-          description: "Use exactly once after the player explicitly confirms a character. The engine preflights all fixed state pages, stages the new world, activates the canonical save marker last, validates readback, and compensates every staged write on failure.",
+          description: "Use exactly once after the player explicitly confirms a character. The engine paces Notion requests, preflights all fixed state pages, stages the new world, activates the canonical save marker last, validates or safely defers transient post-commit readback, reconciles failed compensation, and repairs display and GitHub mirrors idempotently.",
           security: apiKeySecurity,
           requestBody: jsonBody("#/components/schemas/WorldInitializeRequest", true),
           responses: standardResponses,
