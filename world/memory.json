@@ -1,26 +1,15 @@
 {
-  "version": 1,
-  "updatedAt": "2026-07-16T08:25:23.239Z",
+  "version": 2,
+  "updatedAt": "2026-07-17T05:54:38.528Z",
+  "worldState": "EMPTY",
+  "worldId": "PENDING",
+  "purgeId": "PURGE-2026-07-17-CLEAN-SLATE",
   "events": [
     {
-      "timestamp": "2026-07-14T15:54:33.970Z",
-      "summary": "Cloudflare?Notion?GitHub ? KV ????????",
-      "version": "0.3.0",
-      "type": "engine_milestone"
-    },
-    {
-      "timestamp": "2026-07-14T15:57:28.219Z",
-      "summary": "Cloudflare、Notion、GitHub 與 KV 核心鏈路驗證完成",
-      "supersedesCommit": "a3439047060139ff9cd2a20416e4f8c6013b2619",
-      "encoding": "utf-8",
-      "version": "0.3.0",
-      "type": "engine_milestone"
-    },
-    {
-      "timestamp": "2026-07-16T08:25:23.239Z",
-      "type": "new_game",
-      "summary": "建立沐劍英新世界：15歲赤髮少年，由沐雲撫養，與蕭瀟青梅竹馬；目標是保護家人與村民，隱藏天賦與身世。開局青溪村。",
-      "version": "1"
+      "timestamp": "2026-07-17T05:54:38.528Z",
+      "type": "world_purge",
+      "summary": "All prior and current gameplay saves were removed. The fixed Notion pages 02-09 and 11 are authoritative and remain EMPTY/PENDING until a character is explicitly confirmed.",
+      "version": "2"
     }
   ]
 }
