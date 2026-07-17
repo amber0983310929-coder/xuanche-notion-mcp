@@ -1,5 +1,6 @@
 import { buildOpenApi } from "./openapi.js";
 import { GitHubClient } from "./github.js";
+import { initializeWorld } from "./initializer.js";
 import { loadWorld } from "./loader.js";
 import { NotionClient } from "./notion.js";
 import { updateWorld } from "./updater.js";
@@ -30,9 +31,9 @@ export function createRouter(dependencies = {}) {
         return json({
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.6",
+          version: "0.5.7",
           protectedReads: readsRequireApiKey(env),
-          endpoints: ["/health", "/home", "/tree", "/world/load", "/world/update", "/openapi.json"],
+          endpoints: ["/health", "/home", "/tree", "/world/initialize", "/world/load", "/world/update", "/openapi.json"],
         });
       }
 
@@ -44,7 +45,7 @@ export function createRouter(dependencies = {}) {
         const result = {
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.6",
+          version: "0.5.7",
           integrations: {
             notion: notion.configured ? "configured" : "missing",
             github: github.configured ? "configured" : "missing",
@@ -56,6 +57,7 @@ export function createRouter(dependencies = {}) {
             dynamicTurnPreload: "TURN_PRELOAD_V1",
             idempotentWorldUpdates: true,
             fixedWorldWriteAllowlist: true,
+            atomicWorldInitialization: true,
           },
           protectedReads: readsRequireApiKey(env),
           requestId: id,
@@ -143,6 +145,13 @@ export function createRouter(dependencies = {}) {
         requireApiKey(request, env);
         const body = await readJson(request);
         const data = await updateWorld(env, body, { notion, github, cache: dependencies.cache });
+        return json({ ok: true, data, requestId: id });
+      }
+
+      if (request.method === "POST" && url.pathname === "/world/initialize") {
+        requireApiKey(request, env);
+        const body = await readJson(request);
+        const data = await initializeWorld(env, body, { notion, github, cache: dependencies.cache });
         return json({ ok: true, data, requestId: id });
       }
 
