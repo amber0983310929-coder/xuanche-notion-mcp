@@ -9,7 +9,7 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
-const GATEWAY_VERSION = "0.5.8";
+const GATEWAY_VERSION = "0.5.9";
 
 const SAFE_PUBLIC_OPERATIONS = [
   { path: "/health", method: "get", operationId: "getEngineHealth" },
@@ -567,7 +567,7 @@ export function patchOpenApi(spec, origin) {
 
   const loadWorld = patched.paths?.["/world/load"]?.post;
   if (loadWorld) {
-    loadWorld.description = "Use turn_core after each player reply, then add exactly one action-specific TURN_PRELOAD_V1 profile. The gateway compacts oversized snapshots.";
+    loadWorld.description = "World profile reads are fixed to depth 0. Use turn_core after each player reply, then add exactly one action-specific TURN_PRELOAD_V1 profile. The gateway compacts oversized snapshots.";
   }
 
   const initializeWorld = patched.paths?.["/world/initialize"]?.post;

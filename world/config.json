@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "homePageId": "5f4c8de4a4c246478a4658d1ebc2a1a2",
   "catalog": [
     {
@@ -230,19 +230,11 @@
       "save",
       "character",
       "timeline",
-      "knowledge",
-      "relationships",
-      "causality",
-      "clues",
       "events",
       "director",
       "flow",
-      "npc",
-      "protagonist",
-      "world",
       "hud",
-      "persistence",
-      "factions"
+      "persistence"
     ],
     "new_game": [
       "home",
@@ -457,7 +449,7 @@
   },
   "loader": {
     "defaultProfile": "continue",
-    "maxDepth": 1,
+    "maxDepth": 0,
     "homeMaxDepth": 0,
     "maxNodesPerPage": 1500,
     "concurrency": 2,
@@ -465,4 +457,3 @@
     "persistSnapshotToGitHub": false
   }
 }
-

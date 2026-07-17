@@ -5,7 +5,7 @@ import { ApiError, mapLimit, mergeDeep, normalizeNotionId, nowIso } from "./util
 import { validateLoadedWorld } from "./world-state.js";
 
 export const DEFAULT_WORLD_CONFIG = {
-  version: 6,
+  version: 7,
   homePageId: "5f4c8de4a4c246478a4658d1ebc2a1a2",
   catalog: [
     { key: "home", title: "修真世界（首頁）", id: "5f4c8de4a4c246478a4658d1ebc2a1a2" },
@@ -52,7 +52,7 @@ export const DEFAULT_WORLD_CONFIG = {
   profiles: {
     base: ["home", "route", "rules", "save", "timeline", "persistence"],
     state_check: ["save", "character", "timeline", "knowledge", "relationships", "causality", "clues", "events", "director"],
-    continue: ["home", "route", "rules", "save", "character", "timeline", "knowledge", "relationships", "causality", "clues", "events", "director", "flow", "npc", "protagonist", "world", "hud", "persistence", "factions"],
+    continue: ["home", "route", "rules", "save", "character", "timeline", "events", "director", "flow", "hud", "persistence"],
     new_game: ["home", "route", "rules", "character_template"],
     character_creation: ["home", "route", "rules", "character_template", "npc", "protagonist", "hud"],
     character_finalize: ["home", "route", "rules", "character_template", "npc", "protagonist", "hud", "world", "narrative_long", "originality"],
@@ -72,7 +72,7 @@ export const DEFAULT_WORLD_CONFIG = {
   },
   loader: {
     defaultProfile: "continue",
-    maxDepth: 1,
+    maxDepth: 0,
     homeMaxDepth: 0,
     maxNodesPerPage: 1_500,
     concurrency: 2,
@@ -121,7 +121,10 @@ export async function loadWorld(env, options = {}) {
   const config = await resolveWorldConfig(env, github);
   const profile = options.profile || config.loader.defaultProfile || "continue";
   const selectedPages = selectWorldPages(config, profile, options.pageKeys);
-  const maxDepth = Math.min(1, Math.max(0, Number(options.maxDepth ?? config.loader.maxDepth)));
+  // Profile loads are deliberately shallow. Recursive reads multiply Notion
+  // requests for tables, toggles, and child pages and can exhaust the Action
+  // request window before the authoritative world markers are returned.
+  const maxDepth = 0;
   const homeMaxDepth = Number(config.loader.homeMaxDepth ?? 0);
   const maxNodes = Number(options.maxNodes ?? config.loader.maxNodesPerPage);
   const cacheKey = worldCacheKey(profile, selectedPages, maxDepth, maxNodes, homeMaxDepth, config.version);
@@ -163,7 +166,17 @@ export async function loadWorld(env, options = {}) {
   if (world) snapshot.meta.world = world;
 
   const ttl = Number(env.CACHE_TTL_SECONDS || config.loader.cacheTtlSeconds || 300);
-  await cache.put(cacheKey, snapshot, ttl);
+  try {
+    await cache.put(cacheKey, snapshot, ttl);
+    snapshot.meta.cacheWrite = { status: "complete" };
+  } catch (error) {
+    // KV is an acceleration layer, not an authority. A size or transient KV
+    // failure must never turn a valid Notion read into an internal error.
+    snapshot.meta.cacheWrite = {
+      status: "pending",
+      error: error?.message || String(error),
+    };
+  }
   if (persist) snapshot.meta.githubCommit = await persistSnapshot(github, snapshot);
   return snapshot;
 }
