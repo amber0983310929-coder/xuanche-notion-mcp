@@ -5,7 +5,7 @@ import { ApiError, mapLimit, mergeDeep, normalizeNotionId, nowIso } from "./util
 import { validateLoadedWorld } from "./world-state.js";
 
 export const DEFAULT_WORLD_CONFIG = {
-  version: 7,
+  version: 8,
   homePageId: "5f4c8de4a4c246478a4658d1ebc2a1a2",
   catalog: [
     { key: "home", title: "修真世界（首頁）", id: "5f4c8de4a4c246478a4658d1ebc2a1a2" },
@@ -61,7 +61,10 @@ export const DEFAULT_WORLD_CONFIG = {
     npc: ["home", "route", "rules", "save", "timeline", "character", "relationships", "causality", "npc", "protagonist", "factions", "hud", "persistence", "narrative", "narrative_social", "narrative_power"],
     exploration: ["home", "route", "rules", "save", "timeline", "character", "knowledge", "clues", "events", "world", "regions", "ecology", "intelligence", "hud", "persistence", "narrative", "narrative_daily"],
     save: ["home", "route", "rules", "save", "character", "timeline", "knowledge", "relationships", "causality", "clues", "events", "director", "persistence"],
-    turn_core: ["route", "rules", "save", "character", "timeline", "events", "director", "flow", "hud", "persistence", "factions"],
+    // Per-turn state must fit safely inside a single GPT Action response.
+    // Static rules and action-specific material are loaded separately; this
+    // profile is deliberately limited to the authoritative live state.
+    turn_core: ["save", "character", "timeline", "events", "director", "hud"],
     turn_combat: ["save", "character", "timeline", "relationships", "causality", "events", "director", "combat", "equipment", "hud", "narrative_combat"],
     turn_dialogue: ["save", "character", "timeline", "relationships", "causality", "events", "director", "npc", "intelligence", "factions", "hud", "narrative_social", "narrative_power"],
     turn_exploration: ["save", "character", "timeline", "knowledge", "clues", "events", "director", "world", "regions", "ecology", "intelligence", "hud", "narrative_daily"],
@@ -75,6 +78,7 @@ export const DEFAULT_WORLD_CONFIG = {
     maxDepth: 0,
     homeMaxDepth: 0,
     maxNodesPerPage: 1_500,
+    turnCoreMaxNodesPerPage: 60,
     concurrency: 2,
     cacheTtlSeconds: 300,
     persistSnapshotToGitHub: false
@@ -126,7 +130,14 @@ export async function loadWorld(env, options = {}) {
   // request window before the authoritative world markers are returned.
   const maxDepth = 0;
   const homeMaxDepth = Number(config.loader.homeMaxDepth ?? 0);
-  const maxNodes = Number(options.maxNodes ?? config.loader.maxNodesPerPage);
+  const requestedMaxNodes = Number(options.maxNodes ?? config.loader.maxNodesPerPage);
+  const turnCoreMaxNodes = Number(config.loader.turnCoreMaxNodesPerPage ?? 60);
+  // A caller must not be able to expand the mandatory per-turn state profile
+  // back into an unbounded snapshot. Other profiles retain their configured
+  // ceiling so optional action-specific preloads still work as designed.
+  const maxNodes = profile === "turn_core"
+    ? Math.min(requestedMaxNodes, turnCoreMaxNodes)
+    : requestedMaxNodes;
   const cacheKey = worldCacheKey(profile, selectedPages, maxDepth, maxNodes, homeMaxDepth, config.version);
   const persist = options.persist ?? config.loader.persistSnapshotToGitHub;
 

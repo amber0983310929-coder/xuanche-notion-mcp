@@ -43,7 +43,7 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.9",
+      version: "0.5.10",
       description: "Fail-closed Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, TURN_PRELOAD_V1 profile loads, and idempotent allowlisted Notion updates.",
     },
     servers: [{ url: new URL(origin).origin }],
