@@ -2,12 +2,12 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Xuanche Engine API",
-    "version": "0.5.6",
-    "description": "Fail-closed Cloudflare Worker bridge for SAVE_V3.2 world loads, TURN_PRELOAD_V1 profiles, and idempotent allowlisted Notion updates."
+    "version": "0.5.7",
+    "description": "Fail-closed Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, TURN_PRELOAD_V1 profile loads, and idempotent allowlisted Notion updates."
   },
   "servers": [
     {
-      "url": "https://xuanche-engine-gateway.pages.dev"
+      "url": "https://plain-dew-5810xuanche-api.workers.dev"
     }
   ],
   "components": {
@@ -260,6 +260,188 @@
             ]
           }
         ]
+      },
+      "WorldInitializeRequest": {
+        "type": "object",
+        "required": [
+          "saveKey",
+          "character"
+        ],
+        "properties": {
+          "saveKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\r\\n\\s](?:[^\\r\\n]*[^\\r\\n\\s])?$",
+            "description": "Unique idempotency key for this confirmed character and new-world initialization."
+          },
+          "character": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "gender": {
+                "type": "string"
+              },
+              "age": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "appearance": {
+                "type": "string"
+              },
+              "personality": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "background": {
+                "type": "string"
+              },
+              "motivation": {
+                "type": "string"
+              },
+              "bottomLine": {
+                "type": "string"
+              },
+              "relationships": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              }
+            },
+            "additionalProperties": true
+          },
+          "opening": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string"
+              },
+              "time": {
+                "type": "string"
+              },
+              "premise": {
+                "type": "string"
+              },
+              "knownAbilities": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              },
+              "knownWorldFacts": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              },
+              "promises": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              },
+              "visibleClue": {
+                "type": "string"
+              },
+              "choices": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              },
+              "contracts": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {},
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              },
+              "hiddenOrigin": {
+                "type": "string"
+              },
+              "directorNotes": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
       },
       "BlockUpdate": {
         "type": "object",
@@ -753,6 +935,52 @@
         }
       }
     },
+    "/world/initialize": {
+      "post": {
+        "operationId": "initializeWorld",
+        "summary": "Initialize every fixed SAVE_V3.2 page after explicit character confirmation",
+        "description": "Use exactly once after the player explicitly confirms a character. The engine preflights all fixed state pages, stages the new world, activates the canonical save marker last, validates readback, and compensates every staged write on failure.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorldInitializeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
     "/world/update": {
       "post": {
         "operationId": "updateWorldState",
@@ -899,4 +1127,3 @@
     }
   }
 }
-
