@@ -26,7 +26,10 @@ test("recursive Notion reader follows pagination and nested children", async () 
     return response({ message: "not found" }, 404);
   };
 
-  const notion = new NotionClient({ NOTION_TOKEN: "test" }, mockFetch);
+  const notion = new NotionClient({
+    NOTION_TOKEN: "test",
+    NOTION_MIN_REQUEST_INTERVAL_MS: "0",
+  }, mockFetch);
   const tree = await notion.getPageTree(PAGE, { maxDepth: 4, maxNodes: 10 });
   assert.equal(tree.meta.nodeCount, 3);
   assert.equal(tree.children.length, 2);
@@ -40,9 +43,31 @@ test("Notion client invokes fetch with the Cloudflare global receiver", async ()
     receiver = this;
     return response({ results: [], has_more: false });
   };
-  const notion = new NotionClient({ NOTION_TOKEN: "test" }, receiverAwareFetch);
+  const notion = new NotionClient({
+    NOTION_TOKEN: "test",
+    NOTION_MIN_REQUEST_INTERVAL_MS: "0",
+  }, receiverAwareFetch);
   await notion.listBlockChildren(PAGE);
   assert.equal(receiver, globalThis);
+});
+
+test("Notion client spaces concurrent requests to stay below the configured rate", async () => {
+  const starts = [];
+  const mockFetch = async () => {
+    starts.push(Date.now());
+    return response({ results: [], has_more: false });
+  };
+  const notion = new NotionClient({
+    NOTION_TOKEN: "test",
+    NOTION_MIN_REQUEST_INTERVAL_MS: "20",
+  }, mockFetch);
+
+  await Promise.all([
+    notion.listBlockChildren(PAGE),
+    notion.listBlockChildren(CHILD),
+  ]);
+  assert.equal(starts.length, 2);
+  assert.ok(starts[1] - starts[0] >= 15);
 });
 
 function response(body, status = 200) {
