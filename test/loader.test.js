@@ -12,9 +12,8 @@ function worldMarkers(worldState = "EMPTY", worldId = "PENDING") {
 test("continue profile follows the active-world core route", () => {
   const pages = selectWorldPages(DEFAULT_WORLD_CONFIG, "continue");
   assert.deepEqual(pages.map((page) => page.key), [
-    "home", "route", "rules", "save", "character", "timeline", "knowledge", "relationships",
-    "causality", "clues", "events", "director", "flow", "npc", "protagonist", "world",
-    "hud", "persistence", "factions"
+    "home", "route", "rules", "save", "character", "timeline", "events", "director",
+    "flow", "hud", "persistence"
   ]);
 });
 
@@ -41,7 +40,7 @@ test("unknown profiles fail with available choices", () => {
   assert.throws(() => selectWorldPages(DEFAULT_WORLD_CONFIG, "missing"), /Unknown world load profile/);
 });
 
-test("world loader keeps the home page shallow and bounds selected modules to one nested level", async () => {
+test("world profile loads remain shallow even when a recursive depth is requested", async () => {
   const depths = new Map();
   const notion = {
     configured: true,
@@ -63,10 +62,30 @@ test("world loader keeps the home page shallow and bounds selected modules to on
   const home = result.pages.find((page) => page.key === "home");
   const rules = result.pages.find((page) => page.key === "rules");
   assert.equal(depths.get(home.page.id), 0);
-  assert.equal(depths.get(rules.page.id), 1);
+  assert.equal(depths.get(rules.page.id), 0);
   assert.equal(result.meta.pageCount, 6);
   assert.equal(result.meta.world.worldState, "EMPTY");
   assert.equal(result.meta.world.worldId, "PENDING");
+});
+
+test("a cache write failure does not invalidate a successful authoritative world read", async () => {
+  const notion = {
+    configured: true,
+    async getPageTree(id, options) {
+      return { page: { id }, children: worldMarkers(), meta: { nodeCount: 2, maxDepth: options.maxDepth } };
+    },
+  };
+  const result = await loadWorld({}, {
+    notion,
+    github: { configured: false },
+    cache: { async put() { throw new Error("KV value is too large"); } },
+    profile: "base",
+    refresh: true,
+    persist: false,
+  });
+  assert.equal(result.meta.world.worldState, "EMPTY");
+  assert.equal(result.meta.cacheWrite.status, "pending");
+  assert.match(result.meta.cacheWrite.error, /too large/);
 });
 
 test("current-state catalog points at the fixed clean-slate pages", () => {

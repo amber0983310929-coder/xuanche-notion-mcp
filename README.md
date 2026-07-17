@@ -1,6 +1,6 @@
-# Xuanche Engine v0.5.8
+# Xuanche Engine v0.5.9
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.8 makes SAVE_V3.2 initialization rate-limit safe and recoverable after a completed commit.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.9 keeps ACTIVE-world continuation shallow, bounded, and independent of non-authoritative cache writes.
 
 ## Safety model
 
@@ -74,6 +74,12 @@ The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and impor
 ## Verification
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
+
+## Version 0.5.9
+
+- Aligned the `continue` profile with the fixed ACTIVE-world core route instead of preloading nineteen pages.
+- Forced world profile loads to depth 0 so tables, toggles, and child pages cannot recursively multiply Notion requests.
+- Made KV snapshot writes best-effort so a cache size or transient failure cannot turn a valid Notion read into HTTP 500.
 
 ## Version 0.5.8
 

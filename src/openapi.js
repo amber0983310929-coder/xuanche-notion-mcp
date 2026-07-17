@@ -43,7 +43,7 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.8",
+      version: "0.5.9",
       description: "Fail-closed Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, TURN_PRELOAD_V1 profile loads, and idempotent allowlisted Notion updates.",
     },
     servers: [{ url: new URL(origin).origin }],
@@ -126,7 +126,12 @@ export function buildOpenApi(origin) {
             },
             refresh: { type: "boolean", default: true, description: "Read Notion instead of using an unexpired KV snapshot." },
             persist: { type: "boolean", default: false, description: "Commit the loaded snapshot to world/cache.json in GitHub." },
-            maxDepth: { type: "integer", minimum: 0, maximum: 1 },
+            maxDepth: {
+              type: "integer",
+              enum: [0],
+              default: 0,
+              description: "World profile loads are always shallow to keep Notion reads bounded.",
+            },
             maxNodes: { type: "integer", minimum: 1, maximum: 20_000 },
             pageKeys: { type: "array", items: { type: "string" }, uniqueItems: true },
           },
