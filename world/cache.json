@@ -1,10 +1,11 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "invalidatedAt": "2026-07-17T00:00:00.000+08:00",
-  "purgeId": "PURGE-2026-07-17-FULL-SAVE-RESET",
-  "worldState": "EMPTY",
-  "worldId": "PENDING",
+  "updatedAt": "2026-07-17T14:06:42.386Z",
+  "worldState": "ACTIVE",
+  "worldId": "W20260717-432D5443",
   "simTick": 0,
+  "purgeId": "PURGE-2026-07-17-FULL-SAVE-RESET",
+  "lastSaveKey": "new-world-muqingchen-20260717-001",
   "snapshot": null
 }
