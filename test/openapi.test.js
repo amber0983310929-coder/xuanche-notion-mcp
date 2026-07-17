@@ -5,7 +5,7 @@ import { buildOpenApi } from "../src/openapi.js";
 test("OpenAPI is bound to the deployed origin and exposes unique operation IDs", () => {
   const document = buildOpenApi("https://worker.example/openapi.json");
   assert.equal(document.openapi, "3.1.0");
-  assert.equal(document.info.version, "0.5.6");
+  assert.equal(document.info.version, "0.5.7");
   assert.equal(document.servers[0].url, "https://worker.example");
 
   const operationIds = Object.values(document.paths)
@@ -42,6 +42,10 @@ test("OpenAPI protects world reads and defines GPT Action request bodies", () =>
     "#/components/schemas/WorldLoadRequest",
   );
   assert.equal(
+    document.paths["/world/initialize"].post.requestBody.content["application/json"].schema.$ref,
+    "#/components/schemas/WorldInitializeRequest",
+  );
+  assert.equal(
     document.paths["/world/update"].post.requestBody.content["application/json"].schema.$ref,
     "#/components/schemas/WorldUpdateRequest",
   );
@@ -72,7 +76,7 @@ test("WorldLoadRequest exposes all clean-slate loader profiles", () => {
   ]);
 });
 
-test("OpenAPI exposes only the safe world mutation route", () => {
+test("OpenAPI exposes only the safe world mutation routes", () => {
   const document = buildOpenApi("https://worker.example/openapi.json");
   assert.equal(document.paths["/notion/pages"], undefined);
   assert.equal(document.paths["/notion/blocks/{id}/children"], undefined);
@@ -83,5 +87,7 @@ test("OpenAPI exposes only the safe world mutation route", () => {
     "expectedWorldId",
     "expectedWorldState",
   ]);
+  assert.deepEqual(document.components.schemas.WorldInitializeRequest.required, ["saveKey", "character"]);
+  assert.equal(document.paths["/world/initialize"].post.operationId, "initializeWorld");
   assert.ok(document.components.schemas.WorldUpdateRequest.properties.blockUpdates);
 });
