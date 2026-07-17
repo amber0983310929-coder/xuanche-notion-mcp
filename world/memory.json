@@ -1,15 +1,10 @@
 {
-  "version": 2,
-  "updatedAt": "2026-07-17T05:54:38.528Z",
+  "version": 3,
+  "schema": "SAVE_V3.2",
+  "updatedAt": "2026-07-17T00:00:00.000+08:00",
   "worldState": "EMPTY",
   "worldId": "PENDING",
-  "purgeId": "PURGE-2026-07-17-CLEAN-SLATE",
-  "events": [
-    {
-      "timestamp": "2026-07-17T05:54:38.528Z",
-      "type": "world_purge",
-      "summary": "All prior and current gameplay saves were removed. The fixed Notion pages 02-09 and 11 are authoritative and remain EMPTY/PENDING until a character is explicitly confirmed.",
-      "version": "2"
-    }
-  ]
+  "simTick": 0,
+  "purgeId": "PURGE-2026-07-17-FULL-SAVE-RESET",
+  "events": []
 }
