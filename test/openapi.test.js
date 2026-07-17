@@ -46,3 +46,20 @@ test("OpenAPI protects world reads and defines GPT Action request bodies", () =>
     "#/components/schemas/WorldUpdateRequest",
   );
 });
+
+test("WorldLoadRequest exposes all clean-slate loader profiles", () => {
+  const document = buildOpenApi("https://worker.example/openapi.json");
+  assert.deepEqual(document.components.schemas.WorldLoadRequest.properties.profile.enum, [
+    "base",
+    "continue",
+    "new_game",
+    "character_creation",
+    "character_finalize",
+    "cultivation",
+    "combat",
+    "npc",
+    "exploration",
+    "save",
+    "full",
+  ]);
+});
