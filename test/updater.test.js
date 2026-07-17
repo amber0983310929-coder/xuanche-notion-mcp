@@ -92,6 +92,33 @@ test("world update is idempotent when SAVE_KEY already exists", async () => {
   assert.equal(writes, 0);
 });
 
+test("an idempotent retry repairs a missing GitHub mirror without rewriting Notion", async () => {
+  let notionWrites = 0;
+  let githubWrites = 0;
+  const result = await updateWorld({}, validInput({ memoryEvent: "repair mirror" }), {
+    notion: {
+      listAllBlockChildren: async () => [...canonicalBlocks(), paragraph("SAVE_KEY：TEST-SAVE-001")],
+      appendBlocks: async () => {
+        notionWrites += 1;
+      },
+    },
+    github: {
+      configured: true,
+      getJson: async () => ({ data: { version: 3, events: [] } }),
+      putJson: async (path, value) => {
+        githubWrites += 1;
+        assert.equal(value.events[0].saveKey, "TEST-SAVE-001");
+        return { commit: { sha: "mirror-repaired" } };
+      },
+    },
+    cache: { deletePrefix: async () => 1 },
+  });
+  assert.equal(result.idempotent, true);
+  assert.equal(result.memoryCommit, "mirror-repaired");
+  assert.equal(notionWrites, 0);
+  assert.equal(githubWrites, 1);
+});
+
 test("world update rejects stale world identity and revision", async () => {
   await assert.rejects(
     updateWorld({}, validInput(), {
