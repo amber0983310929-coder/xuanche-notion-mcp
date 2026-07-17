@@ -9,7 +9,7 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
-const GATEWAY_VERSION = "0.5.7";
+const GATEWAY_VERSION = "0.5.8";
 
 const SAFE_PUBLIC_OPERATIONS = [
   { path: "/health", method: "get", operationId: "getEngineHealth" },
@@ -572,7 +572,7 @@ export function patchOpenApi(spec, origin) {
 
   const initializeWorld = patched.paths?.["/world/initialize"]?.post;
   if (initializeWorld) {
-    initializeWorld.description = "Call immediately after explicit character confirmation. This single action preflights, stages, activates, and readback-validates all fixed SAVE_V3.2 pages; on any authoritative write failure it compensates staged changes before returning an error.";
+    initializeWorld.description = "Call immediately after explicit character confirmation. This action rate-paces Notion, preflights, stages, activates, and validates all fixed SAVE_V3.2 pages. A transient readback limit after every ACTIVE commit never triggers destructive rollback; retries repair display and GitHub mirrors idempotently.";
   }
 
   const updateWorld = patched.paths?.["/world/update"]?.post;

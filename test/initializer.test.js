@@ -12,7 +12,11 @@ function block(id, type, text) {
   };
 }
 
-function createNotionMock({ failCommitKey } = {}) {
+function createNotionMock({
+  failCommitKey,
+  failReadbackAfterCommit = false,
+  includeStatusMirrors = false,
+} = {}) {
   const pages = new Map(STATE_PAGE_KEYS.map((key) => [key, {
     markerId: key + "-marker",
     markerText: "SAVE_SCHEMA_VERSION：SAVE_V3.2｜WORLD_STATE：EMPTY｜WORLD_ID：PENDING\nSIM_TICK：0｜狀態修訂：0",
@@ -21,12 +25,35 @@ function createNotionMock({ failCommitKey } = {}) {
   const keyByPageId = new Map(STATE_PAGE_KEYS.map((key) => [WORLD_PAGE_IDS[key], key]));
   const keyByMarkerId = new Map(STATE_PAGE_KEYS.map((key) => [key + "-marker", key]));
   const operations = [];
+  const statusPages = new Map([
+    ["5f4c8de4a4c246478a4658d1ebc2a1a2", [
+      { id: "home-callout", type: "callout", text: "世界系統：RULES_V3.2｜目前狀態：EMPTY" },
+      { id: "home-heading", type: "heading_3", text: "固定世界資料｜目前EMPTY" },
+      { id: "home-state", type: "bulleted_list_item", text: "目前WORLD_STATE：EMPTY；目前WORLD_ID：PENDING。" },
+    ]],
+    ["39cc845007ae8184b97dd0e8c0122768", [
+      { id: "route-callout", type: "callout", text: "目前世界狀態：EMPTY。沒有可續接角色或劇情。" },
+    ]],
+  ]);
   let nextBlock = 1;
 
   const notion = {
     pages,
     operations,
     async getPageTree(pageId) {
+      const activeCommits = operations.filter((item) =>
+        item.operation === "marker" && item.text.includes("WORLD_STATE：ACTIVE")
+      ).length;
+      if (failReadbackAfterCommit && activeCommits === STATE_PAGE_KEYS.length) {
+        const error = new Error("Notion request limit reached during readback");
+        error.status = 429;
+        throw error;
+      }
+      if (includeStatusMirrors && statusPages.has(pageId)) {
+        return {
+          children: statusPages.get(pageId).map((item) => block(item.id, item.type, item.text)),
+        };
+      }
       const key = keyByPageId.get(pageId);
       const page = pages.get(key);
       return {
@@ -48,6 +75,13 @@ function createNotionMock({ failCommitKey } = {}) {
       return { results };
     },
     async updateBlock(markerId, input) {
+      for (const [pageId, items] of statusPages) {
+        const item = items.find((candidate) => candidate.id === markerId);
+        if (!item) continue;
+        item.text = input.text;
+        operations.push({ operation: "status_mirror", pageId, markerId, text: input.text });
+        return { id: markerId };
+      }
       const key = keyByMarkerId.get(markerId);
       operations.push({ operation: "marker", key, text: input.text });
       if (key === failCommitKey && input.text.includes("WORLD_STATE：ACTIVE")) {
@@ -67,6 +101,7 @@ function createNotionMock({ failCommitKey } = {}) {
       throw new Error("unknown staged block " + blockId);
     },
   };
+  notion.statusPages = statusPages;
   return notion;
 }
 
@@ -93,6 +128,7 @@ function dependencies(notion) {
     notion,
     github: { configured: false },
     cache: { deletePrefix: async () => 2 },
+    statusMirrors: false,
   };
 }
 
@@ -157,6 +193,36 @@ test("retrying the same SAVE_KEY is idempotent and does not stage another world"
   assert.equal(second.idempotent, true);
   assert.equal(second.worldId, first.worldId);
   assert.equal(notion.operations.length, operationsAfterFirst);
+});
+
+test("a transient readback limit after every ACTIVE commit never triggers rollback", async () => {
+  const notion = createNotionMock({ failReadbackAfterCommit: true });
+  const result = await initializeWorld({}, input(), dependencies(notion));
+
+  assert.equal(result.initialized, true);
+  assert.equal(result.worldState, "ACTIVE");
+  assert.equal(result.verification.status, "deferred");
+  assert.equal(notion.operations.some((item) => item.operation === "archive"), false);
+  for (const page of notion.pages.values()) {
+    const markers = parseWorldMarkers([block("marker", "callout", page.markerText)]);
+    assert.equal(markers.worldState, "ACTIVE");
+    assert.equal(markers.worldId, result.worldId);
+  }
+});
+
+test("successful initialization synchronizes the non-authoritative home and route mirrors", async () => {
+  const notion = createNotionMock({ includeStatusMirrors: true });
+  const result = await initializeWorld({}, input(), {
+    ...dependencies(notion),
+    statusMirrors: true,
+  });
+
+  assert.equal(result.statusMirror.status, "complete");
+  assert.equal(result.statusMirror.updates, 4);
+  const mirrorText = [...notion.statusPages.values()].flat().map((item) => item.text).join("\n");
+  assert.match(mirrorText, /目前狀態：ACTIVE/);
+  assert.match(mirrorText, new RegExp("目前WORLD_ID：" + result.worldId));
+  assert.match(mirrorText, new RegExp("現行WORLD_ID：" + result.worldId));
 });
 
 test("SAVE_KEY rejects whitespace and line-break marker injection", async () => {

@@ -1,10 +1,18 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-17T00:00:00.000+08:00",
-  "worldState": "EMPTY",
-  "worldId": "PENDING",
+  "updatedAt": "2026-07-17T14:06:42.386Z",
+  "worldState": "ACTIVE",
+  "worldId": "W20260717-432D5443",
   "simTick": 0,
   "purgeId": "PURGE-2026-07-17-FULL-SAVE-RESET",
-  "events": []
+  "events": [
+    {
+      "timestamp": "2026-07-17T14:06:42.386Z",
+      "type": "world_initialize",
+      "summary": "Initialized world for 沐青塵",
+      "saveKey": "new-world-muqingchen-20260717-001",
+      "worldId": "W20260717-432D5443"
+    }
+  ]
 }

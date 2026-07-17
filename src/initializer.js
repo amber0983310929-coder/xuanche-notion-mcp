@@ -16,11 +16,17 @@ const MARKER_TYPES = new Set([
   "bulleted_list_item", "numbered_list_item", "quote", "toggle",
 ]);
 
+const STATUS_MIRROR_PAGE_IDS = Object.freeze({
+  home: "5f4c8de4a4c246478a4658d1ebc2a1a2",
+  route: "39cc845007ae8184b97dd0e8c0122768",
+});
+
 export async function initializeWorld(env, input, dependencies = {}) {
   validateInput(input);
   const notion = dependencies.notion || new NotionClient(env);
   const github = dependencies.github || new GitHubClient(env);
   const cache = dependencies.cache || new CacheStore(env);
+  const statusMirrorsEnabled = dependencies.statusMirrors !== false;
   const timestamp = nowIso();
   const pages = await readStatePages(notion);
   const canonical = pages.find((page) => page.key === "save");
@@ -36,17 +42,17 @@ export async function initializeWorld(env, input, dependencies = {}) {
     if (world.worldState !== "ACTIVE") {
       throw new ApiError(409, "The matching SAVE_KEY does not belong to an ACTIVE world");
     }
-    const mirror = await mirrorInitialization(github, input, canonical.markers.worldId, timestamp);
-    const cacheInvalidation = await invalidateWorldCache(cache);
-    return {
-      idempotent: true,
-      initialized: true,
+    return finalizeInitialization({
+      notion,
+      github,
+      cache,
+      input,
       worldId: canonical.markers.worldId,
-      worldState: "ACTIVE",
-      saveKey: input.saveKey,
-      mirror,
-      cacheInvalidation,
-    };
+      timestamp,
+      idempotent: true,
+      statusMirrorsEnabled,
+      verification: { status: "complete", validatedPageKeys: world.validatedPageKeys },
+    });
   }
 
   const conflicts = pages
@@ -63,6 +69,7 @@ export async function initializeWorld(env, input, dependencies = {}) {
   const worldId = createWorldId();
   const staged = [];
   const committed = [];
+  let verification = { status: "pending", validatedPageKeys: [] };
   try {
     for (const page of pages) {
       const result = await notion.appendBlocks(
@@ -84,43 +91,108 @@ export async function initializeWorld(env, input, dependencies = {}) {
       committed.push(page);
     }
 
-    const readback = await readStatePages(notion);
-    const world = validateLoadedWorld(
-      readback.map((page) => ({ key: page.key, children: page.children })),
-      { required: true },
-    );
-    if (world.worldState !== "ACTIVE" || world.worldId !== worldId) {
-      throw new ApiError(409, "World initialization readback did not match the staged world identity");
+    try {
+      const readback = await readStatePages(notion);
+      const world = validateLoadedWorld(
+        readback.map((page) => ({ key: page.key, children: page.children })),
+        { required: true },
+      );
+      if (world.worldState !== "ACTIVE" || world.worldId !== worldId) {
+        throw new ApiError(409, "World initialization readback did not match the staged world identity");
+      }
+      verification = { status: "complete", validatedPageKeys: world.validatedPageKeys };
+    } catch (error) {
+      if (committed.length !== pages.length || !isTransientUpstreamError(error)) throw error;
+      verification = {
+        status: "deferred",
+        validatedPageKeys: [],
+        cause: error?.message || String(error),
+      };
     }
   } catch (error) {
     const rollbackErrors = await rollbackInitialization(notion, staged, committed);
-    const cacheInvalidation = await invalidateWorldCache(cache);
-    if (rollbackErrors.length) {
-      throw new ApiError(500, "World initialization failed and rollback was incomplete", {
-        cause: error?.message || String(error),
-        rollbackErrors,
-        cacheInvalidation,
-        worldConflict: true,
+    const reconciliation = await reconcileWorld(notion, worldId, input.saveKey);
+    if (reconciliation.status === "active") {
+      return finalizeInitialization({
+        notion,
+        github,
+        cache,
+        input,
+        worldId,
+        timestamp,
+        idempotent: false,
+        statusMirrorsEnabled,
+        verification: {
+          status: "recovered",
+          validatedPageKeys: reconciliation.validatedPageKeys,
+          cause: error?.message || String(error),
+          rollbackErrors,
+        },
       });
     }
-    throw new ApiError(error?.status || 500, "World initialization failed; every page was restored to EMPTY/PENDING", {
+    const cacheInvalidation = await invalidateWorldCache(cache);
+    if (reconciliation.status === "empty") {
+      throw new ApiError(error?.status || 500, "World initialization failed; authoritative markers were restored to EMPTY/PENDING", {
+        cause: error?.message || String(error),
+        cacheInvalidation,
+        rolledBack: true,
+        cleanupPending: rollbackErrors.length > 0,
+        rollbackErrors,
+      });
+    }
+    throw new ApiError(500, "World initialization failed and authoritative state could not be reconciled", {
       cause: error?.message || String(error),
+      rollbackErrors,
+      reconciliation,
       cacheInvalidation,
-      rolledBack: true,
+      worldConflict: true,
     });
   }
 
+  return finalizeInitialization({
+    notion,
+    github,
+    cache,
+    input,
+    worldId,
+    timestamp,
+    idempotent: false,
+    statusMirrorsEnabled,
+    verification,
+  });
+}
+
+async function finalizeInitialization({
+  notion,
+  github,
+  cache,
+  input,
+  worldId,
+  timestamp,
+  idempotent,
+  statusMirrorsEnabled,
+  verification,
+}) {
+  const statusMirror = statusMirrorsEnabled
+    ? await mirrorNotionWorldStatus(notion, {
+      worldId,
+      saveKey: input.saveKey,
+      characterName: input.character.name,
+    })
+    : { status: "disabled" };
   const mirror = await mirrorInitialization(github, input, worldId, timestamp);
   const cacheInvalidation = await invalidateWorldCache(cache);
   return {
-    idempotent: false,
+    idempotent,
     initialized: true,
     worldId,
     worldState: "ACTIVE",
     simTick: 0,
     revision: 1,
     saveKey: input.saveKey,
-    validatedPageKeys: [...STATE_PAGE_KEYS],
+    validatedPageKeys: verification.validatedPageKeys,
+    verification,
+    statusMirror,
     mirror,
     cacheInvalidation,
   };
@@ -134,12 +206,124 @@ async function invalidateWorldCache(cache) {
   }
 }
 
+async function reconcileWorld(notion, expectedWorldId, saveKey) {
+  try {
+    const pages = await readStatePages(notion);
+    const world = validateLoadedWorld(
+      pages.map((page) => ({ key: page.key, children: page.children })),
+      { required: true },
+    );
+    const canonical = pages.find((page) => page.key === "save");
+    if (
+      world.worldState === "ACTIVE" &&
+      world.worldId === expectedWorldId &&
+      blocksPlainText(canonical.children).includes("SAVE_KEY：" + saveKey)
+    ) {
+      return { status: "active", validatedPageKeys: world.validatedPageKeys };
+    }
+    if (world.worldState === "EMPTY" && world.worldId === "PENDING") {
+      return { status: "empty", validatedPageKeys: world.validatedPageKeys };
+    }
+    return {
+      status: "mixed",
+      worldState: world.worldState,
+      worldId: world.worldId,
+      validatedPageKeys: world.validatedPageKeys,
+    };
+  } catch (error) {
+    return {
+      status: "unavailable",
+      error: error?.message || String(error),
+      httpStatus: error?.status || null,
+    };
+  }
+}
+
+async function mirrorNotionWorldStatus(notion, { worldId, saveKey, characterName }) {
+  try {
+    let updates = 0;
+    for (const [key, pageId] of Object.entries(STATUS_MIRROR_PAGE_IDS)) {
+      const tree = await notion.getPageTree(pageId, {
+        maxDepth: 0,
+        maxNodes: 250,
+        concurrency: 1,
+        includePage: false,
+      });
+      for (const block of tree.children) {
+        const current = blockPlainText(block);
+        const next = statusMirrorText(key, current, { worldId, saveKey, characterName });
+        if (!next || next === current || !MARKER_TYPES.has(block.type)) continue;
+        await notion.updateBlock(block.id, { type: block.type, text: next });
+        updates += 1;
+      }
+    }
+
+    for (const [key, pageId] of Object.entries(STATUS_MIRROR_PAGE_IDS)) {
+      const tree = await notion.getPageTree(pageId, {
+        maxDepth: 0,
+        maxNodes: 250,
+        concurrency: 1,
+        includePage: false,
+      });
+      const text = blocksPlainText(tree.children);
+      if (!statusMirrorMatches(key, text, worldId)) {
+        throw new ApiError(409, "Notion display-status mirror did not match the ACTIVE world", {
+          page: key,
+          worldId,
+        });
+      }
+    }
+    return { status: "complete", pages: Object.keys(STATUS_MIRROR_PAGE_IDS), updates };
+  } catch (error) {
+    return {
+      status: "pending",
+      error: error?.message || String(error),
+      httpStatus: error?.status || null,
+    };
+  }
+}
+
+function statusMirrorText(page, current, { worldId, saveKey, characterName }) {
+  if (page === "home") {
+    if (current.includes("世界系統：") && current.includes("目前狀態：")) {
+      return current.replace(/目前狀態：(EMPTY|ACTIVE|WORLD_CONFLICT)/, "目前狀態：ACTIVE");
+    }
+    if (/^固定世界資料｜目前(?:EMPTY|ACTIVE|WORLD_CONFLICT)$/.test(current)) {
+      return "固定世界資料｜目前ACTIVE";
+    }
+    if (current.startsWith("目前WORLD_STATE：")) {
+      return "目前WORLD_STATE：ACTIVE；目前WORLD_ID：" + worldId +
+        "；現行主角：" + characterName + "；SIM_TICK：0；來源SAVE_KEY：" + saveKey + "。";
+    }
+  }
+  if (page === "route" && current.startsWith("目前世界狀態：")) {
+    return "目前世界狀態：ACTIVE。現行WORLD_ID：" + worldId +
+      "；現行主角：" + characterName +
+      "；SIM_TICK：0。續接時依本頁ACTIVE路由載入02、04、12、19與20；不得重新建立或覆寫現行世界。";
+  }
+  return null;
+}
+
+function statusMirrorMatches(page, text, worldId) {
+  if (page === "home") {
+    return text.includes("目前狀態：ACTIVE") &&
+      text.includes("固定世界資料｜目前ACTIVE") &&
+      text.includes("目前WORLD_STATE：ACTIVE；目前WORLD_ID：" + worldId);
+  }
+  return text.includes("目前世界狀態：ACTIVE。現行WORLD_ID：" + worldId);
+}
+
+function isTransientUpstreamError(error) {
+  return [429, 500, 502, 503, 504, 529].includes(Number(error?.status));
+}
+
 async function readStatePages(notion) {
   return mapLimit(STATE_PAGE_KEYS, 2, async (key) => {
     const tree = await notion.getPageTree(WORLD_PAGE_IDS[key], {
       maxDepth: 0,
       maxNodes: 5_000,
       concurrency: 2,
+      includePage: false,
     });
     const markers = parseWorldMarkers(tree.children);
     const marker = tree.children.find((block) => {

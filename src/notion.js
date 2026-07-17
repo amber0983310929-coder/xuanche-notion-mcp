@@ -8,6 +8,12 @@ export class NotionClient {
     // Workerd runtime functions can require their original global receiver.
     // Always invoke fetch with globalThis instead of treating it as a client method.
     this.fetch = (...args) => Reflect.apply(fetchImpl, globalThis, args);
+    const configuredInterval = Number(env.NOTION_MIN_REQUEST_INTERVAL_MS ?? 400);
+    this.minimumRequestIntervalMs = Number.isFinite(configuredInterval)
+      ? Math.min(2_000, Math.max(0, configuredInterval))
+      : 400;
+    this.nextRequestAt = 0;
+    this.requestSlot = Promise.resolve();
   }
 
   get configured() {
@@ -18,6 +24,7 @@ export class NotionClient {
     if (!this.token) throw new ApiError(503, "NOTION_TOKEN is not configured");
     let response;
     for (let attempt = 0; attempt < 4; attempt += 1) {
+      await this.waitForRequestSlot();
       response = await this.fetch(`${this.baseUrl}${path}`, {
         method,
         headers: {
@@ -28,7 +35,7 @@ export class NotionClient {
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
-      if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 3) break;
+      if (![429, 500, 502, 503, 504, 529].includes(response.status) || attempt === 3) break;
       await sleep(retryDelay(response, attempt));
     }
     const payload = await response.json().catch(() => ({}));
@@ -38,6 +45,22 @@ export class NotionClient {
       });
     }
     return payload;
+  }
+
+  async waitForRequestSlot() {
+    const previous = this.requestSlot;
+    let release;
+    this.requestSlot = new Promise((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      const delay = Math.max(0, this.nextRequestAt - Date.now());
+      if (delay > 0) await sleep(delay);
+      this.nextRequestAt = Date.now() + this.minimumRequestIntervalMs;
+    } finally {
+      release();
+    }
   }
 
   getPage(pageId) {

@@ -1,6 +1,6 @@
 {
   "name": "xuanche-engine",
-  "version": "0.5.7",
+  "version": "0.5.8",
   "private": true,
   "type": "module",
   "description": "Cloudflare Worker bridge for the Xuanche cultivation world in Notion and GitHub.",
