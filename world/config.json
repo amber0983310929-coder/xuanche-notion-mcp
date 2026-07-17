@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "homePageId": "5f4c8de4a4c246478a4658d1ebc2a1a2",
   "catalog": [
     {
@@ -349,17 +349,12 @@
       "persistence"
     ],
     "turn_core": [
-      "route",
-      "rules",
       "save",
       "character",
       "timeline",
       "events",
       "director",
-      "flow",
-      "hud",
-      "persistence",
-      "factions"
+      "hud"
     ],
     "turn_combat": [
       "save",
@@ -454,6 +449,7 @@
     "maxNodesPerPage": 1500,
     "concurrency": 2,
     "cacheTtlSeconds": 300,
-    "persistSnapshotToGitHub": false
+    "persistSnapshotToGitHub": false,
+    "turnCoreMaxNodesPerPage": 60
   }
 }

@@ -1,6 +1,6 @@
-# Xuanche Engine v0.5.9
+# Xuanche Engine v0.5.10
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.9 keeps ACTIVE-world continuation shallow, bounded, and independent of non-authoritative cache writes.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.10 keeps ACTIVE-world continuation shallow, bounded, and independent of non-authoritative cache writes, with a hard cap for the mandatory per-turn state profile.
 
 ## Safety model
 
@@ -75,7 +75,7 @@ The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and impor
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
 
-## Version 0.5.9
+## Version 0.5.10
 
 - Aligned the `continue` profile with the fixed ACTIVE-world core route instead of preloading nineteen pages.
 - Forced world profile loads to depth 0 so tables, toggles, and child pages cannot recursively multiply Notion requests.

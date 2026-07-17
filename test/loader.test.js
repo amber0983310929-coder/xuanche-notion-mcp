@@ -17,6 +17,33 @@ test("continue profile follows the active-world core route", () => {
   ]);
 });
 
+test("turn_core contains only the bounded authoritative per-turn state", () => {
+  const pages = selectWorldPages(DEFAULT_WORLD_CONFIG, "turn_core");
+  assert.deepEqual(pages.map((page) => page.key), [
+    "save", "character", "timeline", "events", "director", "hud"
+  ]);
+});
+
+test("turn_core enforces its page-node cap even when a caller requests more", async () => {
+  const received = [];
+  const notion = {
+    configured: true,
+    async getPageTree(_id, options) {
+      received.push(options.maxNodes);
+      return { page: {}, children: worldMarkers("ACTIVE", "W-test"), meta: { nodeCount: 2 } };
+    },
+  };
+  await loadWorld({}, {
+    notion,
+    github: { configured: false },
+    cache: { put: async () => undefined },
+    profile: "turn_core",
+    refresh: true,
+    maxNodes: 1_500,
+  });
+  assert.deepEqual(received, Array(6).fill(60));
+});
+
 test("new_game profile loads only the fixed character-creation route", () => {
   const pages = selectWorldPages(DEFAULT_WORLD_CONFIG, "new_game");
   assert.deepEqual(pages.map((page) => page.key), ["home", "route", "rules", "character_template"]);
