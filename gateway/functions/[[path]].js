@@ -9,12 +9,13 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
-const GATEWAY_VERSION = "0.5.6";
+const GATEWAY_VERSION = "0.5.7";
 
 const SAFE_PUBLIC_OPERATIONS = [
   { path: "/health", method: "get", operationId: "getEngineHealth" },
   { path: "/tree", method: "get", operationId: "getNotionTree" },
   { path: "/page", method: "get", operationId: "getNotionPage" },
+  { path: "/world/initialize", method: "post", operationId: "initializeWorld" },
   { path: "/world/load", method: "post", operationId: "loadWorldProfile" },
   { path: "/world/update", method: "post", operationId: "updateWorldState" },
   { path: "/github/tree", method: "get", operationId: "listGitHubWorldTree" },
@@ -365,11 +366,12 @@ function versionAtLeast(actual, minimum) {
   return true;
 }
 
-function filterPublicPaths(paths = {}, { worldStateReady = false } = {}) {
+function filterPublicPaths(paths = {}, { worldStateReady = false, initializationReady = false } = {}) {
   const filtered = {};
 
   for (const { path, method, operationId } of SAFE_PUBLIC_OPERATIONS) {
     if (!worldStateReady && (path === "/world/load" || path === "/world/update")) continue;
+    if (!initializationReady && path === "/world/initialize") continue;
     const sourcePath = paths[path];
     const sourceOperation = sourcePath?.[method];
     if (sourceOperation?.operationId !== operationId) continue;
@@ -457,11 +459,14 @@ export function patchOpenApi(spec, origin) {
   const privacyPolicyUrl = new URL("/privacy", origin).href;
   const backendVersion = patched.info?.version || "0.0.0";
   const worldStateReady = versionAtLeast(backendVersion, "0.5.6");
+  const initializationReady = versionAtLeast(backendVersion, "0.5.7");
   patched.info = {
     ...patched.info,
     version: GATEWAY_VERSION,
-    description: worldStateReady
-      ? "Safety-scoped GPT Actions gateway for bounded reads, TURN_PRELOAD_V1 profile loads, idempotent SAVE_V3.2 updates, and read-only GitHub memory. Privacy policy: " + privacyPolicyUrl
+    description: initializationReady
+      ? "Safety-scoped GPT Actions gateway for compensated SAVE_V3.2 initialization, bounded reads, TURN_PRELOAD_V1 profile loads, idempotent updates, and read-only GitHub memory. Privacy policy: " + privacyPolicyUrl
+      : worldStateReady
+        ? "Safety-scoped GPT Actions gateway. World load/update are enabled; initialization remains disabled until the bound Worker reaches version 0.5.7. Privacy policy: " + privacyPolicyUrl
       : "Safety-scoped GPT Actions gateway. World load and update actions are disabled until the bound Worker reaches version 0.5.6. Privacy policy: " + privacyPolicyUrl,
   };
   patched.servers = [{ url: origin }];
@@ -469,8 +474,8 @@ export function patchOpenApi(spec, origin) {
     description: "玄澈引擎 Gateway 隱私權政策",
     url: privacyPolicyUrl,
   };
-  patched["x-xuanche-backend"] = { version: backendVersion, worldStateReady };
-  patched.paths = filterPublicPaths(patched.paths, { worldStateReady });
+  patched["x-xuanche-backend"] = { version: backendVersion, worldStateReady, initializationReady };
+  patched.paths = filterPublicPaths(patched.paths, { worldStateReady, initializationReady });
   patched.components = patched.components ?? {};
   patched.components.schemas = patched.components.schemas ?? {};
   patched.components.schemas.PageBatchResponse = pageBatchResponseSchema();
@@ -479,6 +484,7 @@ export function patchOpenApi(spec, origin) {
     delete patched.components.schemas.WorldUpdateRequest;
     delete patched.components.schemas.BlockUpdate;
   }
+  if (!initializationReady) delete patched.components.schemas.WorldInitializeRequest;
 
   const tree = patched.paths?.["/tree"]?.get;
   if (tree) {
@@ -562,6 +568,11 @@ export function patchOpenApi(spec, origin) {
   const loadWorld = patched.paths?.["/world/load"]?.post;
   if (loadWorld) {
     loadWorld.description = "Use turn_core after each player reply, then add exactly one action-specific TURN_PRELOAD_V1 profile. The gateway compacts oversized snapshots.";
+  }
+
+  const initializeWorld = patched.paths?.["/world/initialize"]?.post;
+  if (initializeWorld) {
+    initializeWorld.description = "Call immediately after explicit character confirmation. This single action preflights, stages, activates, and readback-validates all fixed SAVE_V3.2 pages; on any authoritative write failure it compensates staged changes before returning an error.";
   }
 
   const updateWorld = patched.paths?.["/world/update"]?.post;
@@ -648,14 +659,14 @@ async function fetchUpstream(context, request) {
   return context.env.XUANCHE_ENGINE.fetch(request);
 }
 
-async function safeWorldBackendReady(context) {
+async function safeWorldBackendReady(context, minimumVersion) {
   const response = await fetchUpstream(
     context,
     new Request("https://xuanche-engine.internal/health"),
   );
   if (!response.ok) return false;
   const payload = await response.json().catch(() => ({}));
-  return versionAtLeast(payload?.version, "0.5.6");
+  return versionAtLeast(payload?.version, minimumVersion);
 }
 
 export async function onRequest(context) {
@@ -673,14 +684,19 @@ export async function onRequest(context) {
     return privacyResponse(request.method);
   }
 
+  const minimumWorldVersion = incoming.pathname === "/world/initialize"
+    ? "0.5.7"
+    : ["/load", "/world/load", "/world/update"].includes(incoming.pathname)
+      ? "0.5.6"
+      : null;
   if (
     request.method === "POST" &&
-    ["/load", "/world/load", "/world/update"].includes(incoming.pathname) &&
-    !(await safeWorldBackendReady(context))
+    minimumWorldVersion &&
+    !(await safeWorldBackendReady(context, minimumWorldVersion))
   ) {
     return jsonResponse({
       ok: false,
-      error: "The bound Xuanche Worker must be deployed at version 0.5.6 or newer before world load/update is enabled.",
+      error: "The bound Xuanche Worker must be deployed at version " + minimumWorldVersion + " or newer before this world operation is enabled.",
     }, 503);
   }
 
