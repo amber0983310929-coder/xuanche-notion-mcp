@@ -1,6 +1,6 @@
-# Xuanche Engine v0.5.6
+# Xuanche Engine v0.5.7
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.6 implements SAVE_V3.2 and TURN_PRELOAD_V1.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.7 adds one-action SAVE_V3.2 initialization to the existing TURN_PRELOAD_V1 runtime.
 
 ## Safety model
 
@@ -9,6 +9,7 @@ Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation 
 - Optional block updates verify that every block belongs to the declared fixed page and support optimistic expected-text checks.
 - Public raw page creation, arbitrary block append, and page metadata mutation are disabled by default. They exist only behind ALLOW_RAW_NOTION_WRITES=true and are never advertised by OpenAPI.
 - World loads reject archived pages and mixed save identities.
+- Character confirmation uses one dedicated initializer: it preflights every fixed page, stages all state, activates the canonical save marker last, validates readback, and compensates staged writes on failure.
 - A failed GitHub mirror is reported as pending after the authoritative Notion write; it does not make a completed Notion write look rolled back.
 
 ## Main API
@@ -17,6 +18,7 @@ Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation 
 - GET /home
 - GET /tree
 - GET /page and GET /page/:id
+- POST /world/initialize
 - POST /world/load
 - POST /world/update
 - GET /github/tree
@@ -57,15 +59,26 @@ Optional:
 
 The service appends the SAVE_KEY marker automatically and invalidates all cached world profiles.
 
+## Confirmed-character initialization
+
+Call POST /world/initialize exactly once after explicit character confirmation. It requires a unique saveKey and a character object containing name; opening context is optional. EMPTY/PENDING is the required starting state, not a reason to postpone initialization. A retry with the same SAVE_KEY returns the existing ACTIVE world without staging another copy.
+
 ## Deployment
 
 Store NOTION_TOKEN, GITHUB_TOKEN, and XUANCHE_API_KEY as Cloudflare secrets. Keep compatibility_date current, keep observability enabled, and bind XUANCHE_CACHE when durable low-latency snapshots are needed.
 
-The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and import the gateway /openapi.json into GPT Actions. The gateway exposes bounded reads, safe profile loads, safe world updates, and read-only GitHub inspection.
+The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and import the gateway /openapi.json into GPT Actions. The gateway exposes bounded reads, confirmed-character initialization, safe profile loads, safe world updates, and read-only GitHub inspection.
 
 ## Verification
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
+
+## Version 0.5.7
+
+- Added initializeWorld for same-turn confirmed-character initialization across pages 02–09 and 11.
+- Added staged writes, canonical-save-last activation, readback validation, compensation, and idempotent retries.
+- Fixed full-width `｜` world-marker parsing, which could misread an EMPTY page as an unknown state.
+- Added gateway backend gating so initializeWorld is never advertised against a pre-0.5.7 Worker.
 
 ## Version 0.5.6
 
