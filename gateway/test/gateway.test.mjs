@@ -25,10 +25,10 @@ function paragraph(id, text) {
   };
 }
 
-function openApiFixture() {
+function openApiFixture(version = "0.5.6") {
   return {
     openapi: "3.1.0",
-    info: { title: "Xuanche Engine API", version: "0.5.4" },
+    info: { title: "Xuanche Engine API", version },
     servers: [{ url: "https://old.example" }],
     components: {
       schemas: {
@@ -253,6 +253,44 @@ test("the Pages handler serves the filtered 0.5.6 OpenAPI document", async () =>
     "loadWorldProfile",
     "updateWorldState",
   ]);
+});
+
+test("hides world state actions when the bound Worker is older than 0.5.6", () => {
+  const patched = patchOpenApi(
+    openApiFixture("0.5.3"),
+    "https://xuanche-engine-gateway.pages.dev",
+  );
+  assert.equal(patched["x-xuanche-backend"].worldStateReady, false);
+  assert.equal(patched.paths["/world/load"], undefined);
+  assert.equal(patched.paths["/world/update"], undefined);
+  assert.equal(patched.components.schemas.WorldLoadRequest, undefined);
+  assert.equal(patched.components.schemas.WorldUpdateRequest, undefined);
+});
+
+test("rejects world writes while the bound Worker is older than 0.5.6", async () => {
+  let updateCalls = 0;
+  const response = await onRequest({
+    request: new Request("https://xuanche-engine-gateway.pages.dev/world/update", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    }),
+    env: {
+      XUANCHE_ENGINE: {
+        async fetch(request) {
+          if (new URL(request.url).pathname === "/health") {
+            return Response.json({ ok: true, version: "0.5.3" });
+          }
+          updateCalls += 1;
+          return Response.json({ ok: true });
+        },
+      },
+    },
+  });
+  const body = await response.json();
+  assert.equal(response.status, 503);
+  assert.match(body.error, /0\.5\.6/);
+  assert.equal(updateCalls, 0);
 });
 
 test("serves a public Traditional Chinese privacy policy without an upstream binding", async () => {

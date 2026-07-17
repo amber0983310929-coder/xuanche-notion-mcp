@@ -355,10 +355,21 @@ function addOrReplaceParameter(parameters, parameter) {
   else parameters.push(parameter);
 }
 
-function filterPublicPaths(paths = {}) {
+function versionAtLeast(actual, minimum) {
+  const left = String(actual || "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const right = String(minimum || "").split(".").map((part) => Number.parseInt(part, 10) || 0);
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    if ((left[index] || 0) > (right[index] || 0)) return true;
+    if ((left[index] || 0) < (right[index] || 0)) return false;
+  }
+  return true;
+}
+
+function filterPublicPaths(paths = {}, { worldStateReady = false } = {}) {
   const filtered = {};
 
   for (const { path, method, operationId } of SAFE_PUBLIC_OPERATIONS) {
+    if (!worldStateReady && (path === "/world/load" || path === "/world/update")) continue;
     const sourcePath = paths[path];
     const sourceOperation = sourcePath?.[method];
     if (sourceOperation?.operationId !== operationId) continue;
@@ -444,20 +455,30 @@ function pageBatchResponseSchema() {
 export function patchOpenApi(spec, origin) {
   const patched = structuredClone(spec);
   const privacyPolicyUrl = new URL("/privacy", origin).href;
+  const backendVersion = patched.info?.version || "0.0.0";
+  const worldStateReady = versionAtLeast(backendVersion, "0.5.6");
   patched.info = {
     ...patched.info,
     version: GATEWAY_VERSION,
-    description: `Safety-scoped GPT Actions gateway for bounded reads, TURN_PRELOAD_V1 profile loads, idempotent SAVE_V3.2 updates, and read-only GitHub memory. Privacy policy: ${privacyPolicyUrl}`,
+    description: worldStateReady
+      ? "Safety-scoped GPT Actions gateway for bounded reads, TURN_PRELOAD_V1 profile loads, idempotent SAVE_V3.2 updates, and read-only GitHub memory. Privacy policy: " + privacyPolicyUrl
+      : "Safety-scoped GPT Actions gateway. World load and update actions are disabled until the bound Worker reaches version 0.5.6. Privacy policy: " + privacyPolicyUrl,
   };
   patched.servers = [{ url: origin }];
   patched.externalDocs = {
     description: "玄澈引擎 Gateway 隱私權政策",
     url: privacyPolicyUrl,
   };
-  patched.paths = filterPublicPaths(patched.paths);
+  patched["x-xuanche-backend"] = { version: backendVersion, worldStateReady };
+  patched.paths = filterPublicPaths(patched.paths, { worldStateReady });
   patched.components = patched.components ?? {};
   patched.components.schemas = patched.components.schemas ?? {};
   patched.components.schemas.PageBatchResponse = pageBatchResponseSchema();
+  if (!worldStateReady) {
+    delete patched.components.schemas.WorldLoadRequest;
+    delete patched.components.schemas.WorldUpdateRequest;
+    delete patched.components.schemas.BlockUpdate;
+  }
 
   const tree = patched.paths?.["/tree"]?.get;
   if (tree) {
@@ -627,6 +648,16 @@ async function fetchUpstream(context, request) {
   return context.env.XUANCHE_ENGINE.fetch(request);
 }
 
+async function safeWorldBackendReady(context) {
+  const response = await fetchUpstream(
+    context,
+    new Request("https://xuanche-engine.internal/health"),
+  );
+  if (!response.ok) return false;
+  const payload = await response.json().catch(() => ({}));
+  return versionAtLeast(payload?.version, "0.5.6");
+}
+
 export async function onRequest(context) {
   const request = context.request;
   const incoming = new URL(request.url);
@@ -640,6 +671,17 @@ export async function onRequest(context) {
     ["/privacy", "/privacy/", "/privacy.html"].includes(incoming.pathname)
   ) {
     return privacyResponse(request.method);
+  }
+
+  if (
+    request.method === "POST" &&
+    ["/load", "/world/load", "/world/update"].includes(incoming.pathname) &&
+    !(await safeWorldBackendReady(context))
+  ) {
+    return jsonResponse({
+      ok: false,
+      error: "The bound Xuanche Worker must be deployed at version 0.5.6 or newer before world load/update is enabled.",
+    }, 503);
   }
 
   const upstreamRequest = buildUpstreamRequest(request);
