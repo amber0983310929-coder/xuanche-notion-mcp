@@ -15,6 +15,7 @@ test("health reports integrations without exposing secrets", async () => {
   assert.equal(body.integrations.notion, "configured");
   assert.equal(body.integrations.github, "configured");
   assert.equal(body.capabilities.shallowPageBatchSizing, true);
+  assert.equal(body.capabilities.atomicWorldInitialization, true);
   assert.equal(JSON.stringify(body).includes("secret"), false);
 });
 
@@ -26,6 +27,13 @@ test("mutation endpoints reject missing API keys", async () => {
     body: JSON.stringify({}),
   }), { NOTION_TOKEN: "test", XUANCHE_API_KEY: "required" });
   assert.equal(response.status, 401);
+
+  const initializeResponse = await route(new Request("https://example.test/world/initialize", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({}),
+  }), { NOTION_TOKEN: "test", XUANCHE_API_KEY: "required" });
+  assert.equal(initializeResponse.status, 401);
 });
 
 test("raw Notion mutation routes are disabled by default", async () => {

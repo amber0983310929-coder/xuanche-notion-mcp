@@ -143,7 +143,7 @@ export async function resolveBlockPageId(notion, blockId) {
 }
 
 function marker(text, name) {
-  return text.match(new RegExp(name + "\\s*[：:]\\s*([^\\s|]+)", "i"))?.[1] || null;
+  return text.match(new RegExp(name + "\\s*[：:]\\s*([^\\s|｜]+)", "i"))?.[1] || null;
 }
 
 function richTextPlainText(value) {

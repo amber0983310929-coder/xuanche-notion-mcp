@@ -25,7 +25,7 @@ function paragraph(id, text) {
   };
 }
 
-function openApiFixture(version = "0.5.6") {
+function openApiFixture(version = "0.5.7") {
   return {
     openapi: "3.1.0",
     info: { title: "Xuanche Engine API", version },
@@ -33,6 +33,7 @@ function openApiFixture(version = "0.5.6") {
     components: {
       schemas: {
         WorldLoadRequest: { type: "object", properties: {} },
+        WorldInitializeRequest: { type: "object", properties: {} },
         WorldUpdateRequest: { type: "object", properties: {} },
       },
     },
@@ -60,6 +61,7 @@ function openApiFixture(version = "0.5.6") {
         },
       },
       "/page/{id}": { get: { operationId: "getNotionPageTreeById" } },
+      "/world/initialize": { post: { operationId: "initializeWorld" } },
       "/world/load": { post: { operationId: "loadWorldProfile" } },
       "/world/update": { post: { operationId: "updateWorldState" } },
       "/notion/pages": { post: { operationId: "createNotionPage" } },
@@ -92,7 +94,7 @@ test("compacts raw Notion blocks and removes noisy metadata", () => {
   assert.equal(result.data.blocks[0].created_time, undefined);
   assert.equal(result.data.blocks[0].parent, undefined);
   assert.equal(result._gateway.compact, true);
-  assert.equal(result._gateway.version, "0.5.6");
+  assert.equal(result._gateway.version, "0.5.7");
   assert.equal(result._gateway.returnedChars, JSON.stringify(result).length);
 });
 
@@ -166,7 +168,7 @@ test("publishes only the safety-scoped GPT Action operations with bounded page r
   const patched = patchOpenApi(openApiFixture(), "https://xuanche-engine-gateway.pages.dev");
   const parameters = patched.paths["/tree"].get.parameters;
 
-  assert.equal(patched.info.version, "0.5.6");
+  assert.equal(patched.info.version, "0.5.7");
   assert.equal(
     patched.externalDocs.url,
     "https://xuanche-engine-gateway.pages.dev/privacy",
@@ -177,6 +179,7 @@ test("publishes only the safety-scoped GPT Action operations with bounded page r
     "getGitHubWorldFile",
     "getNotionPage",
     "getNotionTree",
+    "initializeWorld",
     "listGitHubWorldTree",
     "loadWorldProfile",
     "updateWorldState",
@@ -184,9 +187,11 @@ test("publishes only the safety-scoped GPT Action operations with bounded page r
   assert.equal(patched.paths["/home"], undefined);
   assert.equal(patched.paths["/page/{id}"], undefined);
   assert.ok(patched.paths["/world/load"]);
+  assert.ok(patched.paths["/world/initialize"]);
   assert.ok(patched.paths["/world/update"]);
   assert.equal(patched.paths["/future/batch"], undefined);
   assert.ok(patched.components.schemas.WorldLoadRequest);
+  assert.ok(patched.components.schemas.WorldInitializeRequest);
   assert.ok(patched.components.schemas.WorldUpdateRequest);
 
   assert.equal(parameters.find((item) => item.name === "depth").schema.default, 0);
@@ -224,7 +229,7 @@ test("publishes only the safety-scoped GPT Action operations with bounded page r
   );
 });
 
-test("the Pages handler serves the filtered 0.5.6 OpenAPI document", async () => {
+test("the Pages handler serves the filtered 0.5.7 OpenAPI document", async () => {
   const response = await onRequest({
     request: new Request("https://xuanche-engine-gateway.pages.dev/openapi.json"),
     env: {
@@ -238,8 +243,8 @@ test("the Pages handler serves the filtered 0.5.6 OpenAPI document", async () =>
   const document = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.6");
-  assert.equal(document.info.version, "0.5.6");
+  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.7");
+  assert.equal(document.info.version, "0.5.7");
   assert.equal(
     document.externalDocs.url,
     "https://xuanche-engine-gateway.pages.dev/privacy",
@@ -249,6 +254,7 @@ test("the Pages handler serves the filtered 0.5.6 OpenAPI document", async () =>
     "getGitHubWorldFile",
     "getNotionPage",
     "getNotionTree",
+    "initializeWorld",
     "listGitHubWorldTree",
     "loadWorldProfile",
     "updateWorldState",
@@ -262,9 +268,24 @@ test("hides world state actions when the bound Worker is older than 0.5.6", () =
   );
   assert.equal(patched["x-xuanche-backend"].worldStateReady, false);
   assert.equal(patched.paths["/world/load"], undefined);
+  assert.equal(patched.paths["/world/initialize"], undefined);
   assert.equal(patched.paths["/world/update"], undefined);
   assert.equal(patched.components.schemas.WorldLoadRequest, undefined);
+  assert.equal(patched.components.schemas.WorldInitializeRequest, undefined);
   assert.equal(patched.components.schemas.WorldUpdateRequest, undefined);
+});
+
+test("keeps load/update but hides initialization on a 0.5.6 backend", () => {
+  const patched = patchOpenApi(
+    openApiFixture("0.5.6"),
+    "https://xuanche-engine-gateway.pages.dev",
+  );
+  assert.equal(patched["x-xuanche-backend"].worldStateReady, true);
+  assert.equal(patched["x-xuanche-backend"].initializationReady, false);
+  assert.ok(patched.paths["/world/load"]);
+  assert.ok(patched.paths["/world/update"]);
+  assert.equal(patched.paths["/world/initialize"], undefined);
+  assert.equal(patched.components.schemas.WorldInitializeRequest, undefined);
 });
 
 test("rejects world writes while the bound Worker is older than 0.5.6", async () => {
@@ -293,6 +314,32 @@ test("rejects world writes while the bound Worker is older than 0.5.6", async ()
   assert.equal(updateCalls, 0);
 });
 
+test("rejects initialization while the bound Worker is older than 0.5.7", async () => {
+  let initializeCalls = 0;
+  const response = await onRequest({
+    request: new Request("https://xuanche-engine-gateway.pages.dev/world/initialize", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    }),
+    env: {
+      XUANCHE_ENGINE: {
+        async fetch(request) {
+          if (new URL(request.url).pathname === "/health") {
+            return Response.json({ ok: true, version: "0.5.6" });
+          }
+          initializeCalls += 1;
+          return Response.json({ ok: true });
+        },
+      },
+    },
+  });
+  const body = await response.json();
+  assert.equal(response.status, 503);
+  assert.match(body.error, /0\.5\.7/);
+  assert.equal(initializeCalls, 0);
+});
+
 test("serves a public Traditional Chinese privacy policy without an upstream binding", async () => {
   const response = await onRequest({
     request: new Request("https://xuanche-engine-gateway.pages.dev/privacy"),
@@ -302,7 +349,7 @@ test("serves a public Traditional Chinese privacy policy without an upstream bin
 
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
-  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.6");
+  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.7");
   assert.match(response.headers.get("content-security-policy"), /default-src 'none'/);
   assert.match(body, /lang="zh-Hant"/);
   assert.match(body, /X-API-Key/);
@@ -356,7 +403,7 @@ test("full Pages handler compacts a large module response before returning it to
   assert.equal(response.headers.get("X-Xuanche-Page-Batch-Sizing"), "true");
   assert.equal(response.headers.get("X-Xuanche-Page-Batch-Limit"), "20");
   assert.equal(response.headers.get("X-Xuanche-Readable-Page-Payload"), "true");
-  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.6");
+  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.7");
   assert.ok(body.length < 72_000);
   assert.equal(parsed.data.items.length, 20);
   assert.equal(parsed.data.items[0].id, "0");
@@ -367,6 +414,6 @@ test("full Pages handler compacts a large module response before returning it to
   assert.equal(parsed.data.cursor, "batch-2");
   assert.equal(parsed.data.truncated, false);
   assert.equal(parsed.data.results, undefined);
-  assert.equal(parsed._gateway.version, "0.5.6");
+  assert.equal(parsed._gateway.version, "0.5.7");
   assert.equal(parsed._gateway.returnedChars, body.length);
 });
