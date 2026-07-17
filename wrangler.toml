@@ -1,8 +1,11 @@
 name = "plain-dew-5810xuanche-api"
 main = "worker.js"
 keep_vars = true
-compatibility_date = "2026-07-14"
+compatibility_date = "2026-07-17"
 compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
 
 [vars]
 NOTION_VERSION = "2022-06-28"
