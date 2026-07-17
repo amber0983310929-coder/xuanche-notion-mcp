@@ -34,7 +34,8 @@ export async function updateWorld(env, input, dependencies = {}) {
   const targetBlocks = pageId === canonicalSaveId
     ? canonicalBlocks
     : await notion.listAllBlockChildren(pageId, { maxNodes: 5_000 });
-  if (hasSaveKey(targetBlocks, input.saveKey)) {
+  const idempotent = hasSaveKey(targetBlocks, input.saveKey);
+  if (idempotent && input.memoryEvent === undefined && input.cachePatch === undefined) {
     return {
       idempotent: true,
       saveKey: input.saveKey,
@@ -45,23 +46,25 @@ export async function updateWorld(env, input, dependencies = {}) {
     };
   }
 
-  const preparedUpdates = await prepareBlockUpdates(notion, pageId, input.blockUpdates || []);
   const notionResult = { updated: [], append: null };
-  for (const update of preparedUpdates) {
-    if (update.alreadyApplied) {
-      notionResult.updated.push({ blockId: update.blockId, alreadyApplied: true });
-      continue;
+  if (!idempotent) {
+    const preparedUpdates = await prepareBlockUpdates(notion, pageId, input.blockUpdates || []);
+    for (const update of preparedUpdates) {
+      if (update.alreadyApplied) {
+        notionResult.updated.push({ blockId: update.blockId, alreadyApplied: true });
+        continue;
+      }
+      const result = await notion.updateBlock(update.blockId, update.input);
+      notionResult.updated.push({ blockId: update.blockId, result });
     }
-    const result = await notion.updateBlock(update.blockId, update.input);
-    notionResult.updated.push({ blockId: update.blockId, result });
-  }
 
-  const children = [...(input.children || []), "SAVE_KEY：" + input.saveKey];
-  notionResult.append = await notion.appendBlocks(pageId, children, input.after);
+    const children = [...(input.children || []), "SAVE_KEY：" + input.saveKey];
+    notionResult.append = await notion.appendBlocks(pageId, children, input.after);
+  }
 
   const timestamp = nowIso();
   const output = {
-    idempotent: false,
+    idempotent,
     saveKey: input.saveKey,
     worldState: markers.worldState,
     worldId: markers.worldId,
@@ -79,19 +82,23 @@ export async function updateWorld(env, input, dependencies = {}) {
       const event = typeof input.memoryEvent === "string"
         ? { timestamp, summary: input.memoryEvent }
         : { timestamp, ...input.memoryEvent };
-      existing.version = Math.max(3, Number(existing.version || 0));
-      existing.worldState = input.expectedWorldState;
-      existing.worldId = input.expectedWorldId;
-      existing.events = [...(existing.events || []), {
-        ...event,
-        saveKey: input.saveKey,
-        worldId: input.expectedWorldId,
-      }].slice(-1_000);
-      existing.updatedAt = timestamp;
-      const saved = await github.putJson("world/memory.json", existing, {
-        message: input.commitMessage || "chore(world): record " + input.saveKey,
-      });
-      output.memoryCommit = saved.commit?.sha;
+      if ((existing.events || []).some((item) => item?.saveKey === input.saveKey)) {
+        output.memoryIdempotent = true;
+      } else {
+        existing.version = Math.max(3, Number(existing.version || 0));
+        existing.worldState = input.expectedWorldState;
+        existing.worldId = input.expectedWorldId;
+        existing.events = [...(existing.events || []), {
+          ...event,
+          saveKey: input.saveKey,
+          worldId: input.expectedWorldId,
+        }].slice(-1_000);
+        existing.updatedAt = timestamp;
+        const saved = await github.putJson("world/memory.json", existing, {
+          message: input.commitMessage || "chore(world): record " + input.saveKey,
+        });
+        output.memoryCommit = saved.commit?.sha;
+      }
     } catch (error) {
       githubErrors.push({ target: "world/memory.json", message: error?.message || String(error) });
     }
@@ -100,16 +107,20 @@ export async function updateWorld(env, input, dependencies = {}) {
   if (input.cachePatch !== undefined) {
     try {
       const existing = (await github.getJson("world/cache.json", { allowNotFound: true }))?.data || {};
-      const next = mergeDeep(existing, input.cachePatch);
-      next.version = Math.max(3, Number(next.version || 0));
-      next.worldState = input.expectedWorldState;
-      next.worldId = input.expectedWorldId;
-      next.lastSaveKey = input.saveKey;
-      next.updatedAt = timestamp;
-      const saved = await github.putJson("world/cache.json", next, {
-        message: input.commitMessage || "chore(world): cache " + input.saveKey,
-      });
-      output.cacheCommit = saved.commit?.sha;
+      if (existing.lastSaveKey === input.saveKey) {
+        output.cacheIdempotent = true;
+      } else {
+        const next = mergeDeep(existing, input.cachePatch);
+        next.version = Math.max(3, Number(next.version || 0));
+        next.worldState = input.expectedWorldState;
+        next.worldId = input.expectedWorldId;
+        next.lastSaveKey = input.saveKey;
+        next.updatedAt = timestamp;
+        const saved = await github.putJson("world/cache.json", next, {
+          message: input.commitMessage || "chore(world): cache " + input.saveKey,
+        });
+        output.cacheCommit = saved.commit?.sha;
+      }
     } catch (error) {
       githubErrors.push({ target: "world/cache.json", message: error?.message || String(error) });
     }
