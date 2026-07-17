@@ -121,6 +121,28 @@ export class NotionClient {
     return this.request(`/blocks/${normalizeNotionId(blockId)}/children`, { method: "PATCH", body });
   }
 
+  updateBlock(blockId, input) {
+    const type = input?.type;
+    const textTypes = new Set([
+      "paragraph", "callout", "heading_1", "heading_2", "heading_3",
+      "bulleted_list_item", "numbered_list_item", "quote", "toggle", "to_do",
+    ]);
+    let body;
+    if (type === "table_row") {
+      if (!Array.isArray(input.cells) || input.cells.length === 0) {
+        throw new ApiError(400, "table_row updates require a non-empty cells array");
+      }
+      body = { table_row: { cells: input.cells.map((cell) => normalizeRichText(cell)) } };
+    } else if (textTypes.has(type)) {
+      if (typeof input.text !== "string") throw new ApiError(400, type + " updates require text");
+      body = { [type]: { rich_text: normalizeRichText(input.text) } };
+      if (type === "to_do" && typeof input.checked === "boolean") body.to_do.checked = input.checked;
+    } else {
+      throw new ApiError(400, "Unsupported Notion block update type", { type });
+    }
+    return this.request("/blocks/" + normalizeNotionId(blockId), { method: "PATCH", body });
+  }
+
   updatePage(pageId, patch) {
     const allowed = ["properties", "icon", "cover", "archived", "in_trash"];
     const body = Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)));
@@ -138,6 +160,16 @@ export function normalizeBlocks(children) {
       paragraph: { rich_text: [{ type: "text", text: { content: block } }] },
     };
   });
+}
+
+function normalizeRichText(value) {
+  if (Array.isArray(value)) {
+    if (value.every((item) => typeof item === "string")) {
+      return value.map((content) => ({ type: "text", text: { content } }));
+    }
+    return value;
+  }
+  return [{ type: "text", text: { content: String(value ?? "") } }];
 }
 
 function hasTruncated(blocks) {
