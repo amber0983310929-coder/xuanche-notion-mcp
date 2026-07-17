@@ -101,7 +101,19 @@ export function buildOpenApi(origin) {
           properties: {
             profile: {
               type: "string",
-              enum: ["base", "continue", "cultivation", "combat", "npc", "exploration", "full"],
+              enum: [
+                "base",
+                "continue",
+                "new_game",
+                "character_creation",
+                "character_finalize",
+                "cultivation",
+                "combat",
+                "npc",
+                "exploration",
+                "save",
+                "full",
+              ],
               default: "continue",
             },
             refresh: { type: "boolean", default: true, description: "Read Notion instead of using an unexpired KV snapshot." },
