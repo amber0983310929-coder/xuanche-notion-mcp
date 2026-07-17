@@ -143,6 +143,13 @@ export class NotionClient {
     return this.request("/blocks/" + normalizeNotionId(blockId), { method: "PATCH", body });
   }
 
+  archiveBlock(blockId) {
+    return this.request("/blocks/" + normalizeNotionId(blockId), {
+      method: "PATCH",
+      body: { archived: true },
+    });
+  }
+
   updatePage(pageId, patch) {
     const allowed = ["properties", "icon", "cover", "archived", "in_trash"];
     const body = Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)));
