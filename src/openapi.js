@@ -43,8 +43,8 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.14",
-      description: "Fail-closed Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, durable verified Notion world archives, bounded NPC_LIVE_PRELOAD_V1 dialogue loads, and idempotent allowlisted Notion updates.",
+      version: "0.5.15",
+      description: "Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, durable verified Notion archives, bounded per-turn differential loads, and idempotent allowlisted Notion updates.",
     },
     servers: [{ url: new URL(origin).origin }],
     components: {
@@ -423,3 +423,4 @@ function jsonBody(schemaRef, required = false) {
     content: { "application/json": { schema: { $ref: schemaRef } } },
   };
 }
+
