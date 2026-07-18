@@ -1,7 +1,7 @@
 name = "plain-dew-5810xuanche-api"
 main = "worker.js"
 keep_vars = true
-compatibility_date = "2026-07-17"
+compatibility_date = "2026-07-18"
 compatibility_flags = ["nodejs_compat"]
 
 [observability]
@@ -25,3 +25,8 @@ PROTECT_READS = "true"
 [[kv_namespaces]]
 binding = "XUANCHE_CACHE"
 id = "2a1fc809e225428a929517fd46e6bcfa"
+
+[[workflows]]
+name = "xuanche-world-archive-reset"
+binding = "WORLD_RESET_WORKFLOW"
+class_name = "WorldArchiveResetWorkflow"
