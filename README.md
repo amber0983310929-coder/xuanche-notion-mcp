@@ -1,6 +1,6 @@
-# Xuanche Engine v0.5.10
+# Xuanche Engine v0.5.11
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.10 keeps ACTIVE-world continuation shallow, bounded, and independent of non-authoritative cache writes, with a hard cap for the mandatory per-turn state profile.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.11 keeps ACTIVE-world continuation shallow, bounded, and independent of non-authoritative cache writes. It gives dialogue a separate, bounded active-cast preload so NPC context is not displaced by broad world data.
 
 ## Safety model
 
@@ -40,6 +40,8 @@ After the player replies, load turn_core and exactly one relevant profile:
 
 Resolve due public events from page 09 and private actor actions from page 11 before resolving the player action. Do not prewrite a player choice.
 
+For dialogue, use `turn_dialogue`: it is capped like `turn_core` and deliberately contains only the active-world state, relationships, private actor queue, NPC rules, HUD, and social narration rules. Keep the scene cast to one to three people.
+
 ## Safe world update fields
 
 Required:
@@ -74,6 +76,12 @@ The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and impor
 ## Verification
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
+
+## Version 0.5.11
+
+- Added a bounded, compact `turn_dialogue` profile for active-cast scenes instead of loading broad intelligence, faction, and unrelated narrative pages.
+- Enforced a 60-node per-page cap for dialogue preloads, protecting the character context inside the GPT Action response budget.
+- Added `NPC_LIVE_PRELOAD_V1` capability reporting for deployment verification.
 
 ## Version 0.5.10
 
