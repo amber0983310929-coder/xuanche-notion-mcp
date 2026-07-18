@@ -1,4 +1,5 @@
 import { CacheStore } from "./cache.js";
+import { assertWorldMutationUnlocked } from "./reset-lock.js";
 import { GitHubClient } from "./github.js";
 import { NotionClient } from "./notion.js";
 import { ApiError, mapLimit, nowIso } from "./utils.js";
@@ -26,6 +27,7 @@ export async function initializeWorld(env, input, dependencies = {}) {
   const notion = dependencies.notion || new NotionClient(env);
   const github = dependencies.github || new GitHubClient(env);
   const cache = dependencies.cache || new CacheStore(env);
+  await assertWorldMutationUnlocked(cache);
   const statusMirrorsEnabled = dependencies.statusMirrors !== false;
   const timestamp = nowIso();
   const pages = await readStatePages(notion);
