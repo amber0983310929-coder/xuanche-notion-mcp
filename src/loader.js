@@ -9,46 +9,46 @@ export const DEFAULT_WORLD_CONFIG = {
   version: 10,
   homePageId: "5f4c8de4a4c246478a4658d1ebc2a1a2",
   catalog: [
-    { key: "home", title: "修真世界（首頁）", id: "5f4c8de4a4c246478a4658d1ebc2a1a2" },
-    { key: "route", title: "00｜AI 載入索引與路由", id: "39cc845007ae8184b97dd0e8c0122768" },
-    { key: "rules", title: "01｜修真世界規則（唯一最高規則）", id: "af1900844075472583e7f30d90a9a7a7" },
-    { key: "save", title: "02｜現行世界存檔", id: "39fc845007ae81f295ecef235d229ff2" },
-    { key: "character", title: "03｜主角與角色資料", id: "39fc845007ae81f2a723dca974a8342a" },
-    { key: "timeline", title: "04｜世界時間線", id: "39fc845007ae8193a691e96f0323561c" },
-    { key: "knowledge", title: "05｜主角知識與圖鑑", id: "3a0c845007ae81518960f13469012b3b" },
-    { key: "relationships", title: "06｜NPC關係與名聲", id: "3a0c845007ae81318eb6c9af267def40" },
-    { key: "causality", title: "07｜因果、承諾與代價", id: "3a0c845007ae81148a7ee469dc58cf2a" },
-    { key: "clues", title: "08｜伏筆與未知線索", id: "3a0c845007ae818cba00fc7ef100b7eb" },
-    { key: "events", title: "09｜世界事件與勢力動向", id: "3a0c845007ae8144a64de3a6c646332c" },
-    { key: "changelog", title: "10｜規則與系統更新日誌", id: "3a0c845007ae81eaa4d4c15a2f3f9b19" },
-    { key: "director", title: "11｜導演筆記（AI專用）", id: "3a0c845007ae81888deaff5b06b6a168" },
-    { key: "flow", title: "12｜遊戲流程與回合規則", id: "39cc845007ae81e7a357c7d4b3a5d6de" },
-    { key: "npc", title: "13｜角色、NPC 與對話規則", id: "39cc845007ae811595cae2aa37672243" },
-    { key: "cultivation", title: "14｜修煉、境界與極境體系", id: "39cc845007ae81439c24d6854fc3f352" },
-    { key: "skills", title: "15｜功法、技能與神通體系", id: "39cc845007ae818d807ee4a9648ecd51" },
-    { key: "combat", title: "16｜戰鬥、難度與公平性", id: "39cc845007ae8146ad02db524906e1b7" },
-    { key: "protagonist", title: "17｜主角核心設定", id: "39cc845007ae8192917ac0f8ec708f9f" },
-    { key: "world", title: "18｜世界觀、劇情與事件生成", id: "39cc845007ae81d59208f786d3303b67" },
-    { key: "hud", title: "19｜HUD、狀態與資訊顯示", id: "39cc845007ae81648196e98ac7349f1d" },
-    { key: "persistence", title: "20｜記憶、載入、存檔與一致性", id: "39cc845007ae8185acf5d7af416b7849" },
-    { key: "equipment", title: "21｜武器、防具與法寶體系", id: "39cc845007ae8108bc7eeb1b7f4c51df" },
-    { key: "creatures", title: "22｜靈獸、妖族與契約體系", id: "39cc845007ae8171a826f644731bc132" },
-    { key: "crafts", title: "23｜丹藥、符籙、陣法與修真百藝", id: "39cc845007ae819aa31ecd7a59a232ac" },
-    { key: "economy", title: "24｜資源、貨幣、勢力與世界經濟", id: "39cc845007ae81f39ac9c4772dfd1048" },
-    { key: "regions", title: "25｜地域、氣候與文明差異", id: "39cc845007ae81e483a4cd72be050b04" },
-    { key: "society", title: "26｜日常生活、社會秩序與凡人世界", id: "39cc845007ae8109bf0dec8624172612" },
-    { key: "ecology", title: "27｜生態、天象、災害與環境演化", id: "39cc845007ae81d899f9dc23218de15d" },
-    { key: "intelligence", title: "28｜情報、謠言、秘密與知識傳播", id: "39cc845007ae818db0a9cb19c1010689" },
-    { key: "factions", title: "29｜NPC目標、派系演化與世界脈動", id: "39cc845007ae81b483e5c8a095ceb409" },
-    { key: "narrative", title: "30｜玄澈多源敘事文法", id: "39fc845007ae817390d5ee71cc4ac498" },
-    { key: "narrative_daily", title: "30-1｜日常、時間與成長", id: "39fc845007ae81a09225ebb826729cd9" },
-    { key: "narrative_social", title: "30-2｜人物關係、情緒與對話", id: "39fc845007ae816e81dbe14636fda7dc" },
-    { key: "narrative_power", title: "30-3｜利益、權力與不可兼得選擇", id: "39fc845007ae810da175ddfaf8608ba2" },
-    { key: "narrative_combat", title: "30-4｜修煉、戰鬥、失敗與代價", id: "39fc845007ae817eb88ae8f8c5cf1403" },
-    { key: "narrative_long", title: "30-5｜伏筆、世界運行與長線結構", id: "39fc845007ae81919641fff5423e565b" },
-    { key: "originality", title: "30-6｜原創生成與禁止模仿", id: "39fc845007ae81748ed5ccd3131a30d0" },
-    { key: "experience", title: "31｜敘事經驗索引", id: "39fc845007ae81eeb4fac2a18a75abd7" },
-    { key: "character_template", title: "32｜角色建立與新存檔固定模板", id: "3a0c845007ae81bb9b11e29e0b10e7d7" }
+    { key: "home", title: "靽桃?銝?嚗???", id: "5f4c8de4a4c246478a4658d1ebc2a1a2" },
+    { key: "route", title: "00嚚I 頛蝝Ｗ??楝??, id: "39cc845007ae8184b97dd0e8c0122768" },
+    { key: "rules", title: "01嚚耨???????臭??擃???", id: "af1900844075472583e7f30d90a9a7a7" },
+    { key: "save", title: "02嚚銵???瑼?, id: "39fc845007ae81f295ecef235d229ff2" },
+    { key: "character", title: "03嚚蜓閫?閫鞈?", id: "39fc845007ae81f2a723dca974a8342a" },
+    { key: "timeline", title: "04嚚?????", id: "39fc845007ae8193a691e96f0323561c" },
+    { key: "knowledge", title: "05嚚蜓閫霅???", id: "3a0c845007ae81518960f13469012b3b" },
+    { key: "relationships", title: "06嚚PC??????, id: "3a0c845007ae81318eb6c9af267def40" },
+    { key: "causality", title: "07嚚??隢曇?隞?", id: "3a0c845007ae81148a7ee469dc58cf2a" },
+    { key: "clues", title: "08嚚?蝑??芰蝺揣", id: "3a0c845007ae818cba00fc7ef100b7eb" },
+    { key: "events", title: "09嚚???隞嗉??Ｗ???", id: "3a0c845007ae8144a64de3a6c646332c" },
+    { key: "changelog", title: "10嚚???蝟餌絞?湔?亥?", id: "3a0c845007ae81eaa4d4c15a2f3f9b19" },
+    { key: "director", title: "11嚚?瞍?閮?AI撠嚗?, id: "3a0c845007ae81888deaff5b06b6a168" },
+    { key: "flow", title: "12嚚??脫?蝔???閬?", id: "39cc845007ae81e7a357c7d4b3a5d6de" },
+    { key: "npc", title: "13嚚??脯PC ??閰梯???, id: "39cc845007ae811595cae2aa37672243" },
+    { key: "cultivation", title: "14嚚耨????璆萄?擃頂", id: "39cc845007ae81439c24d6854fc3f352" },
+    { key: "skills", title: "15嚚?瘜??質?蟡?蝟?, id: "39cc845007ae818d807ee4a9648ecd51" },
+    { key: "combat", title: "16嚚擛乓摨西??砍像??, id: "39cc845007ae8146ad02db524906e1b7" },
+    { key: "protagonist", title: "17嚚蜓閫敹身摰?, id: "39cc845007ae8192917ac0f8ec708f9f" },
+    { key: "world", title: "18嚚???????鈭辣??", id: "39cc845007ae81d59208f786d3303b67" },
+    { key: "hud", title: "19嚚UD????鞈?憿舐內", id: "39cc845007ae81648196e98ac7349f1d" },
+    { key: "persistence", title: "20嚚??嗚??乓?瑼?銝?湔?, id: "39cc845007ae8185acf5d7af416b7849" },
+    { key: "equipment", title: "21嚚郎?具?瑁?瘜窄擃頂", id: "39cc845007ae8108bc7eeb1b7f4c51df" },
+    { key: "creatures", title: "22嚚??詻???憟?擃頂", id: "39cc845007ae8171a826f644731bc132" },
+    { key: "crafts", title: "23嚚號?乓泵蝐瘜?靽桃??曇?", id: "39cc845007ae819aa31ecd7a59a232ac" },
+    { key: "economy", title: "24嚚?皞疏撟???銝?蝬?", id: "39cc845007ae81f39ac9c4772dfd1048" },
+    { key: "regions", title: "25嚚?除????撌桃", id: "39cc845007ae81e483a4cd72be050b04" },
+    { key: "society", title: "26嚚撣貊?瘣颯冗?妝摨??∩犖銝?", id: "39cc845007ae8109bf0dec8624172612" },
+    { key: "ecology", title: "27嚚??予鞊～摰唾??啣?瞍?", id: "39cc845007ae81d899f9dc23218de15d" },
+    { key: "intelligence", title: "28嚚??晞?閮??撖??亥??單", id: "39cc845007ae818db0a9cb19c1010689" },
+    { key: "factions", title: "29嚚PC?格??晷蝟餅???銝???", id: "39cc845007ae81b483e5c8a095ceb409" },
+    { key: "narrative", title: "30嚚?瞉?皞?鈭?瘜?, id: "39fc845007ae817390d5ee71cc4ac498" },
+    { key: "narrative_daily", title: "30-1嚚撣詻????", id: "39fc845007ae81a09225ebb826729cd9" },
+    { key: "narrative_social", title: "30-2嚚犖?拚?靽?蝺?撠店", id: "39fc845007ae816e81dbe14636fda7dc" },
+    { key: "narrative_power", title: "30-3嚚????銝?澆??豢?", id: "39fc845007ae810da175ddfaf8608ba2" },
+    { key: "narrative_combat", title: "30-4嚚耨?擛乓仃??隞?", id: "39fc845007ae817eb88ae8f8c5cf1403" },
+    { key: "narrative_long", title: "30-5嚚?蝑???銵??瑞?蝯?", id: "39fc845007ae81919641fff5423e565b" },
+    { key: "originality", title: "30-6嚚??萇???蝳迫璅∩遛", id: "39fc845007ae81748ed5ccd3131a30d0" },
+    { key: "experience", title: "31嚚?鈭?撽揣撘?, id: "39fc845007ae81eeb4fac2a18a75abd7" },
+    { key: "character_template", title: "32嚚??脣遣蝡??啣?瑼摰芋??, id: "3a0c845007ae81bb9b11e29e0b10e7d7" }
   ],
   profiles: {
     base: ["home", "route", "rules", "save", "timeline", "persistence"],
@@ -66,16 +66,23 @@ export const DEFAULT_WORLD_CONFIG = {
     // Static rules and action-specific material are loaded separately; this
     // profile is deliberately limited to the authoritative live state.
     turn_core: ["save", "character", "timeline", "events", "director", "hud"],
-    turn_combat: ["save", "character", "timeline", "relationships", "causality", "events", "director", "combat", "equipment", "hud", "narrative_combat"],
+    // Action-specific profiles are differentials.  The caller loads
+    // turn_core first, so repeating the live state plus broad rule pages here
+    // wastes the GPT Action response budget and can make a valid turn fail at
+    // a location transition.
+    turn_combat: ["relationships", "causality", "combat"],
     // turn_core already supplies the authoritative live state. Dialogue only
     // adds the active cast's public relationships, obligations, private queue,
     // and voice rules. This avoids both duplicate payload and oversized
     // general-purpose narration pages.
     turn_dialogue: ["relationships", "causality", "director", "npc"],
-    turn_exploration: ["save", "character", "timeline", "knowledge", "clues", "events", "director", "world", "regions", "ecology", "intelligence", "hud", "narrative_daily"],
-    turn_cultivation: ["save", "character", "timeline", "causality", "events", "director", "cultivation", "skills", "hud", "narrative_combat"],
-    turn_trade: ["save", "character", "timeline", "knowledge", "relationships", "events", "director", "economy", "crafts", "hud", "narrative_power"],
-    turn_travel: ["save", "character", "timeline", "knowledge", "clues", "events", "director", "regions", "society", "ecology", "intelligence", "hud"],
+    // A new map must never require an encyclopaedia load.  Known facts and
+    // visible clues are enough to stage the next decision; deeper setting
+    // detail can be retrieved only after the player commits to it.
+    turn_exploration: ["knowledge", "clues"],
+    turn_cultivation: ["causality", "cultivation"],
+    turn_trade: ["knowledge", "economy"],
+    turn_travel: ["knowledge", "regions"],
     full: ["*"]
   },
   loader: {
@@ -265,7 +272,7 @@ function dedupePages(pages, homePageId) {
   const byKey = new Map();
   const byId = new Map();
   const output = [];
-  for (const page of [{ key: "home", title: "修真世界（首頁）", id: homePageId }, ...pages]) {
+  for (const page of [{ key: "home", title: "靽桃?銝?嚗???", id: homePageId }, ...pages]) {
     const key = typeof page.key === "string" ? page.key.trim() : "";
     if (!key) throw new ApiError(409, "World config contains a page without a key");
     const id = normalizeNotionId(page.id);
@@ -304,3 +311,4 @@ function assertFixedPageIdentities(catalog) {
     throw new ApiError(409, "World config does not match the current fixed Notion page mapping", { conflicts });
   }
 }
+
