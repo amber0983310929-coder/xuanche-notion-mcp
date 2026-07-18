@@ -1,9 +1,9 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-18T12:58:00.000Z",
-  "worldState": "EMPTY",
-  "worldId": "PENDING",
+  "updatedAt": "2026-07-18T13:09:14.686Z",
+  "worldState": "ACTIVE",
+  "worldId": "W20260718-12990485",
   "simTick": 0,
   "purgeId": "A-W20260717-432D5443-88A6FECA",
   "events": [
@@ -13,6 +13,13 @@
       "summary": "Archived and reset W20260717-432D5443",
       "worldId": "W20260717-432D5443",
       "archiveId": "A-W20260717-432D5443-88A6FECA"
+    },
+    {
+      "timestamp": "2026-07-18T13:09:14.686Z",
+      "type": "world_initialize",
+      "summary": "Initialized world for 李望舒",
+      "saveKey": "李望舒",
+      "worldId": "W20260718-12990485"
     }
   ]
 }
