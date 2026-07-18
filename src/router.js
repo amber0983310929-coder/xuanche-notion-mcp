@@ -1,5 +1,6 @@
 import { buildOpenApi } from "./openapi.js";
 import { GitHubClient } from "./github.js";
+import { archiveAndResetWorld } from "./archive-reset.js";
 import { initializeWorld } from "./initializer.js";
 import { loadWorld } from "./loader.js";
 import { NotionClient } from "./notion.js";
@@ -31,9 +32,9 @@ export function createRouter(dependencies = {}) {
         return json({
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.12",
+          version: "0.5.13",
           protectedReads: readsRequireApiKey(env),
-          endpoints: ["/health", "/home", "/tree", "/world/initialize", "/world/load", "/world/update", "/openapi.json"],
+          endpoints: ["/health", "/home", "/tree", "/world/initialize", "/world/load", "/world/update", "/world/archive-reset", "/openapi.json"],
         });
       }
 
@@ -45,7 +46,7 @@ export function createRouter(dependencies = {}) {
         const result = {
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.12",
+          version: "0.5.13",
           integrations: {
             notion: notion.configured ? "configured" : "missing",
             github: github.configured ? "configured" : "missing",
@@ -59,6 +60,7 @@ export function createRouter(dependencies = {}) {
             idempotentWorldUpdates: true,
             fixedWorldWriteAllowlist: true,
             atomicWorldInitialization: true,
+            verifiedWorldArchiveAndReset: true,
           },
           protectedReads: readsRequireApiKey(env),
           requestId: id,
@@ -153,6 +155,13 @@ export function createRouter(dependencies = {}) {
         requireApiKey(request, env);
         const body = await readJson(request);
         const data = await initializeWorld(env, body, { notion, github, cache: dependencies.cache });
+        return json({ ok: true, data, requestId: id });
+      }
+
+      if (request.method === "POST" && url.pathname === "/world/archive-reset") {
+        requireApiKey(request, env);
+        const body = await readJson(request);
+        const data = await archiveAndResetWorld(env, body, { notion, github, cache: dependencies.cache });
         return json({ ok: true, data, requestId: id });
       }
 
