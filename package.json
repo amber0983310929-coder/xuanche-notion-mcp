@@ -1,14 +1,18 @@
 {
   "name": "xuanche-engine",
-  "version": "0.5.13",
+  "version": "0.5.14",
   "private": true,
   "type": "module",
   "description": "Cloudflare Worker bridge for the Xuanche cultivation world in Notion and GitHub.",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "npx --no-install wrangler deploy",
     "test": "node --test",
-    "check": "node --check worker.js && node --test"
+    "test:actions": "node gateway/scripts/validate-gpt-action-contract.mjs",
+    "verify:actions": "node gateway/scripts/verify-deployed-gpt-action.mjs",
+    "deploy:gateway": "npm run check && npx --no-install wrangler pages deploy gateway/public --project-name xuanche-engine-gateway && npm run verify:actions -- https://xuanche-engine-gateway.pages.dev",
+    "deploy:release": "npm run check && npx --no-install wrangler deploy && npx --no-install wrangler pages deploy gateway/public --project-name xuanche-engine-gateway && npm run verify:actions -- https://xuanche-engine-gateway.pages.dev",
+    "check": "node --check worker.js && node --test && npm run test:actions"
   },
   "devDependencies": {
     "wrangler": "^4.24.3"
