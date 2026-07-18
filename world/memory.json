@@ -1,7 +1,7 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-18T05:56:30.424Z",
+  "updatedAt": "2026-07-18T08:21:52.672Z",
   "worldState": "ACTIVE",
   "worldId": "W20260717-432D5443",
   "simTick": 0,
@@ -28,6 +28,14 @@
       "summary": "沐青塵突破至引氣境・初入，形成第一絲本源清息與七枚記錄節點；獲宗主賜予上品凡器『青衡練鋒』作日常訓練與普通實戰使用，無名斷鋒改為僅在生死搏殺或強化訓練中使用。",
       "version": "SAVE_V3.2",
       "saveKey": "breakthrough-weapon-muqingchen-20260718-002",
+      "worldId": "W20260717-432D5443"
+    },
+    {
+      "timestamp": "2026-07-18T08:21:52.672Z",
+      "type": "major_state_change",
+      "summary": "沐青塵接受魏長策提出的洗劍池資源爭議約戰，三日後於問劍臺決勝；宗門第一條正式敵對線成立。",
+      "version": "SAVE_V3.2",
+      "saveKey": "accept-duel-weichangce-muqingchen-20260718-003",
       "worldId": "W20260717-432D5443"
     }
   ]
