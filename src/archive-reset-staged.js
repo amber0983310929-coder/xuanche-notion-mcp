@@ -276,7 +276,7 @@ async function readPage(notion, key, { deep }) {
     return { key, page: direct.page, children: direct.children, deepChildren: direct.children, markers, marker: { id: markerBlock.id, type: markerBlock.type } };
   }
   const tree = await notion.getPageTree(WORLD_PAGE_IDS[key], {
-    maxDepth: 20, maxNodes: MAX_SNAPSHOT_NODES, concurrency: 2, includePage: true,
+    maxDepth: 2, maxNodes: MAX_SNAPSHOT_NODES, concurrency: 2, includePage: true,
   });
   return { key, page: tree.page, children: direct.children, deepChildren: tree.children, markers, marker: { id: markerBlock.id, type: markerBlock.type } };
 }
