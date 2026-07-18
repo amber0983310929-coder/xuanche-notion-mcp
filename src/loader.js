@@ -3,6 +3,7 @@ import { GitHubClient } from "./github.js";
 import { NotionClient } from "./notion.js";
 import { ApiError, mapLimit, mergeDeep, normalizeNotionId, nowIso } from "./utils.js";
 import { validateLoadedWorld } from "./world-state.js";
+import { getActiveReset } from "./reset-lock.js";
 
 export const DEFAULT_WORLD_CONFIG = {
   version: 10,
@@ -127,6 +128,14 @@ export async function loadWorld(env, options = {}) {
   const notion = options.notion || new NotionClient(env);
   const github = options.github || new GitHubClient(env);
   const cache = options.cache || new CacheStore(env);
+  const resetLock = await getActiveReset(cache);
+  if (resetLock) {
+    throw new ApiError(423, "World archive-and-reset is in progress; wait for the operation to finish before loading", {
+      archiveId: resetLock.archiveId || null,
+      expectedWorldId: resetLock.expectedWorldId || null,
+      phase: resetLock.phase,
+    });
+  }
   const config = await resolveWorldConfig(env, github);
   const profile = options.profile || config.loader.defaultProfile || "continue";
   const selectedPages = selectWorldPages(config, profile, options.pageKeys);
