@@ -1,6 +1,6 @@
-# Xuanche Engine v0.5.11
+# Xuanche Engine v0.5.12
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.11 keeps ACTIVE-world continuation shallow, bounded, and independent of non-authoritative cache writes. It gives dialogue a separate, bounded active-cast preload so NPC context is not displaced by broad world data.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.12 keeps ACTIVE-world continuation shallow, bounded, and independent of non-authoritative cache writes. It gives dialogue a separate active-cast preload without re-reading the core state or broad narration pages.
 
 ## Safety model
 
@@ -40,7 +40,7 @@ After the player replies, load turn_core and exactly one relevant profile:
 
 Resolve due public events from page 09 and private actor actions from page 11 before resolving the player action. Do not prewrite a player choice.
 
-For dialogue, use `turn_dialogue`: it is capped like `turn_core` and deliberately contains only the active-world state, relationships, private actor queue, NPC rules, HUD, and social narration rules. Keep the scene cast to one to three people.
+For dialogue, call `turn_core` first, then `turn_dialogue`. The dialogue profile deliberately contains only relationships, obligations, the private actor queue, and NPC rules; it does not duplicate the core state or load broad narration pages. Keep the scene cast to one to three people.
 
 ## Safe world update fields
 
@@ -76,6 +76,11 @@ The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and impor
 ## Verification
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
+
+## Version 0.5.12
+
+- Removed duplicate live-state and broad narrative pages from `turn_dialogue`; it now adds only the four active-cast modules after `turn_core`.
+- Raised the per-page dialogue safety ceiling to 200 nodes so a growing NPC rules page cannot halt the entire interaction before any scene is generated.
 
 ## Version 0.5.11
 

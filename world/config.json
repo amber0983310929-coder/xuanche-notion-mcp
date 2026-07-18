@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "homePageId": "5f4c8de4a4c246478a4658d1ebc2a1a2",
   "catalog": [
     {
@@ -370,16 +370,10 @@
       "narrative_combat"
     ],
     "turn_dialogue": [
-      "save",
-      "character",
-      "timeline",
       "relationships",
       "causality",
-      "events",
       "director",
-      "npc",
-      "hud",
-      "narrative_social"
+      "npc"
     ],
     "turn_exploration": [
       "save",
@@ -448,6 +442,6 @@
     "cacheTtlSeconds": 300,
     "persistSnapshotToGitHub": false,
     "turnCoreMaxNodesPerPage": 60,
-    "turnDialogueMaxNodesPerPage": 60
+    "turnDialogueMaxNodesPerPage": 200
   }
 }

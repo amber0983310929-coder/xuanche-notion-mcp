@@ -27,8 +27,7 @@ test("turn_core contains only the bounded authoritative per-turn state", () => {
 test("turn_dialogue loads the compact active-cast context", () => {
   const pages = selectWorldPages(DEFAULT_WORLD_CONFIG, "turn_dialogue");
   assert.deepEqual(pages.map((page) => page.key), [
-    "save", "character", "timeline", "relationships", "causality", "events",
-    "director", "npc", "hud", "narrative_social"
+    "relationships", "causality", "director", "npc"
   ]);
 });
 
@@ -69,7 +68,7 @@ test("turn_dialogue enforces its active-cast page-node cap", async () => {
     refresh: true,
     maxNodes: 1_500,
   });
-  assert.deepEqual(received, Array(10).fill(60));
+  assert.deepEqual(received, Array(4).fill(200));
 });
 
 test("new_game profile loads only the fixed character-creation route", () => {
