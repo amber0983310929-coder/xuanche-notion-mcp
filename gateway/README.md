@@ -1,4 +1,4 @@
-# Xuanche Engine Gateway v0.5.10
+# Xuanche Engine Gateway v0.5.11
 
 This Cloudflare Pages gateway keeps GPT Action responses below the payload limit and publishes a safety-scoped OpenAPI contract.
 
@@ -8,6 +8,7 @@ This Cloudflare Pages gateway keeps GPT Action responses below the payload limit
 - getNotionTree
 - getNotionPage
 - initializeWorld
+- archiveAndResetWorld (only when the Worker is v0.5.13 or later)
 - loadWorldProfile
 - updateWorldState
 - listGitHubWorldTree
@@ -33,7 +34,7 @@ World profile loads are compacted to the same response budget. Use turn_core plu
 - Build output directory: public
 - Service binding: XUANCHE_ENGINE to the Xuanche Worker
 
-After deployment, re-import the Pages /openapi.json URL into GPT Actions and use /privacy as the privacy-policy URL. Confirm that the document reports version 0.5.10 and exactly the eight operations above, including initializeWorld.
+After deployment, re-import the Pages /openapi.json URL into GPT Actions and use /privacy as the privacy-policy URL. Confirm that the document reports version 0.5.11 and exposes archiveAndResetWorld only when the bound Worker is v0.5.13 or later.
 
 ## Verification
 
