@@ -1,11 +1,10 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-18T12:58:00.000Z",
-  "worldState": "EMPTY",
-  "worldId": "PENDING",
+  "updatedAt": "2026-07-18T13:09:14.686Z",
+  "worldState": "ACTIVE",
+  "worldId": "W20260718-12990485",
   "simTick": 0,
-  "lastSaveKey": null,
-  "archiveId": "A-W20260717-432D5443-88A6FECA",
+  "lastSaveKey": "李望舒",
   "snapshot": null
 }
