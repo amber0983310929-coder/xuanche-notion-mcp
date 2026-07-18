@@ -1,6 +1,6 @@
-# Xuanche Engine v0.5.12
+# Xuanche Engine v0.5.13
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.12 keeps ACTIVE-world continuation shallow, bounded, and independent of non-authoritative cache writes. It gives dialogue a separate active-cast preload without re-reading the core state or broad narration pages.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.13 adds a verified archive-and-reset transaction: the current world is copied to a content-hashed Notion archive and verified before fixed pages are cleared to EMPTY/PENDING.
 
 ## Safety model
 
@@ -9,6 +9,7 @@ Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation 
 - Optional block updates verify that every block belongs to the declared fixed page and support optimistic expected-text checks.
 - Public raw page creation, arbitrary block append, and page metadata mutation are disabled by default. They exist only behind ALLOW_RAW_NOTION_WRITES=true and are never advertised by OpenAPI.
 - World loads reject archived pages and mixed save identities.
+- Archive-and-reset first verifies a checksummed Notion archive and then holds a durable reset lock until every fixed page is EMPTY/PENDING; it never presents a partially cleared world as playable.
 - Character confirmation uses one dedicated initializer: it rate-paces Notion, preflights every fixed page, stages all state, activates the canonical save marker last, validates readback, and reconciles compensation before declaring a conflict.
 - A failed GitHub mirror is reported as pending after the authoritative Notion write; it does not make a completed Notion write look rolled back.
 
@@ -19,6 +20,7 @@ Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation 
 - GET /tree
 - GET /page and GET /page/:id
 - POST /world/initialize
+- POST /world/archive-reset
 - POST /world/load
 - POST /world/update
 - GET /github/tree
@@ -61,6 +63,10 @@ Optional:
 
 The service appends the SAVE_KEY marker automatically and invalidates all cached world profiles.
 
+## Archive and reset
+
+`POST /world/archive-reset` is deliberately separate from initialization. It requires `confirmation: "ARCHIVE_AND_RESET"`, the exact current `expectedWorldId`, and an idempotent `operationKey`. The Worker copies pages 02–09 and 11 into a `世界封存庫` child page in Notion, checks the SHA-256 digest of every source snapshot, and only then clears the fixed pages to `EMPTY/PENDING`. If Notion interrupts clearing, the current world remains `RESETTING` and normal loads/writes are locked; retry the same request with the same operation key to resume safely.
+
 ## Confirmed-character initialization
 
 Call POST /world/initialize exactly once after explicit character confirmation. It requires a unique saveKey and a character object containing name; opening context is optional. EMPTY/PENDING is the required starting state, not a reason to postpone initialization. A retry with the same SAVE_KEY returns the existing ACTIVE world without staging another copy.
@@ -71,11 +77,17 @@ Store NOTION_TOKEN, GITHUB_TOKEN, and XUANCHE_API_KEY as Cloudflare secrets. Kee
 
 NOTION_MIN_REQUEST_INTERVAL_MS defaults to 400 so one Worker instance stays below Notion's documented average of three requests per second. The client also honors Retry-After for HTTP 429 and 529 responses.
 
-The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and import the gateway /openapi.json into GPT Actions. The gateway exposes bounded reads, confirmed-character initialization, safe profile loads, safe world updates, and read-only GitHub inspection.
+The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and import the gateway /openapi.json into GPT Actions. The gateway exposes bounded reads, confirmed-character initialization, verified archive/reset, safe profile loads, safe world updates, and read-only GitHub inspection.
 
 ## Verification
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
+
+## Version 0.5.13
+
+- Added `archiveAndResetWorld`: an explicit, exact-WORLD_ID operation that creates a full Notion archive before any fixed world page is cleared.
+- A durable KV reset lock blocks world reads and writes during the non-atomic Notion clearing phase; interrupted resets resume only with the same operation key.
+- Archives preserve each fixed page as a checksummed JSON snapshot, then GitHub active memory/cache are reset to EMPTY/PENDING to prevent cross-world bleed.
 
 ## Version 0.5.12
 
