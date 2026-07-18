@@ -5,7 +5,7 @@ import { ApiError, mapLimit, mergeDeep, normalizeNotionId, nowIso } from "./util
 import { validateLoadedWorld } from "./world-state.js";
 
 export const DEFAULT_WORLD_CONFIG = {
-  version: 9,
+  version: 10,
   homePageId: "5f4c8de4a4c246478a4658d1ebc2a1a2",
   catalog: [
     { key: "home", title: "修真世界（首頁）", id: "5f4c8de4a4c246478a4658d1ebc2a1a2" },
@@ -66,11 +66,11 @@ export const DEFAULT_WORLD_CONFIG = {
     // profile is deliberately limited to the authoritative live state.
     turn_core: ["save", "character", "timeline", "events", "director", "hud"],
     turn_combat: ["save", "character", "timeline", "relationships", "causality", "events", "director", "combat", "equipment", "hud", "narrative_combat"],
-    // Dialogue needs the current cast, their public relationships, and their
-    // private queued actions. Loading every intelligence/faction/narrative
-    // page here starves those details and makes NPC voices collapse into a
-    // generic response.
-    turn_dialogue: ["save", "character", "timeline", "relationships", "causality", "events", "director", "npc", "hud", "narrative_social"],
+    // turn_core already supplies the authoritative live state. Dialogue only
+    // adds the active cast's public relationships, obligations, private queue,
+    // and voice rules. This avoids both duplicate payload and oversized
+    // general-purpose narration pages.
+    turn_dialogue: ["relationships", "causality", "director", "npc"],
     turn_exploration: ["save", "character", "timeline", "knowledge", "clues", "events", "director", "world", "regions", "ecology", "intelligence", "hud", "narrative_daily"],
     turn_cultivation: ["save", "character", "timeline", "causality", "events", "director", "cultivation", "skills", "hud", "narrative_combat"],
     turn_trade: ["save", "character", "timeline", "knowledge", "relationships", "events", "director", "economy", "crafts", "hud", "narrative_power"],
@@ -83,7 +83,7 @@ export const DEFAULT_WORLD_CONFIG = {
     homeMaxDepth: 0,
     maxNodesPerPage: 1_500,
     turnCoreMaxNodesPerPage: 60,
-    turnDialogueMaxNodesPerPage: 60,
+    turnDialogueMaxNodesPerPage: 200,
     concurrency: 2,
     cacheTtlSeconds: 300,
     persistSnapshotToGitHub: false
