@@ -267,31 +267,42 @@ async function startArchiveResetWorkflow(env, input, injectedCache) {
     });
   }
 
-  const workflowId = archiveResetWorkflowId(input);
+  let workflowId = active?.workflowId || archiveResetWorkflowId(input);
   const queuedHere = !active;
-  if (queuedHere) {
+  const persistWorkflowId = async () => {
     await cache.put(ACTIVE_RESET_LOCK, {
-      phase: "queued",
+      ...(active || {}),
+      phase: active?.phase || "queued",
       expectedWorldId: input.expectedWorldId,
       operationKey: input.operationKey,
       workflowId,
-      createdAt: new Date().toISOString(),
+      createdAt: active?.createdAt || new Date().toISOString(),
     }, 86_400);
-  }
+  };
+  if (queuedHere || !active?.workflowId) await persistWorkflowId();
+
+  const submit = () => env.WORLD_RESET_WORKFLOW.createBatch([{
+    id: workflowId,
+    params: input,
+    retention: { successRetention: "7 days", errorRetention: "14 days" },
+  }]);
   try {
-    await env.WORLD_RESET_WORKFLOW.createBatch([{
-      id: workflowId,
-      params: input,
-      retention: { successRetention: "7 days", errorRetention: "14 days" },
-    }]);
+    await submit();
   } catch (error) {
-    // The instance ID is deterministic. A duplicate submit must return the
-    // already-running job instead of turning a harmless retry into an error.
+    let existingStatus;
     try {
-      await env.WORLD_RESET_WORKFLOW.get(workflowId);
+      existingStatus = await (await env.WORLD_RESET_WORKFLOW.get(workflowId)).status();
     } catch {
       if (queuedHere) await cache.delete(ACTIVE_RESET_LOCK);
       throw error;
+    }
+    // A completed or running deterministic instance is idempotent.  An errored
+    // instance cannot be re-used by Cloudflare Workflows, so start a fresh
+    // attempt while retaining the same archive checkpoint and operationKey.
+    if (["errored", "terminated", "canceled", "cancelled"].includes(existingStatus.status)) {
+      workflowId = archiveResetWorkflowId(input) + "-retry-" + crypto.randomUUID().slice(0, 8);
+      await persistWorkflowId();
+      await submit();
     }
   }
   const instance = await env.WORLD_RESET_WORKFLOW.get(workflowId);
@@ -304,7 +315,11 @@ async function getArchiveResetWorkflowStatus(env, input) {
   if (!env.WORLD_RESET_WORKFLOW?.get) {
     throw new ApiError(503, "Durable archive workflow binding is not configured");
   }
-  const workflowId = archiveResetWorkflowId(input);
+  const cache = new CacheStore(env);
+  const active = await getActiveReset(cache);
+  const workflowId = active?.expectedWorldId === input.expectedWorldId && active?.operationKey === input.operationKey
+    ? active.workflowId || archiveResetWorkflowId(input)
+    : archiveResetWorkflowId(input);
   let instance;
   try {
     instance = await env.WORLD_RESET_WORKFLOW.get(workflowId);
