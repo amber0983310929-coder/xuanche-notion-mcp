@@ -43,8 +43,8 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.12",
-      description: "Fail-closed Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, bounded NPC_LIVE_PRELOAD_V1 dialogue loads, and idempotent allowlisted Notion updates.",
+      version: "0.5.13",
+      description: "Fail-closed Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, verified Notion world archives, bounded NPC_LIVE_PRELOAD_V1 dialogue loads, and idempotent allowlisted Notion updates.",
     },
     servers: [{ url: new URL(origin).origin }],
     components: {
@@ -224,6 +224,30 @@ export function buildOpenApi(origin) {
             },
           },
         },
+        WorldArchiveResetRequest: {
+          type: "object",
+          required: ["confirmation", "expectedWorldId", "operationKey"],
+          properties: {
+            confirmation: {
+              type: "string",
+              enum: ["ARCHIVE_AND_RESET"],
+              description: "Exact destructive-operation acknowledgement. The engine archives and verifies before clearing any fixed page.",
+            },
+            expectedWorldId: {
+              type: "string",
+              pattern: "^W\\d{8}-[0-9A-F]{8}$",
+              description: "Exact WORLD_ID of the currently ACTIVE world to archive.",
+            },
+            operationKey: {
+              type: "string",
+              minLength: 8,
+              maxLength: 120,
+              pattern: "^[A-Za-z0-9._-]+$",
+              description: "Stable idempotency key. Reuse the same key only to safely resume this exact reset.",
+            },
+          },
+          additionalProperties: false,
+        },
         BlockUpdate: {
           type: "object",
           required: ["blockId", "type"],
@@ -334,6 +358,16 @@ export function buildOpenApi(origin) {
           summary: "Apply an idempotent, allowlisted SAVE_V3.2 world update",
           security: apiKeySecurity,
           requestBody: jsonBody("#/components/schemas/WorldUpdateRequest", true),
+          responses: standardResponses,
+        },
+      },
+      "/world/archive-reset": {
+        post: {
+          operationId: "archiveAndResetWorld",
+          summary: "Archive and then reset the exact current world",
+          description: "Destructive operation. It requires an exact ACTIVE WORLD_ID and explicit ARCHIVE_AND_RESET confirmation, copies all fixed world pages to a content-hashed Notion archive, verifies every page, locks normal world writes, then clears fixed pages to EMPTY/PENDING. If clearing is interrupted, retry with the same operationKey; the world stays non-playable rather than becoming mixed.",
+          security: apiKeySecurity,
+          requestBody: jsonBody("#/components/schemas/WorldArchiveResetRequest", true),
           responses: standardResponses,
         },
       },
