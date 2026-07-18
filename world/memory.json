@@ -1,7 +1,7 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-17T14:06:42.386Z",
+  "updatedAt": "2026-07-18T00:15:21.786Z",
   "worldState": "ACTIVE",
   "worldId": "W20260717-432D5443",
   "simTick": 0,
@@ -12,6 +12,14 @@
       "type": "world_initialize",
       "summary": "Initialized world for 沐青塵",
       "saveKey": "new-world-muqingchen-20260717-001",
+      "worldId": "W20260717-432D5443"
+    },
+    {
+      "timestamp": "2026-07-18T00:15:21.786Z",
+      "type": "major_state_change",
+      "summary": "沐青塵選擇加入衡岳劍宗，前提是正式保障母親沐晚晴與妹妹沐清瑤，並先明確身分、資源與自由邊界。",
+      "version": "SAVE_V3.2",
+      "saveKey": "sect-join-hengyue-muqingchen-20260718-001",
       "worldId": "W20260717-432D5443"
     }
   ]
