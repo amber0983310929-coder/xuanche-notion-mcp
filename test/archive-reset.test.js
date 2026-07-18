@@ -195,3 +195,35 @@ test("a queued durable-workflow lock starts the archive instead of being treated
   assert.equal(result.reset, true);
   assert.equal(result.worldState, "EMPTY");
 });
+
+
+test("staged archive uses independently resumable page checkpoints before reset", async () => {
+  const { notion, pages } = createNotionMock();
+  const cache = createCache();
+  const deps = { notion, github: { configured: false }, cache };
+  const env = { HOME_PAGE_ID: "home" };
+  const request = input("archive-reset-staged-001");
+
+  await prepareStagedArchiveReset(env, request, deps);
+  for (const key of STATE_PAGE_KEYS) {
+    await archiveAndVerifyStagedPage(env, request, key, deps);
+  }
+  const verified = await verifyStagedArchive(env, request, deps);
+  assert.equal(verified.phase, "archive_verified");
+  assert.equal(verified.archivedKeys.length, STATE_PAGE_KEYS.length);
+
+  for (const key of STATE_PAGE_KEYS) {
+    await markStagedPageResetting(env, request, key, deps);
+    await clearStagedPage(env, request, key, deps);
+    await markStagedPageEmpty(env, request, key, deps);
+  }
+  const result = await finalizeStagedArchiveReset(env, request, deps);
+  assert.equal(result.archived, true);
+  assert.equal(result.reset, true);
+  assert.equal(result.worldState, "EMPTY");
+  assert.equal(await cache.get("world-reset:active"), undefined);
+  for (const key of STATE_PAGE_KEYS) {
+    const live = pages.get(WORLD_PAGE_IDS[key]).children.filter((item) => !item.archived);
+    assert.equal(live.length, 1);
+  }
+});
