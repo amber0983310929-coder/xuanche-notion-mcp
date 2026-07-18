@@ -5,7 +5,7 @@ import { buildOpenApi } from "../src/openapi.js";
 test("OpenAPI is bound to the deployed origin and exposes unique operation IDs", () => {
   const document = buildOpenApi("https://worker.example/openapi.json");
   assert.equal(document.openapi, "3.1.0");
-  assert.equal(document.info.version, "0.5.12");
+  assert.equal(document.info.version, "0.5.13");
   assert.equal(document.servers[0].url, "https://worker.example");
 
   const operationIds = Object.values(document.paths)
@@ -48,6 +48,10 @@ test("OpenAPI protects world reads and defines GPT Action request bodies", () =>
   assert.equal(
     document.paths["/world/update"].post.requestBody.content["application/json"].schema.$ref,
     "#/components/schemas/WorldUpdateRequest",
+  );
+  assert.equal(
+    document.paths["/world/archive-reset"].post.requestBody.content["application/json"].schema.$ref,
+    "#/components/schemas/WorldArchiveResetRequest",
   );
 });
 
@@ -95,6 +99,8 @@ test("OpenAPI exposes only the safe world mutation routes", () => {
     "expectedWorldState",
   ]);
   assert.deepEqual(document.components.schemas.WorldInitializeRequest.required, ["saveKey", "character"]);
+  assert.deepEqual(document.components.schemas.WorldArchiveResetRequest.required, ["confirmation", "expectedWorldId", "operationKey"]);
   assert.equal(document.paths["/world/initialize"].post.operationId, "initializeWorld");
+  assert.equal(document.paths["/world/archive-reset"].post.operationId, "archiveAndResetWorld");
   assert.ok(document.components.schemas.WorldUpdateRequest.properties.blockUpdates);
 });

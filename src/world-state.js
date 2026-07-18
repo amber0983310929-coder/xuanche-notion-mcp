@@ -19,7 +19,11 @@ export const STATE_PAGE_KEYS = Object.freeze([
 ]);
 
 const WRITABLE_IDS = new Set(Object.values(WORLD_PAGE_IDS).map(normalizeNotionId));
-const WORLD_STATES = new Set(["EMPTY", "ACTIVE", "WORLD_CONFLICT"]);
+// RESETTING is an intentionally non-playable state. It is written only after
+// a complete archive has been verified and remains in place if clearing the
+// fixed pages needs to be resumed. This makes a partially completed reset
+// fail closed instead of exposing a mixed world as playable.
+const WORLD_STATES = new Set(["EMPTY", "ACTIVE", "RESETTING", "WORLD_CONFLICT"]);
 
 export function assertWritableWorldPage(pageId) {
   const normalized = normalizeNotionId(pageId);

@@ -9,13 +9,14 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
-const GATEWAY_VERSION = "0.5.10";
+const GATEWAY_VERSION = "0.5.11";
 
 const SAFE_PUBLIC_OPERATIONS = [
   { path: "/health", method: "get", operationId: "getEngineHealth" },
   { path: "/tree", method: "get", operationId: "getNotionTree" },
   { path: "/page", method: "get", operationId: "getNotionPage" },
   { path: "/world/initialize", method: "post", operationId: "initializeWorld" },
+  { path: "/world/archive-reset", method: "post", operationId: "archiveAndResetWorld" },
   { path: "/world/load", method: "post", operationId: "loadWorldProfile" },
   { path: "/world/update", method: "post", operationId: "updateWorldState" },
   { path: "/github/tree", method: "get", operationId: "listGitHubWorldTree" },
@@ -366,12 +367,13 @@ function versionAtLeast(actual, minimum) {
   return true;
 }
 
-function filterPublicPaths(paths = {}, { worldStateReady = false, initializationReady = false } = {}) {
+function filterPublicPaths(paths = {}, { worldStateReady = false, initializationReady = false, archiveResetReady = false } = {}) {
   const filtered = {};
 
   for (const { path, method, operationId } of SAFE_PUBLIC_OPERATIONS) {
     if (!worldStateReady && (path === "/world/load" || path === "/world/update")) continue;
     if (!initializationReady && path === "/world/initialize") continue;
+    if (!archiveResetReady && path === "/world/archive-reset") continue;
     const sourcePath = paths[path];
     const sourceOperation = sourcePath?.[method];
     if (sourceOperation?.operationId !== operationId) continue;
@@ -460,6 +462,7 @@ export function patchOpenApi(spec, origin) {
   const backendVersion = patched.info?.version || "0.0.0";
   const worldStateReady = versionAtLeast(backendVersion, "0.5.6");
   const initializationReady = versionAtLeast(backendVersion, "0.5.7");
+  const archiveResetReady = versionAtLeast(backendVersion, "0.5.13");
   patched.info = {
     ...patched.info,
     version: GATEWAY_VERSION,
@@ -474,8 +477,8 @@ export function patchOpenApi(spec, origin) {
     description: "玄澈引擎 Gateway 隱私權政策",
     url: privacyPolicyUrl,
   };
-  patched["x-xuanche-backend"] = { version: backendVersion, worldStateReady, initializationReady };
-  patched.paths = filterPublicPaths(patched.paths, { worldStateReady, initializationReady });
+  patched["x-xuanche-backend"] = { version: backendVersion, worldStateReady, initializationReady, archiveResetReady };
+  patched.paths = filterPublicPaths(patched.paths, { worldStateReady, initializationReady, archiveResetReady });
   patched.components = patched.components ?? {};
   patched.components.schemas = patched.components.schemas ?? {};
   patched.components.schemas.PageBatchResponse = pageBatchResponseSchema();
@@ -485,6 +488,7 @@ export function patchOpenApi(spec, origin) {
     delete patched.components.schemas.BlockUpdate;
   }
   if (!initializationReady) delete patched.components.schemas.WorldInitializeRequest;
+  if (!archiveResetReady) delete patched.components.schemas.WorldArchiveResetRequest;
 
   const tree = patched.paths?.["/tree"]?.get;
   if (tree) {
@@ -573,6 +577,11 @@ export function patchOpenApi(spec, origin) {
   const initializeWorld = patched.paths?.["/world/initialize"]?.post;
   if (initializeWorld) {
     initializeWorld.description = "Call immediately after explicit character confirmation. This action rate-paces Notion, preflights, stages, activates, and validates all fixed SAVE_V3.2 pages. A transient readback limit after every ACTIVE commit never triggers destructive rollback; retries repair display and GitHub mirrors idempotently.";
+  }
+
+  const archiveAndReset = patched.paths?.["/world/archive-reset"]?.post;
+  if (archiveAndReset) {
+    archiveAndReset.description = "Destructive operation. Call only after the user has explicitly confirmed the exact current WORLD_ID. The Worker first creates a content-hashed Notion archive and verifies every fixed page, then locks normal writes and resets the fixed pages to EMPTY/PENDING. If it is interrupted, retry the same operationKey; never create a new world until it reports reset=true.";
   }
 
   const updateWorld = patched.paths?.["/world/update"]?.post;
