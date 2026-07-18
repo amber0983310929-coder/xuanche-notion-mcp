@@ -32,7 +32,7 @@ const SNAPSHOT_CHUNK_SIZE = 1_500;
  * same operationKey resumes final clearing; it never creates a second archive.
  */
 export async function archiveAndResetWorld(env, input, dependencies = {}) {
-  validateInput(input);
+  validateArchiveResetInput(input);
   const notion = dependencies.notion || new NotionClient(env);
   const github = dependencies.github || new GitHubClient(env);
   const cache = dependencies.cache || new CacheStore(env);
@@ -40,7 +40,13 @@ export async function archiveAndResetWorld(env, input, dependencies = {}) {
     throw new ApiError(503, "Archive-and-reset requires the XUANCHE_CACHE KV binding for its durable safety lock");
   }
 
-  const activeLock = await getActiveReset(cache);
+  let activeLock = await getActiveReset(cache);
+  // A durable Workflow writes this short-lived queue lock before it starts.
+  // It prevents a normal game save from racing the archive, but must not be
+  // mistaken for an already-verified archive when the workflow begins.
+  if (activeLock?.phase === "queued" && sameOperation(activeLock, input)) {
+    activeLock = null;
+  }
   if (activeLock && !sameOperation(activeLock, input)) {
     throw new ApiError(423, "Another archive-and-reset operation is already in progress", {
       archiveId: activeLock.archiveId || null,
@@ -445,7 +451,7 @@ async function mirrorResetToGitHub(github, lock, input) {
   return { status: errors.length ? "pending" : "complete", commits, errors };
 }
 
-function validateInput(input = {}) {
+export function validateArchiveResetInput(input = {}) {
   if (input.confirmation !== "ARCHIVE_AND_RESET") {
     throw new ApiError(400, "confirmation must be exactly ARCHIVE_AND_RESET");
   }
@@ -455,6 +461,14 @@ function validateInput(input = {}) {
   if (typeof input.operationKey !== "string" || !/^[A-Za-z0-9._-]{8,120}$/.test(input.operationKey)) {
     throw new ApiError(400, "operationKey must be 8-120 characters of letters, digits, dot, underscore, or hyphen");
   }
+}
+
+export function archiveResetWorkflowId(input) {
+  validateArchiveResetInput(input);
+  // Cloudflare Workflow IDs may contain letters, digits, underscores and
+  // hyphens only. Hashing the user-facing idempotency key keeps the ID short
+  // while preserving one durable instance for this exact reset operation.
+  return `archive_reset_${input.expectedWorldId}_${simpleHash(input.operationKey)}`;
 }
 
 function sameOperation(lock, input) {
@@ -504,4 +518,3 @@ async function sha256Hex(value) {
   const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
-

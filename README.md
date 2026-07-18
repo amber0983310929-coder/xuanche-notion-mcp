@@ -1,6 +1,6 @@
-# Xuanche Engine v0.5.13
+# Xuanche Engine v0.5.14
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.13 adds a verified archive-and-reset transaction: the current world is copied to a content-hashed Notion archive and verified before fixed pages are cleared to EMPTY/PENDING.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.14 runs verified archive-and-reset work in a durable Cloudflare Workflow, so a GPT Action timeout cannot be mistaken for a reset result.
 
 ## Safety model
 
@@ -21,6 +21,7 @@ Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation 
 - GET /page and GET /page/:id
 - POST /world/initialize
 - POST /world/archive-reset
+- GET /world/archive-reset/status
 - POST /world/load
 - POST /world/update
 - GET /github/tree
@@ -65,7 +66,7 @@ The service appends the SAVE_KEY marker automatically and invalidates all cached
 
 ## Archive and reset
 
-`POST /world/archive-reset` is deliberately separate from initialization. It requires `confirmation: "ARCHIVE_AND_RESET"`, the exact current `expectedWorldId`, and an idempotent `operationKey`. The Worker copies pages 02–09 and 11 into a `世界封存庫` child page in Notion, checks the SHA-256 digest of every source snapshot, and only then clears the fixed pages to `EMPTY/PENDING`. If Notion interrupts clearing, the current world remains `RESETTING` and normal loads/writes are locked; retry the same request with the same operation key to resume safely.
+`POST /world/archive-reset` is deliberately separate from initialization. It requires `confirmation: "ARCHIVE_AND_RESET"`, the exact current `expectedWorldId`, and an idempotent `operationKey`. It returns quickly with `ARCHIVING`; the durable Workflow then copies pages 02–09 and 11 into a `世界封存庫` child page in Notion, checks the SHA-256 digest of every source snapshot, and only then clears the fixed pages to `EMPTY/PENDING`. Read `GET /world/archive-reset/status` with the same world ID and operation key until it reports both `archiveVerified: true` and `reset: true`. The endpoint deliberately refuses to fall back to an unsafe synchronous reset when the Workflow binding is absent.
 
 ## Confirmed-character initialization
 
@@ -82,6 +83,12 @@ The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and impor
 ## Verification
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
+
+## Version 0.5.14
+
+- Moved archive-and-reset into a bound Cloudflare Workflow so a long Notion snapshot cannot exceed a GPT Action response window.
+- Added `getArchiveAndResetStatus`, which reports the durable job's real queued, running, complete, or failed state rather than returning an ambiguous timeout result.
+- Removed the synchronous reset fallback: a deployment with a missing Workflow binding fails closed before it can modify a world.
 
 ## Version 0.5.13
 
@@ -128,3 +135,7 @@ Run npm test at the repository root. The same test suite includes the gateway te
 - Removed arbitrary Notion writes from the public OpenAPI and GPT Action contract.
 - Reset GitHub memory and cache metadata to PURGE-2026-07-17-FULL-SAVE-RESET without retaining gameplay history.
 - Added CI and Cloudflare observability configuration.
+## Version 0.5.14
+
+- Moved `archiveAndResetWorld` into a durable Workflow and added `getArchiveAndResetStatus` for explicit, inspectable progress and errors.
+- The action now returns quickly with `ARCHIVING`; the workflow retains its result and retries independently of the ChatGPT Action request lifetime.

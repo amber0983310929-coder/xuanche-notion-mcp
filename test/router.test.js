@@ -36,6 +36,69 @@ test("mutation endpoints reject missing API keys", async () => {
   assert.equal(initializeResponse.status, 401);
 });
 
+test("archive reset is queued into a durable workflow and exposes an inspectable status", async () => {
+  const records = new Map();
+  let submitted;
+  const workflow = {
+    async createBatch(batch) { submitted = batch; return [{ id: batch[0].id }]; },
+    async get(id) {
+      return {
+        id,
+        async status() { return { status: "queued" }; },
+      };
+    },
+  };
+  const cache = {
+    kv: {},
+    async get(key) { return records.get(key); },
+    async put(key, value) { records.set(key, value); return value; },
+    async delete(key) { records.delete(key); },
+    async deletePrefix() { return 0; },
+  };
+  const route = createRouter({ cache });
+  const body = {
+    confirmation: "ARCHIVE_AND_RESET",
+    expectedWorldId: "W20260717-432D5443",
+    operationKey: "archive-reset-20260718-001",
+  };
+  const response = await route(new Request("https://example.test/world/archive-reset", {
+    method: "POST",
+    headers: { "content-type": "application/json", "X-API-Key": "required" },
+    body: JSON.stringify(body),
+  }), { XUANCHE_API_KEY: "required", WORLD_RESET_WORKFLOW: workflow });
+  const payload = await response.json();
+
+  assert.equal(response.status, 202);
+  assert.equal(payload.data.workflowStatus, "queued");
+  assert.equal(payload.data.worldState, "ARCHIVING");
+  assert.equal(payload.data.reset, false);
+  assert.deepEqual(submitted[0].params, body);
+
+  const status = await route(new Request(
+    "https://example.test/world/archive-reset/status?expectedWorldId=W20260717-432D5443&operationKey=archive-reset-20260718-001",
+    { headers: { "X-API-Key": "required" } },
+  ), { XUANCHE_API_KEY: "required", WORLD_RESET_WORKFLOW: workflow });
+  const statusPayload = await status.json();
+  assert.equal(status.status, 200);
+  assert.equal(statusPayload.data.workflowStatus, "queued");
+});
+
+test("archive reset refuses to run synchronously without its durable workflow", async () => {
+  const route = createRouter();
+  const response = await route(new Request("https://example.test/world/archive-reset", {
+    method: "POST",
+    headers: { "content-type": "application/json", "X-API-Key": "required" },
+    body: JSON.stringify({
+      confirmation: "ARCHIVE_AND_RESET",
+      expectedWorldId: "W20260717-432D5443",
+      operationKey: "archive-reset-20260718-001",
+    }),
+  }), { XUANCHE_API_KEY: "required" });
+  const body = await response.json();
+  assert.equal(response.status, 503);
+  assert.match(body.error, /Durable archive workflow binding/);
+});
+
 test("raw Notion mutation routes are disabled by default", async () => {
   const route = createRouter();
   const response = await route(new Request("https://example.test/notion/pages", {

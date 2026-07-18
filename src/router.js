@@ -1,6 +1,12 @@
 import { buildOpenApi } from "./openapi.js";
 import { GitHubClient } from "./github.js";
-import { archiveAndResetWorld } from "./archive-reset.js";
+import {
+  archiveAndResetWorld,
+  archiveResetWorkflowId,
+  validateArchiveResetInput,
+} from "./archive-reset.js";
+import { CacheStore } from "./cache.js";
+import { ACTIVE_RESET_LOCK, getActiveReset } from "./reset-lock.js";
 import { initializeWorld } from "./initializer.js";
 import { loadWorld } from "./loader.js";
 import { NotionClient } from "./notion.js";
@@ -32,9 +38,9 @@ export function createRouter(dependencies = {}) {
         return json({
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.13",
+          version: "0.5.14",
           protectedReads: readsRequireApiKey(env),
-          endpoints: ["/health", "/home", "/tree", "/world/initialize", "/world/load", "/world/update", "/world/archive-reset", "/openapi.json"],
+          endpoints: ["/health", "/home", "/tree", "/world/initialize", "/world/load", "/world/update", "/world/archive-reset", "/world/archive-reset/status", "/openapi.json"],
         });
       }
 
@@ -46,7 +52,7 @@ export function createRouter(dependencies = {}) {
         const result = {
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.13",
+          version: "0.5.14",
           integrations: {
             notion: notion.configured ? "configured" : "missing",
             github: github.configured ? "configured" : "missing",
@@ -61,6 +67,7 @@ export function createRouter(dependencies = {}) {
             fixedWorldWriteAllowlist: true,
             atomicWorldInitialization: true,
             verifiedWorldArchiveAndReset: true,
+            durableArchiveReset: Boolean(env.WORLD_RESET_WORKFLOW?.createBatch),
           },
           protectedReads: readsRequireApiKey(env),
           requestId: id,
@@ -161,7 +168,21 @@ export function createRouter(dependencies = {}) {
       if (request.method === "POST" && url.pathname === "/world/archive-reset") {
         requireApiKey(request, env);
         const body = await readJson(request);
-        const data = await archiveAndResetWorld(env, body, { notion, github, cache: dependencies.cache });
+        // Never fall back to the old synchronous implementation here. A reset
+        // can legitimately outlive a GPT Action response and must therefore
+        // be backed by the durable Workflow binding.
+        const data = await startArchiveResetWorkflow(env, body, dependencies.cache);
+        return json({ ok: true, data, requestId: id }, 202);
+      }
+
+      if (request.method === "GET" && url.pathname === "/world/archive-reset/status") {
+        requireApiKey(request, env);
+        const input = {
+          confirmation: "ARCHIVE_AND_RESET",
+          expectedWorldId: url.searchParams.get("expectedWorldId"),
+          operationKey: url.searchParams.get("operationKey"),
+        };
+        const data = await getArchiveResetWorkflowStatus(env, input);
         return json({ ok: true, data, requestId: id });
       }
 
@@ -226,5 +247,84 @@ export function createRouter(dependencies = {}) {
       if (ctx?.waitUntil && error?.backgroundTask) ctx.waitUntil(error.backgroundTask);
       return errorJson(error, id);
     }
+  };
+}
+
+async function startArchiveResetWorkflow(env, input, injectedCache) {
+  validateArchiveResetInput(input);
+  if (!env.WORLD_RESET_WORKFLOW?.createBatch || !env.WORLD_RESET_WORKFLOW?.get) {
+    throw new ApiError(503, "Durable archive workflow binding is not configured");
+  }
+  const cache = injectedCache || new CacheStore(env);
+  const active = await getActiveReset(cache);
+  if (active && (
+    active.expectedWorldId !== input.expectedWorldId || active.operationKey !== input.operationKey
+  )) {
+    throw new ApiError(423, "Another archive-and-reset operation is already in progress", {
+      expectedWorldId: active.expectedWorldId || null,
+      operationKey: active.operationKey || null,
+      phase: active.phase,
+    });
+  }
+
+  const workflowId = archiveResetWorkflowId(input);
+  const queuedHere = !active;
+  if (queuedHere) {
+    await cache.put(ACTIVE_RESET_LOCK, {
+      phase: "queued",
+      expectedWorldId: input.expectedWorldId,
+      operationKey: input.operationKey,
+      workflowId,
+      createdAt: new Date().toISOString(),
+    }, 86_400);
+  }
+  try {
+    await env.WORLD_RESET_WORKFLOW.createBatch([{
+      id: workflowId,
+      params: input,
+      retention: { successRetention: "7 days", errorRetention: "14 days" },
+    }]);
+  } catch (error) {
+    // The instance ID is deterministic. A duplicate submit must return the
+    // already-running job instead of turning a harmless retry into an error.
+    try {
+      await env.WORLD_RESET_WORKFLOW.get(workflowId);
+    } catch {
+      if (queuedHere) await cache.delete(ACTIVE_RESET_LOCK);
+      throw error;
+    }
+  }
+  const instance = await env.WORLD_RESET_WORKFLOW.get(workflowId);
+  const status = await instance.status();
+  return archiveWorkflowStatusPayload(input, workflowId, status);
+}
+
+async function getArchiveResetWorkflowStatus(env, input) {
+  validateArchiveResetInput(input);
+  if (!env.WORLD_RESET_WORKFLOW?.get) {
+    throw new ApiError(503, "Durable archive workflow binding is not configured");
+  }
+  const workflowId = archiveResetWorkflowId(input);
+  let instance;
+  try {
+    instance = await env.WORLD_RESET_WORKFLOW.get(workflowId);
+  } catch {
+    throw new ApiError(404, "No archive-and-reset workflow exists for this operationKey", { workflowId });
+  }
+  return archiveWorkflowStatusPayload(input, workflowId, await instance.status());
+}
+
+function archiveWorkflowStatusPayload(input, workflowId, status = {}) {
+  const output = status.output && typeof status.output === "object" ? status.output : {};
+  const running = ["queued", "running", "waiting", "waitingForPause", "paused"].includes(status.status);
+  return {
+    accepted: true,
+    archiveVerified: output.archiveVerified === true,
+    reset: output.reset === true,
+    worldState: output.worldState || (running ? "ARCHIVING" : "UNKNOWN"),
+    operationKey: input.operationKey,
+    workflowId,
+    workflowStatus: status.status || "unknown",
+    error: status.error?.message || null,
   };
 }

@@ -43,8 +43,8 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.13",
-      description: "Fail-closed Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, verified Notion world archives, bounded NPC_LIVE_PRELOAD_V1 dialogue loads, and idempotent allowlisted Notion updates.",
+      version: "0.5.14",
+      description: "Fail-closed Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, durable verified Notion world archives, bounded NPC_LIVE_PRELOAD_V1 dialogue loads, and idempotent allowlisted Notion updates.",
     },
     servers: [{ url: new URL(origin).origin }],
     components: {
@@ -369,6 +369,20 @@ export function buildOpenApi(origin) {
           security: apiKeySecurity,
           requestBody: jsonBody("#/components/schemas/WorldArchiveResetRequest", true),
           responses: standardResponses,
+        },
+      },
+      "/world/archive-reset/status": {
+        get: {
+          operationId: "getArchiveAndResetStatus",
+          summary: "Read archive-and-reset workflow status",
+          security: [{ apiKey: [] }],
+          parameters: [
+            { name: "expectedWorldId", in: "query", required: true, schema: { type: "string", pattern: "^W\\d{8}-[0-9A-F]{8}$" } },
+            { name: "operationKey", in: "query", required: true, schema: { type: "string", minLength: 8, maxLength: 120, pattern: "^[A-Za-z0-9._-]+$" } },
+          ],
+          responses: {
+            200: { description: "Workflow status", content: { "application/json": { schema: { type: "object", properties: {}, additionalProperties: true } } } },
+          },
         },
       },
       "/github/tree": {
