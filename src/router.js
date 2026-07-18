@@ -11,6 +11,7 @@ import { initializeWorld } from "./initializer.js";
 import { loadWorld } from "./loader.js";
 import { NotionClient } from "./notion.js";
 import { updateWorld } from "./updater.js";
+import { WORLD_PAGE_IDS, parseWorldMarkers } from "./world-state.js";
 import {
   ApiError,
   clampInteger,
@@ -257,6 +258,21 @@ async function startArchiveResetWorkflow(env, input, injectedCache) {
   }
   const cache = injectedCache || new CacheStore(env);
   const active = await getActiveReset(cache);
+
+  // The fixed save page is authoritative.  A stale reset lock must never turn
+  // an already-cleared world into a second archive job: there is no ACTIVE
+  // world left to archive, and the caller should initialize its confirmed
+  // character immediately instead.
+  const canonical = await readCanonicalWorldState(env);
+  if (canonical.worldState === "EMPTY" && canonical.worldId === "PENDING") {
+    if (active) await cache.delete(ACTIVE_RESET_LOCK);
+    throw new ApiError(409, "No archive is required: the fixed world pages are already EMPTY/PENDING. Call initializeWorld now.", {
+      worldState: "EMPTY",
+      worldId: "PENDING",
+      nextAction: "initializeWorld",
+    });
+  }
+
   if (active && (
     active.expectedWorldId !== input.expectedWorldId || active.operationKey !== input.operationKey
   )) {
@@ -308,6 +324,17 @@ async function startArchiveResetWorkflow(env, input, injectedCache) {
   const instance = await env.WORLD_RESET_WORKFLOW.get(workflowId);
   const status = await instance.status();
   return archiveWorkflowStatusPayload(input, workflowId, status);
+}
+
+async function readCanonicalWorldState(env) {
+  const notion = new NotionClient(env);
+  const tree = await notion.getPageTree(WORLD_PAGE_IDS.save, {
+    maxDepth: 0,
+    maxNodes: 10,
+    concurrency: 1,
+    includePage: false,
+  });
+  return parseWorldMarkers(tree.children);
 }
 
 async function getArchiveResetWorkflowStatus(env, input) {
