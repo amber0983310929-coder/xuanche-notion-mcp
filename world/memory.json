@@ -1,10 +1,18 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-18T22:48:32.701Z",
-  "worldState": "EMPTY",
-  "worldId": "PENDING",
+  "updatedAt": "2026-07-18T23:17:36.920Z",
+  "worldState": "ACTIVE",
+  "worldId": "W20260718-89858DE4",
   "simTick": 0,
   "purgeId": "PURGE-20260719-FULL-RESET",
-  "events": []
+  "events": [
+    {
+      "timestamp": "2026-07-18T23:17:36.920Z",
+      "type": "world_initialize",
+      "summary": "Initialized world for 沐卿塵",
+      "saveKey": "沐卿塵-20260719-01",
+      "worldId": "W20260718-89858DE4"
+    }
+  ]
 }
