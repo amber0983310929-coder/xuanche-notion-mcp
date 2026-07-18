@@ -9,7 +9,7 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
-const GATEWAY_VERSION = "0.5.11";
+const GATEWAY_VERSION = "0.5.12";
 
 const SAFE_PUBLIC_OPERATIONS = [
   { path: "/health", method: "get", operationId: "getEngineHealth" },
@@ -17,10 +17,24 @@ const SAFE_PUBLIC_OPERATIONS = [
   { path: "/page", method: "get", operationId: "getNotionPage" },
   { path: "/world/initialize", method: "post", operationId: "initializeWorld" },
   { path: "/world/archive-reset", method: "post", operationId: "archiveAndResetWorld" },
+  { path: "/world/archive-reset/status", method: "get", operationId: "getArchiveAndResetStatus" },
   { path: "/world/load", method: "post", operationId: "loadWorldProfile" },
   { path: "/world/update", method: "post", operationId: "updateWorldState" },
   { path: "/github/tree", method: "get", operationId: "listGitHubWorldTree" },
   { path: "/github/file", method: "get", operationId: "getGitHubWorldFile" },
+];
+
+const GPT_ACTION_PATHS = [
+  ["/health", "get", "getEngineHealth", false],
+  ["/tree", "get", "getNotionTree", true],
+  ["/page", "get", "getNotionPage", true],
+  ["/world/initialize", "post", "initializeWorld", true],
+  ["/world/archive-reset", "post", "archiveAndResetWorld", true],
+  ["/world/archive-reset/status", "get", "getArchiveAndResetStatus", true],
+  ["/world/load", "post", "loadWorldProfile", true],
+  ["/world/update", "post", "updateWorldState", true],
+  ["/github/tree", "get", "listGitHubWorldTree", true],
+  ["/github/file", "get", "getGitHubWorldFile", true],
 ];
 
 const COMPACT_PATHS = new Set([
@@ -373,7 +387,7 @@ function filterPublicPaths(paths = {}, { worldStateReady = false, initialization
   for (const { path, method, operationId } of SAFE_PUBLIC_OPERATIONS) {
     if (!worldStateReady && (path === "/world/load" || path === "/world/update")) continue;
     if (!initializationReady && path === "/world/initialize") continue;
-    if (!archiveResetReady && path === "/world/archive-reset") continue;
+    if (!archiveResetReady && (path === "/world/archive-reset" || path === "/world/archive-reset/status")) continue;
     const sourcePath = paths[path];
     const sourceOperation = sourcePath?.[method];
     if (sourceOperation?.operationId !== operationId) continue;
@@ -462,7 +476,7 @@ export function patchOpenApi(spec, origin) {
   const backendVersion = patched.info?.version || "0.0.0";
   const worldStateReady = versionAtLeast(backendVersion, "0.5.6");
   const initializationReady = versionAtLeast(backendVersion, "0.5.7");
-  const archiveResetReady = versionAtLeast(backendVersion, "0.5.13");
+  const archiveResetReady = versionAtLeast(backendVersion, "0.5.14");
   patched.info = {
     ...patched.info,
     version: GATEWAY_VERSION,
@@ -584,6 +598,11 @@ export function patchOpenApi(spec, origin) {
     archiveAndReset.description = "Destructive. Use only after confirming the exact ACTIVE WORLD_ID. The Worker archives and verifies fixed pages before setting them EMPTY/PENDING. If interrupted, reuse the same operationKey until reset=true.";
   }
 
+  const archiveStatus = patched.paths?.["/world/archive-reset/status"]?.get;
+  if (archiveStatus) {
+    archiveStatus.description = "Read the durable archive-and-reset workflow. Do not begin a new world until reset is true and worldState is EMPTY.";
+  }
+
   const updateWorld = patched.paths?.["/world/update"]?.post;
   if (updateWorld) {
     updateWorld.description = "Only fixed 02–09, 11, and 31 page IDs are writable. Every call must include expected world identity and a unique SAVE_KEY.";
@@ -624,7 +643,13 @@ export function buildUpstreamRequest(request) {
     headers: new Headers(request.headers),
     redirect: "manual",
   };
-  if (request.method !== "GET" && request.method !== "HEAD") init.body = request.body;
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    init.body = request.body;
+    // Cloudflare accepts a streamed Request body directly; Node's standards
+    // implementation also requires this explicit flag. Keeping it here makes
+    // the exact POST forwarding path testable before deployment.
+    init.duplex = "half";
+  }
   return new Request(upstream, init);
 }
 
@@ -646,6 +671,191 @@ function corsHeaders(headers = new Headers()) {
 function jsonResponse(value, status = 200, headers = new Headers()) {
   headers.set("Content-Type", "application/json; charset=utf-8");
   return new Response(JSON.stringify(value), { status, headers: corsHeaders(headers) });
+}
+
+// ChatGPT Actions can reject otherwise-valid, large OpenAPI documents before a
+// request reaches the origin.  Keep this manifest deliberately flat: it is an
+// alternate *description* of the same protected gateway routes, not another
+// backend or a relaxed authorization path.
+function compactRequestSchema(operationId) {
+  if (operationId === "archiveAndResetWorld") {
+    return {
+      type: "object",
+      required: ["confirmation", "expectedWorldId", "operationKey"],
+      properties: {
+        confirmation: { type: "string", enum: ["ARCHIVE_AND_RESET"] },
+        expectedWorldId: { type: "string", pattern: "^W\\d{8}-[0-9A-F]{8}$" },
+        operationKey: { type: "string", minLength: 8, maxLength: 120, pattern: "^[A-Za-z0-9._-]+$" },
+      },
+      additionalProperties: false,
+    };
+  }
+  if (operationId === "loadWorldProfile") {
+    return {
+      type: "object",
+      properties: {
+        profile: { type: "string" },
+        refresh: { type: "boolean" },
+        persist: { type: "boolean" },
+        maxDepth: { type: "integer", enum: [0] },
+        maxNodes: { type: "integer", minimum: 1, maximum: 20000 },
+      },
+      additionalProperties: false,
+    };
+  }
+  if (operationId === "initializeWorld") {
+    return {
+      type: "object",
+      required: ["saveKey", "character"],
+      properties: {
+        saveKey: { type: "string", minLength: 1, maxLength: 200 },
+        character: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: { type: "string", minLength: 1 },
+            gender: { type: "string" },
+            age: { oneOf: [{ type: "integer", minimum: 0 }, { type: "string" }] },
+            appearance: { type: "string" },
+            personality: { oneOf: [{ type: "string" }, { type: "array", items: { type: "string" } }] },
+            background: { type: "string" },
+            motivation: { type: "string" },
+            bottomLine: { type: "string" },
+            relationships: { type: "array", items: { type: "string" } },
+          },
+          additionalProperties: false,
+        },
+        opening: {
+          type: "object",
+          properties: {
+            location: { type: "string" }, time: { type: "string" }, premise: { type: "string" },
+            visibleClue: { type: "string" }, hiddenOrigin: { type: "string" }, directorNotes: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+      },
+      additionalProperties: false,
+    };
+  }
+  if (operationId === "updateWorldState") {
+    return {
+      type: "object",
+      required: ["pageId", "saveKey", "expectedWorldId", "expectedWorldState"],
+      properties: {
+        pageId: { type: "string" }, saveKey: { type: "string", minLength: 1, maxLength: 200 },
+        expectedWorldId: { type: "string", minLength: 1 },
+        expectedWorldState: { type: "string", enum: ["EMPTY", "ACTIVE", "WORLD_CONFLICT"] },
+        expectedRevision: { type: "integer", minimum: 0 },
+        children: {
+          type: "array", minItems: 1, maxItems: 99,
+          items: {
+            type: "object",
+            properties: { type: { type: "string" }, text: { type: "string" }, checked: { type: "boolean" } },
+            additionalProperties: false,
+          },
+        },
+        memoryEvent: { type: "string" }, cachePatch: { type: "object", properties: {}, additionalProperties: true },
+        commitMessage: { type: "string", maxLength: 256 },
+      },
+      additionalProperties: false,
+    };
+  }
+  return { type: "object", properties: {}, additionalProperties: true };
+}
+
+function compactParameters(operationId) {
+  if (operationId === "getEngineHealth") {
+    return [{ name: "deep", in: "query", schema: { type: "integer", enum: [0, 1], default: 0 } }];
+  }
+  if (operationId === "getNotionTree") {
+    return [
+      { name: "pageId", in: "query", schema: { type: "string" } },
+      { name: "depth", in: "query", schema: { type: "integer", enum: [0], default: 0 } },
+      { name: "maxNodes", in: "query", schema: { type: "integer", minimum: 1, maximum: 250, default: 60 } },
+      { name: "cursor", in: "query", schema: { type: "string" } },
+    ];
+  }
+  if (operationId === "getNotionPage") {
+    return [
+      { name: "id", in: "query", required: true, schema: { type: "string" } },
+      { name: "depth", in: "query", schema: { type: "integer", enum: [0], default: 0 } },
+      { name: "maxNodes", in: "query", schema: { type: "integer", minimum: 1, maximum: 20, default: 10 } },
+      { name: "cursor", in: "query", schema: { type: "string" } },
+    ];
+  }
+  if (operationId === "getArchiveAndResetStatus") {
+    return [
+      { name: "expectedWorldId", in: "query", required: true, schema: { type: "string", pattern: "^W\\d{8}-[0-9A-F]{8}$" } },
+      { name: "operationKey", in: "query", required: true, schema: { type: "string", minLength: 8, maxLength: 120, pattern: "^[A-Za-z0-9._-]+$" } },
+    ];
+  }
+  if (operationId === "listGitHubWorldTree") {
+    return [{ name: "ref", in: "query", schema: { type: "string", default: "main" } }];
+  }
+  if (operationId === "getGitHubWorldFile") {
+    return [
+      { name: "path", in: "query", required: true, schema: { type: "string" } },
+      { name: "ref", in: "query", schema: { type: "string", default: "main" } },
+    ];
+  }
+  return [];
+}
+
+export function buildCompactGptActionSpec(origin) {
+  const apiKey = [{ apiKey: [] }];
+  const paths = {};
+  for (const [path, method, operationId, protectedRoute] of GPT_ACTION_PATHS) {
+    paths[path] = {
+      [method]: {
+        operationId,
+        summary: operationId,
+        ...(operationId === "archiveAndResetWorld" ? {
+          description: "Start a durable archive-and-reset Workflow. It returns ARCHIVING quickly; use getArchiveAndResetStatus before creating a new world.",
+        } : {}),
+        ...(operationId === "getArchiveAndResetStatus" ? {
+          description: "Read the durable archive-and-reset result. Proceed only when reset is true and worldState is EMPTY.",
+        } : {}),
+        ...(protectedRoute ? { security: apiKey } : {}),
+        ...(method === "get" ? { parameters: compactParameters(operationId) } : {}),
+        ...(method === "post" ? {
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: compactRequestSchema(operationId),
+              },
+            },
+          },
+        } : {}),
+        responses: {
+          200: {
+            description: "Successful response",
+            content: { "application/json": { schema: { type: "object", properties: {}, additionalProperties: true } } },
+          },
+          400: { description: "Invalid request" },
+          401: { description: "Invalid or missing API key" },
+          409: { description: "World state conflict" },
+          500: { description: "Service error" },
+        },
+      },
+    };
+  }
+  return {
+    openapi: "3.1.0",
+    info: {
+      title: "Xuanche Engine GPT Action",
+      version: GATEWAY_VERSION,
+      description: "Compact compatibility manifest for the Xuanche Engine Gateway.",
+    },
+    servers: [{ url: origin }],
+    components: {
+      schemas: {},
+      securitySchemes: {
+        apiKey: { type: "apiKey", in: "header", name: "X-API-Key" },
+      },
+    },
+    paths,
+  };
 }
 
 function privacyResponse(method) {
@@ -691,6 +901,10 @@ export async function onRequest(context) {
     ["/privacy", "/privacy/", "/privacy.html"].includes(incoming.pathname)
   ) {
     return privacyResponse(request.method);
+  }
+
+  if (request.method === "GET" && incoming.pathname === "/gpt-action-openapi.json") {
+    return jsonResponse(buildCompactGptActionSpec(incoming.origin));
   }
 
   const minimumWorldVersion = incoming.pathname === "/world/initialize"
