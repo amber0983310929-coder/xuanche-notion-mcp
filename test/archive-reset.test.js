@@ -176,3 +176,22 @@ test("archive-and-reset refuses a malformed confirmation before it writes", asyn
   assert.match(pages.get(WORLD_PAGE_IDS.save).children[0].text, /WORLD_STATE：ACTIVE/);
 });
 
+test("a queued durable-workflow lock starts the archive instead of being treated as a completed archive", async () => {
+  const { notion } = createNotionMock();
+  const cache = createCache();
+  await cache.put("world-reset:active", {
+    phase: "queued",
+    expectedWorldId: WORLD_ID,
+    operationKey: "archive-reset-queued-001",
+  });
+
+  const result = await archiveAndResetWorld({ HOME_PAGE_ID: "home" }, input("archive-reset-queued-001"), {
+    notion,
+    github: { configured: false },
+    cache,
+  });
+
+  assert.equal(result.archived, true);
+  assert.equal(result.reset, true);
+  assert.equal(result.worldState, "EMPTY");
+});
