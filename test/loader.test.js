@@ -24,6 +24,14 @@ test("turn_core contains only the bounded authoritative per-turn state", () => {
   ]);
 });
 
+test("turn_dialogue loads the compact active-cast context", () => {
+  const pages = selectWorldPages(DEFAULT_WORLD_CONFIG, "turn_dialogue");
+  assert.deepEqual(pages.map((page) => page.key), [
+    "save", "character", "timeline", "relationships", "causality", "events",
+    "director", "npc", "hud", "narrative_social"
+  ]);
+});
+
 test("turn_core enforces its page-node cap even when a caller requests more", async () => {
   const received = [];
   const notion = {
@@ -42,6 +50,26 @@ test("turn_core enforces its page-node cap even when a caller requests more", as
     maxNodes: 1_500,
   });
   assert.deepEqual(received, Array(6).fill(60));
+});
+
+test("turn_dialogue enforces its active-cast page-node cap", async () => {
+  const received = [];
+  const notion = {
+    configured: true,
+    async getPageTree(_id, options) {
+      received.push(options.maxNodes);
+      return { page: {}, children: worldMarkers("ACTIVE", "W-test"), meta: { nodeCount: 2 } };
+    },
+  };
+  await loadWorld({}, {
+    notion,
+    github: { configured: false },
+    cache: { put: async () => undefined },
+    profile: "turn_dialogue",
+    refresh: true,
+    maxNodes: 1_500,
+  });
+  assert.deepEqual(received, Array(10).fill(60));
 });
 
 test("new_game profile loads only the fixed character-creation route", () => {
