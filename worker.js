@@ -1,4 +1,5 @@
 import { createRouter } from "./src/router.js";
+export { WorldArchiveResetWorkflow } from "./src/archive-reset-workflow.js";
 
 const router = createRouter();
 
