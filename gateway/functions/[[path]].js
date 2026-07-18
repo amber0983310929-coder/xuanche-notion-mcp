@@ -576,12 +576,12 @@ export function patchOpenApi(spec, origin) {
 
   const initializeWorld = patched.paths?.["/world/initialize"]?.post;
   if (initializeWorld) {
-    initializeWorld.description = "Call immediately after explicit character confirmation. This action rate-paces Notion, preflights, stages, activates, and validates all fixed SAVE_V3.2 pages. A transient readback limit after every ACTIVE commit never triggers destructive rollback; retries repair display and GitHub mirrors idempotently.";
+    initializeWorld.description = "Use only after explicit character confirmation. It stages fixed SAVE_V3.2 pages, activates the save marker last, validates the result, and makes retries idempotent.";
   }
 
   const archiveAndReset = patched.paths?.["/world/archive-reset"]?.post;
   if (archiveAndReset) {
-    archiveAndReset.description = "Destructive operation. Call only after the user has explicitly confirmed the exact current WORLD_ID. The Worker first creates a content-hashed Notion archive and verifies every fixed page, then locks normal writes and resets the fixed pages to EMPTY/PENDING. If it is interrupted, retry the same operationKey; never create a new world until it reports reset=true.";
+    archiveAndReset.description = "Destructive. Use only after confirming the exact ACTIVE WORLD_ID. The Worker archives and verifies fixed pages before setting them EMPTY/PENDING. If interrupted, reuse the same operationKey until reset=true.";
   }
 
   const updateWorld = patched.paths?.["/world/update"]?.post;
