@@ -5,7 +5,7 @@ import { ApiError, mapLimit, mergeDeep, normalizeNotionId, nowIso } from "./util
 import { validateLoadedWorld } from "./world-state.js";
 
 export const DEFAULT_WORLD_CONFIG = {
-  version: 8,
+  version: 9,
   homePageId: "5f4c8de4a4c246478a4658d1ebc2a1a2",
   catalog: [
     { key: "home", title: "修真世界（首頁）", id: "5f4c8de4a4c246478a4658d1ebc2a1a2" },
@@ -66,7 +66,11 @@ export const DEFAULT_WORLD_CONFIG = {
     // profile is deliberately limited to the authoritative live state.
     turn_core: ["save", "character", "timeline", "events", "director", "hud"],
     turn_combat: ["save", "character", "timeline", "relationships", "causality", "events", "director", "combat", "equipment", "hud", "narrative_combat"],
-    turn_dialogue: ["save", "character", "timeline", "relationships", "causality", "events", "director", "npc", "intelligence", "factions", "hud", "narrative_social", "narrative_power"],
+    // Dialogue needs the current cast, their public relationships, and their
+    // private queued actions. Loading every intelligence/faction/narrative
+    // page here starves those details and makes NPC voices collapse into a
+    // generic response.
+    turn_dialogue: ["save", "character", "timeline", "relationships", "causality", "events", "director", "npc", "hud", "narrative_social"],
     turn_exploration: ["save", "character", "timeline", "knowledge", "clues", "events", "director", "world", "regions", "ecology", "intelligence", "hud", "narrative_daily"],
     turn_cultivation: ["save", "character", "timeline", "causality", "events", "director", "cultivation", "skills", "hud", "narrative_combat"],
     turn_trade: ["save", "character", "timeline", "knowledge", "relationships", "events", "director", "economy", "crafts", "hud", "narrative_power"],
@@ -79,6 +83,7 @@ export const DEFAULT_WORLD_CONFIG = {
     homeMaxDepth: 0,
     maxNodesPerPage: 1_500,
     turnCoreMaxNodesPerPage: 60,
+    turnDialogueMaxNodesPerPage: 60,
     concurrency: 2,
     cacheTtlSeconds: 300,
     persistSnapshotToGitHub: false
@@ -132,12 +137,18 @@ export async function loadWorld(env, options = {}) {
   const homeMaxDepth = Number(config.loader.homeMaxDepth ?? 0);
   const requestedMaxNodes = Number(options.maxNodes ?? config.loader.maxNodesPerPage);
   const turnCoreMaxNodes = Number(config.loader.turnCoreMaxNodesPerPage ?? 60);
-  // A caller must not be able to expand the mandatory per-turn state profile
-  // back into an unbounded snapshot. Other profiles retain their configured
-  // ceiling so optional action-specific preloads still work as designed.
-  const maxNodes = profile === "turn_core"
-    ? Math.min(requestedMaxNodes, turnCoreMaxNodes)
-    : requestedMaxNodes;
+  const turnDialogueMaxNodes = Number(config.loader.turnDialogueMaxNodesPerPage ?? 60);
+  // A caller must not be able to expand a mandatory per-turn profile back
+  // into an unbounded snapshot. Dialogue is bounded independently so the
+  // active-cast detail survives the Action response budget.
+  const profileMaxNodes = profile === "turn_core"
+    ? turnCoreMaxNodes
+    : profile === "turn_dialogue"
+      ? turnDialogueMaxNodes
+      : undefined;
+  const maxNodes = profileMaxNodes === undefined
+    ? requestedMaxNodes
+    : Math.min(requestedMaxNodes, profileMaxNodes);
   const cacheKey = worldCacheKey(profile, selectedPages, maxDepth, maxNodes, homeMaxDepth, config.version);
   const persist = options.persist ?? config.loader.persistSnapshotToGitHub;
 

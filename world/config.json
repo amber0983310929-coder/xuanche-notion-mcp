@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "homePageId": "5f4c8de4a4c246478a4658d1ebc2a1a2",
   "catalog": [
     {
@@ -378,11 +378,8 @@
       "events",
       "director",
       "npc",
-      "intelligence",
-      "factions",
       "hud",
-      "narrative_social",
-      "narrative_power"
+      "narrative_social"
     ],
     "turn_exploration": [
       "save",
@@ -450,6 +447,7 @@
     "concurrency": 2,
     "cacheTtlSeconds": 300,
     "persistSnapshotToGitHub": false,
-    "turnCoreMaxNodesPerPage": 60
+    "turnCoreMaxNodesPerPage": 60,
+    "turnDialogueMaxNodesPerPage": 60
   }
 }

@@ -5,7 +5,7 @@ import { buildOpenApi } from "../src/openapi.js";
 test("OpenAPI is bound to the deployed origin and exposes unique operation IDs", () => {
   const document = buildOpenApi("https://worker.example/openapi.json");
   assert.equal(document.openapi, "3.1.0");
-  assert.equal(document.info.version, "0.5.10");
+  assert.equal(document.info.version, "0.5.11");
   assert.equal(document.servers[0].url, "https://worker.example");
 
   const operationIds = Object.values(document.paths)
