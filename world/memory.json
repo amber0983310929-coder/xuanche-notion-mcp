@@ -1,9 +1,9 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-19T02:46:18.746Z",
-  "worldState": "EMPTY",
-  "worldId": "PENDING",
+  "updatedAt": "2026-07-19T03:02:38.609Z",
+  "worldState": "ACTIVE",
+  "worldId": "W20260719-D88393B4",
   "simTick": 0,
   "purgeId": "A-W20260719-BDAE6FCD-8E25A09D",
   "events": [
@@ -13,6 +13,13 @@
       "summary": "Archived and reset W20260719-BDAE6FCD",
       "worldId": "W20260719-BDAE6FCD",
       "archiveId": "A-W20260719-BDAE6FCD-8E25A09D"
+    },
+    {
+      "timestamp": "2026-07-19T03:02:38.609Z",
+      "type": "world_initialize",
+      "summary": "Initialized world for 李青楓",
+      "saveKey": "liqingfeng-init-20260719-001",
+      "worldId": "W20260719-D88393B4"
     }
   ]
 }
