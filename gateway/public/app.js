@@ -1,5 +1,6 @@
 const STORAGE = Object.freeze({
   settings: "xuanche:pwa:settings:v1",
+  draft: "xuanche:pwa:draft:v1",
   pending: "xuanche:pwa:pending:v1",
   state: "xuanche:pwa:state:v1",
   locked: "xuanche:pwa:locked:v1",
@@ -47,6 +48,8 @@ const elements = {
   style: document.querySelector("#style-select"),
   length: document.querySelector("#length-select"),
   story: document.querySelector("#story"),
+  playPanel: document.querySelector(".play-panel"),
+  decisionArea: document.querySelector("#decision-area"),
   choices: document.querySelector("#choices"),
   turnStatus: document.querySelector("#turn-status"),
   actionForm: document.querySelector("#action-form"),
@@ -105,6 +108,8 @@ const game = {
   worldOperation: readStorage(STORAGE.worldOperation),
   operationCandidate: null,
   activeHandbookTab: "inventory",
+  handbookDirty: true,
+  draftTimer: null,
 };
 
 const PLAYER_STATE_PRESENTATION = Object.freeze([
@@ -117,6 +122,7 @@ const PLAYER_STATE_PRESENTATION = Object.freeze([
 ]);
 
 applyStoredSettings();
+restoreActionDraft();
 bindEvents();
 registerServiceWorker();
 updateConnection();
@@ -130,6 +136,7 @@ async function bootstrap() {
       return;
     }
     writeStorage(STORAGE.locked, false);
+    hydrateCachedState();
     await loadWorld();
     await resumeWorldOperation();
   } catch (error) {
@@ -163,6 +170,11 @@ function bindEvents() {
       elements.actionForm.requestSubmit();
     }
   });
+  elements.actionInput.addEventListener("input", () => {
+    resizeActionInput();
+    scheduleActionDraftSave();
+  });
+  window.addEventListener("resize", resizeActionInput);
   elements.style.addEventListener("change", saveSettings);
   elements.length.addEventListener("change", saveSettings);
   elements.refreshButton.addEventListener("click", () => loadWorld({ refresh: true }));
@@ -210,6 +222,7 @@ async function login(event) {
     elements.passphrase.value = "";
     writeStorage(STORAGE.locked, false);
     elements.loginDialog.close();
+    hydrateCachedState();
     await loadWorld();
     await resumeWorldOperation();
   } catch (error) {
@@ -240,7 +253,7 @@ async function continueGame() {
 }
 
 function openHandbook(tab = game.activeHandbookTab) {
-  renderHandbook();
+  if (game.handbookDirty) renderHandbook();
   selectHandbookTab(tab, { focus: false });
   if (!elements.handbookDialog.open) elements.handbookDialog.showModal();
 }
@@ -346,6 +359,7 @@ function requestWorldOperation(mode) {
       showAlert("瀏覽器無法保存世界操作檢查點；為避免無法續跑，這次沒有建立世界。", true);
       return;
     }
+    clearActionDraft();
     openCharacterCreation(operation);
     return;
   }
@@ -538,6 +552,7 @@ async function finishArchivedOperation(operation) {
   game.choices = [];
   game.state = emptyWorldState();
   game.checkpoint = null;
+  clearActionDraft();
   localStorage.removeItem(STORAGE.pending);
   localStorage.removeItem(STORAGE.state);
   renderWorldState();
@@ -888,7 +903,8 @@ function renderWorldState() {
   setQuickDisplay(elements.quickTick, playable ? `T${game.state.simTick}` : "T—");
   setQuickDisplay(elements.quickRevision, playable ? `R${game.state.revision}` : "R—");
   renderCharacterState();
-  renderHandbook();
+  game.handbookDirty = true;
+  if (elements.handbookDialog.open) renderHandbook();
   updateWorldControlState();
 }
 
@@ -985,6 +1001,7 @@ function renderHandbook() {
   renderHandbookPeople(playable);
   renderHandbookClues(playable);
   renderHandbookJourney(playable);
+  game.handbookDirty = false;
 }
 
 function splitDisplayItems(value) {
@@ -1087,20 +1104,21 @@ function clampDisplayText(value, maximum) {
 }
 
 function renderStoryFromStorage() {
-  elements.story.replaceChildren();
+  const fragment = document.createDocumentFragment();
   if (!isPlayableWorld()) {
-    const card = appendNarrativeCard(0, "固定世界頁面目前為 EMPTY／PENDING。舊世界若已執行封存，仍保存在世界封存庫；此處不會自動建立或覆寫新世界。", "等待建立", false);
+    const card = appendNarrativeCard(0, "固定世界頁面目前為 EMPTY／PENDING。舊世界若已執行封存，仍保存在世界封存庫；此處不會自動建立或覆寫新世界。", "等待建立", false, fragment);
     card.querySelector(".turn-label").textContent = "空白世界";
     card.classList.remove("generating");
+    elements.story.replaceChildren(fragment);
     renderChoices([]);
     return;
   }
   const history = historyForCurrentWorld();
   for (const turn of history) {
-    appendPlayerAction(turn.action, false);
-    const card = appendNarrativeCard(turn.tick, turn.narrative, "已保存", false);
+    appendPlayerAction(turn.action, false, fragment);
+    const card = appendNarrativeCard(turn.tick, turn.narrative, "已保存", false, fragment);
     card.classList.remove("generating");
-    appendTurnChangeCard(turn.committedSummary, false);
+    appendTurnChangeCard(turn.committedSummary, false, fragment);
   }
   const lastTick = history.at(-1)?.tick;
   if (!history.length || lastTick !== game.state.simTick) {
@@ -1109,9 +1127,11 @@ function renderStoryFromStorage() {
       [game.state.mainline, game.state.situation].filter(Boolean).join("\n\n"),
       "世界錨點",
       false,
+      fragment,
     );
     card.classList.remove("generating");
   }
+  elements.story.replaceChildren(fragment);
   renderChoices(game.choices);
 }
 
@@ -1124,11 +1144,14 @@ async function submitAction(action) {
   hideAlert();
   const baseState = { ...game.state };
   const actionKey = crypto.randomUUID();
+  persistActionDraft(action);
   elements.actionInput.value = "";
+  resizeActionInput();
   renderChoices([]);
   appendPlayerAction(action);
   const card = appendNarrativeCard(baseState.simTick + 1, "", "推演中", true);
   game.currentCard = card;
+  const narrativeWriter = createNarrativeWriter(card);
   setBusy(true, "世界推演中");
   elements.saveState.textContent = "尚未提交";
   card.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1153,27 +1176,41 @@ async function submitAction(action) {
     let committed = false;
     await readEventStream(response.body, async (event, data) => {
       if (event === "delta") {
-        appendNarrativeDelta(card, data.text || "");
+        if (data.text && card.querySelector(".card-status").textContent === "推演中") {
+          card.querySelector(".card-status").textContent = "敘事生成中";
+          elements.turnStatus.textContent = "敘事生成中";
+        }
+        narrativeWriter.push(data.text || "");
       } else if (event === "checkpoint") {
+        narrativeWriter.flush();
         game.checkpoint = data.checkpoint;
         writeStorage(STORAGE.pending, game.checkpoint);
+        clearActionDraft(action);
         card.querySelector(".card-status").textContent = "敘事完成 · 存檔中";
+        elements.turnStatus.textContent = "敘事完成，正在保存";
       } else if (event === "committed") {
+        narrativeWriter.flush();
         committed = true;
+        clearActionDraft(action);
         finalizeCommittedTurn(card, action, data);
       } else if (event === "save_error") {
+        narrativeWriter.flush();
         markTurnUnsaved(card, data.error || "敘事已生成，但存檔尚未完成。");
       } else if (event === "error") {
-        markTurnFailed(card, data.error || "本回合生成失敗。");
+        narrativeWriter.flush();
+        markTurnFailed(card, data.error || "本回合生成失敗。", action);
       }
     });
+    narrativeWriter.flush();
     if (!committed && !game.checkpoint && !card.classList.contains("failed")) {
-      markTurnFailed(card, "連線在回合完成前中斷；世界狀態未確認變更。");
+      markTurnFailed(card, "連線在回合完成前中斷；世界狀態未確認變更。", action);
     }
   } catch (error) {
+    narrativeWriter.flush();
     if (game.checkpoint) markTurnUnsaved(card, error.message);
-    else markTurnFailed(card, error.message);
+    else markTurnFailed(card, error.message, action);
   } finally {
+    narrativeWriter.flush();
     game.currentCard = null;
     setBusy(false, "等待你的行動");
   }
@@ -1233,7 +1270,7 @@ function markTurnUnsaved(card, message) {
   showAlert(message, false);
 }
 
-function markTurnFailed(card, message) {
+function markTurnFailed(card, message, action = "") {
   card.classList.remove("generating", "unsaved");
   card.classList.add("failed");
   card.querySelector(".card-status").textContent = "未提交";
@@ -1241,7 +1278,8 @@ function markTurnFailed(card, message) {
     card.querySelector(".narrative-text").textContent = "這次推演沒有改變世界。你可以稍後再次送出行動。";
   }
   elements.saveState.textContent = "未變更";
-  showAlert(message, true);
+  if (action) restoreActionDraft(action);
+  showAlert(`${message} 行動草稿已保留；若連線曾中斷，請先重新核對世界再決定是否重送。`, true);
 }
 
 async function retryCheckpoint(card = null) {
@@ -1303,27 +1341,52 @@ function reconcilePendingCheckpoint() {
   elements.alert.append(text, document.createTextNode(" "), retry);
 }
 
-function appendPlayerAction(action, animate = true) {
+function appendPlayerAction(action, animate = true, target = elements.story) {
   const node = elements.playerTemplate.content.firstElementChild.cloneNode(true);
   node.querySelector("p").textContent = action;
   if (!animate) node.style.animation = "none";
-  elements.story.append(node);
+  target.append(node);
   return node;
 }
 
-function appendNarrativeCard(tick, narrative, status, generating) {
+function appendNarrativeCard(tick, narrative, status, generating, target = elements.story) {
   const card = elements.narrativeTemplate.content.firstElementChild.cloneNode(true);
   card.querySelector(".turn-label").textContent = `回合 ${tick}`;
   card.querySelector(".card-status").textContent = status;
   card.querySelector(".narrative-text").textContent = narrative;
   card.classList.toggle("generating", generating);
-  elements.story.append(card);
+  target.append(card);
   return card;
 }
 
 function appendNarrativeDelta(card, text) {
   if (!text) return;
   card.querySelector(".narrative-text").append(document.createTextNode(text));
+}
+
+function createNarrativeWriter(card) {
+  let pending = "";
+  let frameId = null;
+
+  const commitPending = () => {
+    frameId = null;
+    if (!pending) return;
+    const text = pending;
+    pending = "";
+    appendNarrativeDelta(card, text);
+  };
+
+  return {
+    push(text) {
+      if (!text) return;
+      pending += text;
+      if (frameId === null) frameId = requestAnimationFrame(commitPending);
+    },
+    flush() {
+      if (frameId !== null) cancelAnimationFrame(frameId);
+      commitPending();
+    },
+  };
 }
 
 function buildCommittedSummary(previousPlayerState, nextPlayerState, data) {
@@ -1345,7 +1408,7 @@ function buildCommittedSummary(previousPlayerState, nextPlayerState, data) {
   };
 }
 
-function appendTurnChangeCard(summary, animate = true) {
+function appendTurnChangeCard(summary, animate = true, target = elements.story) {
   if (!summary || (!summary.result && !summary.cost && !summary.deltas?.length && !summary.facts?.length)) return null;
   const node = elements.turnChangeTemplate.content.firstElementChild.cloneNode(true);
   node.querySelector(".turn-change-tick").textContent = Number.isInteger(summary.tick) ? `T${summary.tick}` : "已保存";
@@ -1398,12 +1461,12 @@ function appendTurnChangeCard(summary, animate = true) {
     }
   }
   if (!animate) node.style.animation = "none";
-  elements.story.append(node);
+  target.append(node);
   return node;
 }
 
 function renderChoices(choices) {
-  elements.choices.replaceChildren();
+  const fragment = document.createDocumentFragment();
   for (const [index, choice] of (choices || []).entries()) {
     const button = document.createElement("button");
     button.type = "button";
@@ -1415,8 +1478,9 @@ function renderChoices(choices) {
     intent.textContent = choice.intent;
     button.append(label, intent);
     button.addEventListener("click", () => submitAction(choice.label));
-    elements.choices.append(button);
+    fragment.append(button);
   }
+  elements.choices.replaceChildren(fragment);
 }
 
 function setBusy(value, status) {
@@ -1427,6 +1491,8 @@ function setBusy(value, status) {
   elements.refreshButton.disabled = value;
   elements.style.disabled = value;
   elements.length.disabled = value;
+  elements.playPanel.setAttribute("aria-busy", String(value));
+  elements.decisionArea.setAttribute("aria-busy", String(value));
   elements.turnStatus.textContent = status;
   for (const button of elements.choices.querySelectorAll("button")) button.disabled = value;
   updateWorldControlState();
@@ -1511,6 +1577,51 @@ function applyStoredSettings() {
   if ([...elements.length.options].some((option) => option.value === settings.length)) elements.length.value = settings.length;
 }
 
+function scheduleActionDraftSave() {
+  clearTimeout(game.draftTimer);
+  game.draftTimer = setTimeout(() => persistActionDraft(elements.actionInput.value), 180);
+}
+
+function persistActionDraft(value) {
+  clearTimeout(game.draftTimer);
+  game.draftTimer = null;
+  const text = String(value || "").slice(0, 800);
+  if (!text.trim()) {
+    localStorage.removeItem(STORAGE.draft);
+    return;
+  }
+  writeStorage(STORAGE.draft, { text, savedAt: Date.now() });
+}
+
+function restoreActionDraft(fallback = "") {
+  const saved = readStorage(STORAGE.draft);
+  const text = String(fallback || saved?.text || "").slice(0, 800);
+  if (!text || elements.actionInput.value) {
+    resizeActionInput();
+    return;
+  }
+  elements.actionInput.value = text;
+  persistActionDraft(text);
+  resizeActionInput();
+}
+
+function clearActionDraft(action = "") {
+  clearTimeout(game.draftTimer);
+  game.draftTimer = null;
+  const saved = readStorage(STORAGE.draft);
+  if (!action || saved?.text === action) localStorage.removeItem(STORAGE.draft);
+  if (!action || elements.actionInput.value === action) elements.actionInput.value = "";
+  resizeActionInput();
+}
+
+function resizeActionInput() {
+  const input = elements.actionInput;
+  input.style.height = "auto";
+  const height = Math.min(Math.max(input.scrollHeight, 88), 180);
+  input.style.height = `${height}px`;
+  input.style.overflowY = input.scrollHeight > 180 ? "auto" : "hidden";
+}
+
 function saveSettings() {
   writeStorage(STORAGE.settings, { style: elements.style.value, length: elements.length.value });
 }
@@ -1550,6 +1661,17 @@ function showOfflineSnapshot() {
   setBusy(true, "離線閱讀");
   elements.saveState.textContent = "離線快照";
   showAlert("目前離線；你仍可閱讀最近內容，重新連線後才能推進世界。", false);
+  return true;
+}
+
+function hydrateCachedState() {
+  const cached = readStorage(STORAGE.state);
+  if (!cached?.state?.worldId) return false;
+  game.state = cached.state;
+  game.choices = Array.isArray(cached.choices) ? cached.choices : [];
+  renderWorldState();
+  renderStoryFromStorage();
+  elements.saveState.textContent = "核對中";
   return true;
 }
 

@@ -146,7 +146,7 @@
         </div>
       </aside>
 
-      <section class="play-panel" aria-label="遊戲敘事">
+      <section class="play-panel" aria-label="遊戲敘事" aria-busy="true">
         <div id="alert" class="alert" role="status" hidden></div>
         <div id="story" class="story" aria-live="polite" aria-relevant="additions text">
           <article class="scene-card loading-card" id="opening-card">
@@ -155,7 +155,7 @@
           </article>
         </div>
 
-        <section id="decision-area" class="decision-area" aria-label="可選行動">
+        <section id="decision-area" class="decision-area" aria-label="可選行動" aria-busy="true">
           <div class="decision-heading">
             <p class="eyebrow">此刻，你要——</p>
             <span id="turn-status">等待世界載入</span>
@@ -177,7 +177,7 @@
               <span>推進世界</span><span aria-hidden="true">→</span>
             </button>
           </form>
-          <p class="composer-note">送出後，伺服器會核對世界修訂，再生成並保存唯一結果。</p>
+          <p class="composer-note">行動草稿會自動保留；送出後，伺服器會核對世界修訂，再生成並保存唯一結果。</p>
         </section>
       </section>
     </main>

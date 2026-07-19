@@ -82,11 +82,29 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
   assert.match(app, /buildCommittedSummary/);
   assert.match(app, /committedSummary/);
   assert.match(app, /function applyCharacterPreset/);
+  assert.match(app, /xuanche:pwa:draft:v1/);
+  assert.match(app, /function createNarrativeWriter/);
+  assert.match(app, /requestAnimationFrame\(commitPending\)/);
+  assert.match(app, /function hydrateCachedState/);
+  assert.match(app, /document\.createDocumentFragment\(\)/);
+  assert.match(app, /handbookDirty/);
+  assert.match(app, /setAttribute\("aria-busy"/);
+  assert.match(html, /行動草稿會自動保留/);
   assert.match(css, /@media \(min-width: 1550px\)/);
   assert.match(css, /grid-template-columns: minmax\(240px, 280px\) minmax\(290px, 360px\) minmax\(0, 860px\)/);
   const decisionRule = css.match(/(?:^|\n)\.decision-area\s*\{([^}]*)\}/s)?.[1] || "";
   assert.match(decisionRule, /position:\s*static/);
   assert.doesNotMatch(decisionRule, /position:\s*sticky/);
+});
+
+test("PWA service worker keeps navigation fresh and returns cached shell assets immediately", async () => {
+  const worker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
+  assert.match(worker, /xuanche-pwa-v0\.6\.0-smooth-flow-v1/);
+  assert.match(worker, /request\.mode === "navigate"/);
+  assert.match(worker, /networkFirst\(request, "\/index\.html"\)/);
+  assert.match(worker, /staleWhileRevalidate\(event, request\)/);
+  assert.match(worker, /url\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(worker, /response\.type !== "opaque"/);
 });
 
 test("signed owner sessions reject tampering and expiry", async () => {
