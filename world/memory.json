@@ -1,10 +1,10 @@
 {
   "version": 3,
-  "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-19T04:42:31.390Z",
+  "schema": "SAVE_V3.3",
+  "updatedAt": "2026-07-19T15:14:45.034Z",
   "worldState": "ACTIVE",
   "worldId": "W20260719-9E6FAA5A",
-  "simTick": 0,
+  "simTick": 17,
   "purgeId": "A-W20260719-D88393B4-C53DA2D2",
   "events": [
     {
@@ -20,6 +20,24 @@
       "summary": "Initialized world for 楚凌霄",
       "saveKey": "init-chulingxiao-20260719-v1",
       "worldId": "W20260719-9E6FAA5A"
+    },
+    {
+      "timestamp": "2026-07-19T15:14:45.034Z",
+      "type": "gameplay_turn",
+      "actionKey": "bfe23fdb-bcfb-4c6b-8b06-922418ba5fab",
+      "saveKey": "turn-W20260719-9E6FAA5A-t17-pwa-bfe23fdb-bcfb-4c6b-8b06-922418ba5fab",
+      "worldId": "W20260719-9E6FAA5A",
+      "simTick": 17,
+      "playerAction": "繼續行動",
+      "summary": "獸群正沿舊獸道逼近北側岔路，岩坪僵局被迫加速。受傷劍修以知曉引開獸群的方法為條件，要求楚凌霄先替他止血，並露出帶有異常劍紋的染血青布。",
+      "facts": [
+        "獸群正沿山腹舊獸道逼近北側岔路，該方向與山村相連。",
+        "受傷劍修右腿仍在流血，表示知道引開獸群的方法，要求先止血。",
+        "斗笠短弩手仍占據高岩面，以短弩控制岩坪；韓峻持刀護在楚凌霄側前。",
+        "劍修露出的染血青布帶有黯銀斷紋，楚凌霄看出其紋路具有精準的受力規律。"
+      ]
     }
-  ]
+  ],
+  "revision": 18,
+  "lastSaveKey": "turn-W20260719-9E6FAA5A-t17-pwa-bfe23fdb-bcfb-4c6b-8b06-922418ba5fab"
 }
