@@ -9,7 +9,7 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
-const GATEWAY_VERSION = "0.5.12";
+const GATEWAY_VERSION = "0.5.13";
 
 const SAFE_PUBLIC_OPERATIONS = [
   { path: "/health", method: "get", operationId: "getEngineHealth" },
@@ -25,16 +25,12 @@ const SAFE_PUBLIC_OPERATIONS = [
 ];
 
 const GPT_ACTION_PATHS = [
-  ["/health", "get", "getEngineHealth", false],
   ["/tree", "get", "getNotionTree", true],
   ["/page", "get", "getNotionPage", true],
   ["/world/initialize", "post", "initializeWorld", true],
   ["/world/archive-reset", "post", "archiveAndResetWorld", true],
   ["/world/archive-reset/status", "get", "getArchiveAndResetStatus", true],
-  ["/world/load", "post", "loadWorldProfile", true],
   ["/world/update", "post", "updateWorldState", true],
-  ["/github/tree", "get", "listGitHubWorldTree", true],
-  ["/github/file", "get", "getGitHubWorldFile", true],
 ];
 
 const COMPACT_PATHS = new Set([
@@ -434,532 +430,4 @@ function pageBatchResponseSchema() {
           cursor: {
             type: "string",
             nullable: true,
-            description: "Pass this cursor to the next getNotionPage call for the same page; null when has_more is false.",
-          },
-          truncated: {
-            type: "boolean",
-            description: "True when the gateway reduced this response to stay within maxChars.",
-          },
-          result_count: { type: "integer", minimum: 0 },
-          has_content: { type: "boolean" },
-          content_text: { type: "string" },
-          content_text_complete: {
-            type: "boolean",
-            description: "False when only the convenience content_text field was shortened.",
-          },
-        },
-        additionalProperties: true,
-      },
-      requestId: { type: "string" },
-      _gateway: {
-        type: "object",
-        required: ["version", "truncated"],
-        properties: {
-          version: { type: "string", enum: [GATEWAY_VERSION] },
-          truncated: {
-            type: "boolean",
-            description: "True when any response content was reduced to satisfy the character budget.",
-          },
-          truncatedStrings: { type: "integer", minimum: 0 },
-          returnedChars: { type: "integer", minimum: 0 },
-        },
-        additionalProperties: true,
-      },
-    },
-    additionalProperties: true,
-  };
-}
-
-export function patchOpenApi(spec, origin) {
-  const patched = structuredClone(spec);
-  const privacyPolicyUrl = new URL("/privacy", origin).href;
-  const backendVersion = patched.info?.version || "0.0.0";
-  const worldStateReady = versionAtLeast(backendVersion, "0.5.6");
-  const initializationReady = versionAtLeast(backendVersion, "0.5.7");
-  const archiveResetReady = versionAtLeast(backendVersion, "0.5.14");
-  patched.info = {
-    ...patched.info,
-    version: GATEWAY_VERSION,
-    description: initializationReady
-      ? "Safety-scoped GPT Actions gateway for compensated SAVE_V3.2 initialization, bounded reads, TURN_PRELOAD_V1 profile loads, idempotent updates, and read-only GitHub memory. Privacy policy: " + privacyPolicyUrl
-      : worldStateReady
-        ? "Safety-scoped GPT Actions gateway. World load/update are enabled; initialization remains disabled until the bound Worker reaches version 0.5.7. Privacy policy: " + privacyPolicyUrl
-      : "Safety-scoped GPT Actions gateway. World load and update actions are disabled until the bound Worker reaches version 0.5.6. Privacy policy: " + privacyPolicyUrl,
-  };
-  patched.servers = [{ url: origin }];
-  patched.externalDocs = {
-    description: "çŽ„æ¾ˆå¼•æ“Ž Gateway éš±ç§æ¬Šæ”¿ç­–",
-    url: privacyPolicyUrl,
-  };
-  patched["x-xuanche-backend"] = { version: backendVersion, worldStateReady, initializationReady, archiveResetReady };
-  patched.paths = filterPublicPaths(patched.paths, { worldStateReady, initializationReady, archiveResetReady });
-  patched.components = patched.components ?? {};
-  patched.components.schemas = patched.components.schemas ?? {};
-  patched.components.schemas.PageBatchResponse = pageBatchResponseSchema();
-  if (!worldStateReady) {
-    delete patched.components.schemas.WorldLoadRequest;
-    delete patched.components.schemas.WorldUpdateRequest;
-    delete patched.components.schemas.BlockUpdate;
-  }
-  if (!initializationReady) delete patched.components.schemas.WorldInitializeRequest;
-  if (!archiveResetReady) delete patched.components.schemas.WorldArchiveResetRequest;
-
-  const tree = patched.paths?.["/tree"]?.get;
-  if (tree) {
-    tree.summary = "Read a compact, paginated Notion page tree for GPT Actions";
-    tree.description = "Use only as a lightweight direct-child index. The gateway forces depth 0; read every module body with getNotionPage, one page at a time.";
-    tree.parameters = Array.isArray(tree.parameters) ? tree.parameters : [];
-
-    const depth = tree.parameters.find((item) => item?.name === "depth" && item?.in === "query");
-    if (depth?.schema) {
-      depth.schema.minimum = 0;
-      depth.schema.maximum = 0;
-      depth.schema.default = 0;
-      depth.description = "Direct children only. The gateway always sends depth 0 upstream.";
-    }
-
-    const maxNodes = tree.parameters.find((item) => item?.name === "maxNodes" && item?.in === "query");
-    if (maxNodes?.schema) {
-      maxNodes.schema.default = DEFAULT_UPSTREAM_NODES;
-      maxNodes.schema.maximum = MAX_UPSTREAM_NODES;
-      maxNodes.description = "Upstream safety cap. The gateway clamps this to 250 nodes.";
-    }
-
-    addOrReplaceParameter(tree.parameters, {
-      name: "offset",
-      in: "query",
-      description: "Zero-based offset for the compact result page.",
-      schema: { type: "integer", minimum: 0, default: 0 },
-    });
-    addOrReplaceParameter(tree.parameters, {
-      name: "limit",
-      in: "query",
-      description: "Number of compact top-level items returned per call.",
-      schema: { type: "integer", minimum: 1, maximum: MAX_PAGE_SIZE, default: DEFAULT_PAGE_SIZE },
-    });
-    addOrReplaceParameter(tree.parameters, {
-      name: "maxChars",
-      in: "query",
-      description: "Maximum JSON response characters; gateway hard cap is 85000.",
-      schema: { type: "integer", minimum: 5_000, maximum: HARD_MAX_CHARS, default: DEFAULT_MAX_CHARS },
-    });
-  }
-
-  const page = patched.paths?.["/page"]?.get;
-  if (page) {
-    page.summary = "Read one compact Notion page batch for GPT Actions";
-    page.description = "Read exactly one Notion page per call. This applies to every page and module, including 00â€“31, each 30-x narrative submodule, and each selected 31 experience card. Never combine modules in one request. Follow data.cursor for the same page until data.has_more is false.";
-    page.parameters = Array.isArray(page.parameters) ? page.parameters : [];
-
-    const depth = page.parameters.find((item) => item?.name === "depth" && item?.in === "query");
-    if (depth?.schema) {
-      depth.schema.minimum = 0;
-      depth.schema.maximum = 0;
-      depth.schema.default = 0;
-      depth.description = "Direct blocks only. The gateway always sends depth 0 upstream.";
-    }
-
-    const maxNodes = page.parameters.find((item) => item?.name === "maxNodes" && item?.in === "query");
-    if (maxNodes?.schema) {
-      maxNodes.schema.default = DEFAULT_PAGE_NODES;
-      maxNodes.schema.maximum = MAX_PAGE_NODES;
-      maxNodes.description = "Blocks per page batch. Gateway defaults to 10 and clamps every request to 20; when cursor is returned, call getNotionPage again with the same page id and that cursor.";
-    }
-
-    addOrReplaceParameter(page.parameters, {
-      name: "maxChars",
-      in: "query",
-      description: "Maximum compact JSON response characters; gateway hard cap is 85000.",
-      schema: { type: "integer", minimum: 5_000, maximum: HARD_MAX_CHARS, default: DEFAULT_MAX_CHARS },
-    });
-    page.responses = page.responses ?? {};
-    page.responses["200"] = {
-      description: "One compact, cursor-paginated Notion page batch",
-      content: {
-        "application/json": {
-          schema: { $ref: "#/components/schemas/PageBatchResponse" },
-        },
-      },
-    };
-  }
-
-  const loadWorld = patched.paths?.["/world/load"]?.post;
-  if (loadWorld) {
-    loadWorld.description = "World profile reads are fixed to depth 0. Use the bounded authoritative turn_core after each player reply, then add exactly one action-specific TURN_PRELOAD_V1 profile. turn_core is intentionally capped to prevent a truncated response from disabling normal saves.";
-  }
-
-  const initializeWorld = patched.paths?.["/world/initialize"]?.post;
-  if (initializeWorld) {
-    initializeWorld.description = "Use only after explicit character confirmation. It stages fixed SAVE_V3.2 pages, activates the save marker last, validates the result, and makes retries idempotent.";
-  }
-
-  const archiveAndReset = patched.paths?.["/world/archive-reset"]?.post;
-  if (archiveAndReset) {
-    archiveAndReset.description = "Destructive. Use only after confirming the exact ACTIVE WORLD_ID. The Worker archives and verifies fixed pages before setting them EMPTY/PENDING. If interrupted, reuse the same operationKey until reset=true.";
-  }
-
-  const archiveStatus = patched.paths?.["/world/archive-reset/status"]?.get;
-  if (archiveStatus) {
-    archiveStatus.description = "Read the durable archive-and-reset workflow. Do not begin a new world until reset is true and worldState is EMPTY.";
-  }
-
-  const updateWorld = patched.paths?.["/world/update"]?.post;
-  if (updateWorld) {
-    updateWorld.description = "Only fixed 02â€“09, 11, and 31 page IDs are writable. Every call must include expected world identity and a unique SAVE_KEY.";
-  }
-
-  return patched;
-}
-
-export function buildUpstreamRequest(request) {
-  const incoming = new URL(request.url);
-  const upstream = new URL(`${incoming.pathname}${incoming.search}`, "https://xuanche-engine.internal");
-
-  if (incoming.pathname === "/tree" || incoming.pathname === "/home" || incoming.pathname === "/page") {
-    const isPage = incoming.pathname === "/page";
-    const offset = integerParam(incoming.searchParams.get("offset"), 0, 0, 20_000);
-    const limit = integerParam(incoming.searchParams.get("limit"), DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
-    const requestedNodes = integerParam(
-      incoming.searchParams.get("maxNodes"),
-      isPage ? DEFAULT_PAGE_NODES : Math.max(DEFAULT_UPSTREAM_NODES, offset + limit),
-      1,
-      isPage ? MAX_PAGE_NODES : MAX_UPSTREAM_NODES,
-    );
-    upstream.searchParams.set("maxNodes", String(requestedNodes));
-    if (incoming.pathname === "/tree" || incoming.pathname === "/page") {
-      upstream.searchParams.set("depth", "0");
-    } else if (!upstream.searchParams.has("depth")) {
-      upstream.searchParams.set("depth", "0");
-    }
-  }
-
-  upstream.searchParams.delete("offset");
-  upstream.searchParams.delete("limit");
-  upstream.searchParams.delete("maxChars");
-  upstream.searchParams.delete("compact");
-
-  const init = {
-    method: request.method,
-    headers: new Headers(request.headers),
-    redirect: "manual",
-  };
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    init.body = request.body;
-    // Cloudflare accepts a streamed Request body directly; Node's standards
-    // implementation also requires this explicit flag. Keeping it here makes
-    // the exact POST forwarding path testable before deployment.
-    init.duplex = "half";
-  }
-  return new Request(upstream, init);
-}
-
-function corsHeaders(headers = new Headers()) {
-  headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Key");
-  headers.set("Access-Control-Expose-Headers", "X-Xuanche-Gateway, X-Xuanche-Gateway-Version, X-Xuanche-Page-Batch-Sizing, X-Xuanche-Page-Batch-Limit, X-Xuanche-Readable-Page-Payload");
-  headers.set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS");
-  headers.set("Access-Control-Max-Age", "86400");
-  headers.set("Cache-Control", "no-store");
-  headers.set("X-Xuanche-Gateway", "cloudflare-pages");
-  headers.set("X-Xuanche-Gateway-Version", GATEWAY_VERSION);
-  headers.set("X-Xuanche-Page-Batch-Sizing", "true");
-  headers.set("X-Xuanche-Page-Batch-Limit", "20");
-  headers.set("X-Xuanche-Readable-Page-Payload", "true");
-  return headers;
-}
-
-function jsonResponse(value, status = 200, headers = new Headers()) {
-  headers.set("Content-Type", "application/json; charset=utf-8");
-  return new Response(JSON.stringify(value), { status, headers: corsHeaders(headers) });
-}
-
-// ChatGPT Actions can reject otherwise-valid, large OpenAPI documents before a
-// request reaches the origin.  Keep this manifest deliberately flat: it is an
-// alternate *description* of the same protected gateway routes, not another
-// backend or a relaxed authorization path.
-function compactRequestSchema(operationId) {
-  if (operationId === "archiveAndResetWorld") {
-    return {
-      type: "object",
-      required: ["confirmation", "expectedWorldId", "operationKey"],
-      properties: {
-        confirmation: { type: "string", enum: ["ARCHIVE_AND_RESET"] },
-        expectedWorldId: { type: "string", pattern: "^W\\d{8}-[0-9A-F]{8}$" },
-        operationKey: { type: "string", minLength: 8, maxLength: 120, pattern: "^[A-Za-z0-9._-]+$" },
-      },
-      additionalProperties: false,
-    };
-  }
-  if (operationId === "loadWorldProfile") {
-    return {
-      type: "object",
-      properties: {
-        profile: { type: "string" },
-        refresh: { type: "boolean" },
-        persist: { type: "boolean" },
-        maxDepth: { type: "integer", enum: [0] },
-        maxNodes: { type: "integer", minimum: 1, maximum: 20000 },
-      },
-      additionalProperties: false,
-    };
-  }
-  if (operationId === "initializeWorld") {
-    return {
-      type: "object",
-      required: ["saveKey", "character"],
-      properties: {
-        saveKey: { type: "string", minLength: 1, maxLength: 200 },
-        character: {
-          type: "object",
-          required: ["name"],
-          properties: {
-            name: { type: "string", minLength: 1 },
-            gender: { type: "string" },
-            age: { oneOf: [{ type: "integer", minimum: 0 }, { type: "string" }] },
-            appearance: { type: "string" },
-            personality: { oneOf: [{ type: "string" }, { type: "array", items: { type: "string" } }] },
-            background: { type: "string" },
-            motivation: { type: "string" },
-            bottomLine: { type: "string" },
-            relationships: { type: "array", items: { type: "string" } },
-          },
-          additionalProperties: false,
-        },
-        opening: {
-          type: "object",
-          properties: {
-            location: { type: "string" }, time: { type: "string" }, premise: { type: "string" },
-            visibleClue: { type: "string" }, hiddenOrigin: { type: "string" }, directorNotes: { type: "string" },
-          },
-          additionalProperties: false,
-        },
-      },
-      additionalProperties: false,
-    };
-  }
-  if (operationId === "updateWorldState") {
-    return {
-      type: "object",
-      required: ["pageId", "saveKey", "expectedWorldId", "expectedWorldState"],
-      properties: {
-        pageId: { type: "string" }, saveKey: { type: "string", minLength: 1, maxLength: 200 },
-        expectedWorldId: { type: "string", minLength: 1 },
-        expectedWorldState: { type: "string", enum: ["EMPTY", "ACTIVE", "WORLD_CONFLICT"] },
-        expectedRevision: { type: "integer", minimum: 0 },
-        children: {
-          type: "array", minItems: 1, maxItems: 99,
-          items: {
-            type: "object",
-            properties: { type: { type: "string" }, text: { type: "string" }, checked: { type: "boolean" } },
-            additionalProperties: false,
-          },
-        },
-        memoryEvent: { type: "string" }, cachePatch: { type: "object", properties: {}, additionalProperties: true },
-        commitMessage: { type: "string", maxLength: 256 },
-      },
-      additionalProperties: false,
-    };
-  }
-  return { type: "object", properties: {}, additionalProperties: true };
-}
-
-function compactParameters(operationId) {
-  if (operationId === "getEngineHealth") {
-    return [{ name: "deep", in: "query", schema: { type: "integer", enum: [0, 1], default: 0 } }];
-  }
-  if (operationId === "getNotionTree") {
-    return [
-      { name: "pageId", in: "query", schema: { type: "string" } },
-      { name: "depth", in: "query", schema: { type: "integer", enum: [0], default: 0 } },
-      { name: "maxNodes", in: "query", schema: { type: "integer", minimum: 1, maximum: 250, default: 60 } },
-      { name: "cursor", in: "query", schema: { type: "string" } },
-    ];
-  }
-  if (operationId === "getNotionPage") {
-    return [
-      { name: "id", in: "query", required: true, schema: { type: "string" } },
-      { name: "depth", in: "query", schema: { type: "integer", enum: [0], default: 0 } },
-      { name: "maxNodes", in: "query", schema: { type: "integer", minimum: 1, maximum: 20, default: 10 } },
-      { name: "cursor", in: "query", schema: { type: "string" } },
-    ];
-  }
-  if (operationId === "getArchiveAndResetStatus") {
-    return [
-      { name: "expectedWorldId", in: "query", required: true, schema: { type: "string", pattern: "^W\\d{8}-[0-9A-F]{8}$" } },
-      { name: "operationKey", in: "query", required: true, schema: { type: "string", minLength: 8, maxLength: 120, pattern: "^[A-Za-z0-9._-]+$" } },
-    ];
-  }
-  if (operationId === "listGitHubWorldTree") {
-    return [{ name: "ref", in: "query", schema: { type: "string", default: "main" } }];
-  }
-  if (operationId === "getGitHubWorldFile") {
-    return [
-      { name: "path", in: "query", required: true, schema: { type: "string" } },
-      { name: "ref", in: "query", schema: { type: "string", default: "main" } },
-    ];
-  }
-  return [];
-}
-
-export function buildCompactGptActionSpec(origin) {
-  const apiKey = [{ apiKey: [] }];
-  const paths = {};
-  for (const [path, method, operationId, protectedRoute] of GPT_ACTION_PATHS) {
-    paths[path] = {
-      [method]: {
-        operationId,
-        summary: operationId,
-        ...(operationId === "archiveAndResetWorld" ? {
-          description: "Start a durable archive-and-reset Workflow. It returns ARCHIVING quickly; use getArchiveAndResetStatus before creating a new world.",
-        } : {}),
-        ...(operationId === "getArchiveAndResetStatus" ? {
-          description: "Read the durable archive-and-reset result. Proceed only when reset is true and worldState is EMPTY.",
-        } : {}),
-        ...(protectedRoute ? { security: apiKey } : {}),
-        ...(method === "get" ? { parameters: compactParameters(operationId) } : {}),
-        ...(method === "post" ? {
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: compactRequestSchema(operationId),
-              },
-            },
-          },
-        } : {}),
-        responses: {
-          200: {
-            description: "Successful response",
-            content: { "application/json": { schema: { type: "object", properties: {}, additionalProperties: true } } },
-          },
-          400: { description: "Invalid request" },
-          401: { description: "Invalid or missing API key" },
-          409: { description: "World state conflict" },
-          500: { description: "Service error" },
-        },
-      },
-    };
-  }
-  return {
-    openapi: "3.1.0",
-    info: {
-      title: "Xuanche Engine GPT Action",
-      version: GATEWAY_VERSION,
-      description: "Compact compatibility manifest for the Xuanche Engine Gateway.",
-    },
-    servers: [{ url: origin }],
-    components: {
-      schemas: {},
-      securitySchemes: {
-        apiKey: { type: "apiKey", in: "header", name: "X-API-Key" },
-      },
-    },
-    paths,
-  };
-}
-
-function privacyResponse(method) {
-  const headers = corsHeaders(new Headers({
-    "Content-Type": "text/html; charset=utf-8",
-    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
-    "Referrer-Policy": "no-referrer",
-    "X-Content-Type-Options": "nosniff",
-  }));
-  return new Response(method === "HEAD" ? null : PRIVACY_POLICY_HTML, { status: 200, headers });
-}
-
-async function fetchUpstream(context, request) {
-  if (!context.env?.XUANCHE_ENGINE?.fetch) {
-    return jsonResponse(
-      { ok: false, error: "Missing Cloudflare Service binding: XUANCHE_ENGINE" },
-      500,
-    );
-  }
-  return context.env.XUANCHE_ENGINE.fetch(request);
-}
-
-async function safeWorldBackendReady(context, minimumVersion) {
-  const response = await fetchUpstream(
-    context,
-    new Request("https://xuanche-engine.internal/health"),
-  );
-  if (!response.ok) return false;
-  const payload = await response.json().catch(() => ({}));
-  return versionAtLeast(payload?.version, minimumVersion);
-}
-
-export async function onRequest(context) {
-  const request = context.request;
-  const incoming = new URL(request.url);
-
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders() });
-  }
-
-  if (
-    (request.method === "GET" || request.method === "HEAD") &&
-    ["/privacy", "/privacy/", "/privacy.html"].includes(incoming.pathname)
-  ) {
-    return privacyResponse(request.method);
-  }
-
-  if (request.method === "GET" && incoming.pathname === "/gpt-action-openapi.json") {
-    return jsonResponse(buildCompactGptActionSpec(incoming.origin));
-  }
-
-  const minimumWorldVersion = incoming.pathname === "/world/initialize"
-    ? "0.5.7"
-    : ["/load", "/world/load", "/world/update"].includes(incoming.pathname)
-      ? "0.5.6"
-      : null;
-  if (
-    request.method === "POST" &&
-    minimumWorldVersion &&
-    !(await safeWorldBackendReady(context, minimumWorldVersion))
-  ) {
-    return jsonResponse({
-      ok: false,
-      error: "The bound Xuanche Worker must be deployed at version " + minimumWorldVersion + " or newer before this world operation is enabled.",
-    }, 503);
-  }
-
-  const upstreamRequest = buildUpstreamRequest(request);
-  const upstreamResponse = await fetchUpstream(context, upstreamRequest);
-
-  if (incoming.pathname === "/openapi.json" && upstreamResponse.ok) {
-    const spec = await upstreamResponse.json();
-    return jsonResponse(patchOpenApi(spec, incoming.origin), upstreamResponse.status);
-  }
-
-  const shouldCompact =
-    COMPACT_PATHS.has(incoming.pathname) || incoming.searchParams.get("compact") === "true";
-  const contentType = upstreamResponse.headers.get("content-type") ?? "";
-
-  if (shouldCompact && upstreamResponse.ok && contentType.includes("application/json")) {
-    const payload = await upstreamResponse.json();
-    const compacted = compactActionResponse(payload, {
-      offset: incoming.searchParams.get("offset"),
-      limit: incoming.pathname === "/page"
-        ? String(integerParam(
-          incoming.searchParams.get("maxNodes"),
-          DEFAULT_PAGE_NODES,
-          1,
-          MAX_PAGE_NODES,
-        ))
-        : incoming.searchParams.get("limit"),
-      maxChars: incoming.searchParams.get("maxChars"),
-      pageBatch: incoming.pathname === "/page",
-    });
-    const headers = new Headers(upstreamResponse.headers);
-    headers.set("X-Xuanche-Compacted", "true");
-    headers.set("X-Xuanche-Returned-Chars", String(JSON.stringify(compacted).length));
-    return jsonResponse(compacted, upstreamResponse.status, headers);
-  }
-
-  const headers = corsHeaders(new Headers(upstreamResponse.headers));
-  return new Response(upstreamResponse.body, {
-    status: upstreamResponse.status,
-    statusText: upstreamResponse.statusText,
-    headers,
-  });
-}
+            description: "Pass this cursor to the next getNotionPage calló^ø¶‰žËkºwµçQåÁ”è€‰ÍÑÉ¥¹œˆ°•¹Õ´èmQ]e}YIM%=9tô°(€€€€€½µÁ…ÐèìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€ÑÉÕ¹…Ñ•èìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€É•ÑÕÉ¹•‘¡…ÉÌèìÑåÁ”è€‰¥¹Ñ••Èˆ°µ¥¹¥µÕ´è€Àô°(€€€€€Á…¥¹…Ñ¥½¸èì(€€€€€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€€€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€€€€€¡…Í5½É”èìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€€€€€¹•áÑ=™™Í•ÐèìÑåÁ”èl‰¥¹Ñ••Èˆ°€‰¹Õ±°‰tô°(€€€€€€€ô°(€€€€€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”°(€€€€€ô°(€€€ô°(€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”°(€ôì(€½¹ÍÐ•ÉÉ½É¹Ù•±½Á”€ôì(€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€É•ÅÕ¥É•èl‰½¬ˆ°€‰•ÉÉ½Èˆ°€‰É•ÅÕ•ÍÑ%‰t°(€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€½¬èìÑåÁ”è€‰‰½½±•…¸ˆ°•¹Õ´èm™…±Í•tô°(€€€€€•ÉÉ½ÈèìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€É•ÅÕ•ÍÑ%èìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€‘•Ñ…¥±ÌèìÑåÁ”è€‰½‰©•Ðˆ°ÁÉ½Á•ÉÑ¥•Ìèíô°…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”ô°(€€€ô°(€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•Ìè™…±Í”°(€ôì(€½¹ÍÐÉ•…‘…Ñ„€ôì(€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€¥èìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€Ñ¥Ñ±”èìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€¥Ñ•µÌèìÑåÁ”è€‰…ÉÉ…äˆ°¥Ñ•µÌè½µÁ…Ñ	±½¬ô°(€€€€€‰±½­ÌèìÑåÁ”è€‰…ÉÉ…äˆ°¥Ñ•µÌè½µÁ…Ñ	±½¬ô°(€€€€€½¹Ñ•¹Ñ}Ñ•áÐèìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€É•ÍÕ±Ñ}½Õ¹ÐèìÑåÁ”è€‰¥¹Ñ••Èˆ°µ¥¹¥µÕ´è€Àô°(€€€€€¡…Í}½¹Ñ•¹ÐèìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€¡…Í}µ½É”èìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€¹•áÑ}ÕÉÍ½ÈèìÑåÁ”èl‰ÍÑÉ¥¹œˆ°€‰¹Õ±°‰tô°(€€€€€ÕÉÍ½ÈèìÑåÁ”èl‰ÍÑÉ¥¹œˆ°€‰¹Õ±°‰tô°(€€€€€ÑÉÕ¹…Ñ•èìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€ô°(€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”°(€ôì(€½¹ÍÐ…É¡¥Ù•AÉ½É•ÍÌ€ôì(€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€É•ÅÕ¥É•èl‰…É¡¥Ù•‘A…•-•åÌˆ°€‰…É¡¥Ù•‘A…•½Õ¹Ðˆ°€‰É•Í•ÑA…•-•åÌˆ°€‰É•Í•ÑA…•½Õ¹Ðˆ°€‰Ñ½Ñ…±A…•½Õ¹Ð‰t°(€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€…É¡¥Ù•‘A…•-•åÌèìÑåÁ”è€‰…ÉÉ…äˆ°¥Ñ•µÌèìÑåÁ”è€‰ÍÑÉ¥¹œˆôô°(€€€€€…É¡¥Ù•‘A…•½Õ¹ÐèìÑåÁ”è€‰¥¹Ñ••Èˆ°µ¥¹¥µÕ´è€Àô°(€€€€€É•Í•ÑA…•-•åÌèìÑåÁ”è€‰…ÉÉ…äˆ°¥Ñ•µÌèìÑåÁ”è€‰ÍÑÉ¥¹œˆôô°(€€€€€É•Í•ÑA…•½Õ¹ÐèìÑåÁ”è€‰¥¹Ñ••Èˆ°µ¥¹¥µÕ´è€Àô°(€€€€€Ñ½Ñ…±A…•½Õ¹ÐèìÑåÁ”è€‰¥¹Ñ••Èˆ°µ¥¹¥µÕ´è€Äô°(€€€ô°(€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•Ìè™…±Í”°(€ôì(€½¹ÍÐ…É¡¥Ù•…Ñ„€ôì(€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€É•ÅÕ¥É•èl(€€€€€€‰…•ÁÑ•ˆ°€‰½µÁ±•Ñ•ˆ°€‰Í…™•Q½%¹¥Ñ¥…±¥é”ˆ°€‰…É¡¥Ù•Y•É¥™¥•ˆ°€‰É•Í•Ðˆ°(€€€€€€‰Ý½É±‘MÑ…Ñ”ˆ°€‰Á¡…Í”ˆ°€‰½Á•É…Ñ¥½¹-•äˆ°€‰…É¡¥Ù•%ˆ°€‰Ý½É­™±½Ý%ˆ°(€€€€€€‰Ý½É­™±½ÝMÑ…ÑÕÌˆ°€‰Ý½É­™±½ÝÑÑ•µÁÐˆ°€‰½¹Ñ¥¹Õ…Ñ¥½¹M•ÅÕ•¹”ˆ°€‰ÁÉ½É•ÍÌˆ°(€€€€€€‰É•ÑÉå…‰±”ˆ°€‰É•ÅÕ¥É•Í=Á•É…Ñ½ÉÑ¥½¸ˆ°€‰¹•áÑÑ¥½¸ˆ°€‰¹•áÑA½±±™Ñ•ÉM•½¹‘Ìˆ°€‰•ÉÉ½Èˆ°(€€€t°(€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€…•ÁÑ•èìÑåÁ”è€‰‰½½±•…¸ˆ°•¹Õ´èmÑÉÕ•tô°(€€€€€½µÁ±•Ñ•èìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€Í…™•Q½%¹¥Ñ¥…±¥é”èìÑåÁ”è€‰‰½½±•…¸ˆ°‘•ÍÉ¥ÁÑ¥½¸è€‰QÉÕ”½¹±ä…™Ñ•È•Ù•Éä™¥á•Ý½É±Á…”¥Ì5AQd½A9%9…¹É•Í•ÐÙ•É¥™¥…Ñ¥½¸½µÁ±•Ñ•¸ˆô°(€€€€€…É¡¥Ù•Y•É¥™¥•èìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€É•Í•ÐèìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€Ý½É±‘MÑ…Ñ”èìÑåÁ”è€‰ÍÑÉ¥¹œˆ°•¹Õ´èl‰I!%Y%9ˆ°€‰IMQQ%9ˆ°€‰5AQdˆ°€‰U9-9=]8‰tô°(€€€€€Á¡…Í”èìÑåÁ”è€‰ÍÑÉ¥¹œˆ°•¹Õ´èl‰ÅÕ•Õ•ˆ°€‰…É¡¥Ù¥¹œˆ°€‰…É¡¥Ù•}Ù•É¥™¥•ˆ°€‰É•Í•ÑÑ¥¹œˆ°€‰½µÁ±•Ñ”ˆ°€‰Õ¹­¹½Ý¸‰tô°(€€€€€½Á•É…Ñ¥½¹-•äèìÑåÁ”è€‰ÍÑÉ¥¹œˆ°‘•ÍÉ¥ÁÑ¥½¸è€‰=É¥¥¹…°…±±•ÈµÍÕÁÁ±¥•¥‘•µÁ½Ñ•¹ä­•ä¸ˆô°(€€€€€…É¡¥Ù•%èìÑåÁ”èl‰ÍÑÉ¥¹œˆ°€‰¹Õ±°‰t°‘•ÍÉ¥ÁÑ¥½¸è€‰M•ÉÙ•Èµ•¹•É…Ñ•…É¡¥Ù”¥‘•¹Ñ¥Ñäì¹•Ù•ÈÕÍ”¥Ð…Ì½Á•É…Ñ¥½¹-•ä¸ˆô°(€€€€€Ý½É­™±½Ý%èìÑåÁ”èl‰ÍÑÉ¥¹œˆ°€‰¹Õ±°‰t°‘•ÍÉ¥ÁÑ¥½¸è€‰±½Õ‘™±…É”]½É­™±½Ü¥¹ÍÑ…¹”¥‘•¹Ñ¥Ñäì¹•Ù•ÈÕÍ”¥Ð…Ì½Á•É…Ñ¥½¹-•ä¸ˆô°(€€€€€Ý½É­™±½ÝMÑ…ÑÕÌèìÑåÁ”è€‰ÍÑÉ¥¹œˆ°•¹Õ´èl‰ÅÕ•Õ•ˆ°€‰ÉÕ¹¹¥¹œˆ°€‰Ý…¥Ñ¥¹œˆ°€‰Ý…¥Ñ¥¹½ÉA…ÕÍ”ˆ°€‰Á…ÕÍ•ˆ°€‰½µÁ±•Ñ”ˆ°€‰•ÉÉ½É•ˆ°€‰Ñ•Éµ¥¹…Ñ•ˆ°€‰…¹•±•ˆ°€‰…¹•±±•ˆ°€‰Õ¹­¹½Ý¸‰tô°(€€€€€Ý½É­™±½ÝÑÑ•µÁÐèìÑåÁ”è€‰¥¹Ñ••Èˆ°µ¥¹¥µÕ´è€Àô°(€€€€€½¹Ñ¥¹Õ…Ñ¥½¹M•ÅÕ•¹”èìÑåÁ”è€‰¥¹Ñ••Èˆ°µ¥¹¥µÕ´è€Àô°(€€€€€ÁÉ½É•ÍÌè…É¡¥Ù•AÉ½É•ÍÌ°(€€€€€É•ÑÉå…‰±”èìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€É•ÅÕ¥É•Í=Á•É…Ñ½ÉÑ¥½¸èìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€¹•áÑÑ¥½¸èìÑåÁ”è€‰ÍÑÉ¥¹œˆ°•¹Õ´èl‰A=11}MQQULˆ°€‰%9%Q%1%i}]=I1ˆ°€‰IQIe}M5}=AIQ%=8ˆ°€‰MQ=A}9}IA=IP‰tô°(€€€€€¹•áÑA½±±™Ñ•ÉM•½¹‘ÌèìÑåÁ”èl‰¥¹Ñ••Èˆ°€‰¹Õ±°‰t°µ¥¹¥µÕ´è€Äô°(€€€€€•ÉÉ½ÈèìÑåÁ”èl‰ÍÑÉ¥¹œˆ°€‰¹Õ±°‰tô°(€€€ô°(€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•Ìè™…±Í”°(€ôì(€É•ÑÕÉ¸ì(€€€ÉÉ½É¹Ù•±½Á”è•ÉÉ½É¹Ù•±½Á”°(€€€I•…‘¹Ù•±½Á”èì(€€€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€€€É•ÅÕ¥É•èl‰½¬ˆ°€‰‘…Ñ„ˆ°€‰É•ÅÕ•ÍÑ%‰t°(€€€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€€€½¬èìÑåÁ”è€‰‰½½±•…¸ˆ°•¹Õ´èmÑÉÕ•tô°(€€€€€€€‘…Ñ„èÉ•…‘…Ñ„°(€€€€€€€É•ÅÕ•ÍÑ%èìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€€€}…Ñ•Ý…äè…Ñ•Ý…å5•Ñ…‘…Ñ„°(€€€€€ô°(€€€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”°(€€€ô°(€€€%¹¥Ñ¥…±¥é•]½É±‘¹Ù•±½Á”èì(€€€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€€€É•ÅÕ¥É•èl‰½¬ˆ°€‰‘…Ñ„ˆ°€‰É•ÅÕ•ÍÑ%‰t°(€€€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€€€½¬èìÑåÁ”è€‰‰½½±•…¸ˆ°•¹Õ´èmÑÉÕ•tô°(€€€€€€€‘…Ñ„èì(€€€€€€€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€€€€€€€É•ÅÕ¥É•èl‰¥‘•µÁ½Ñ•¹Ðˆ°€‰¥¹¥Ñ¥…±¥é•ˆ°€‰Ý½É±‘%ˆ°€‰Ý½É±‘MÑ…Ñ”ˆ°€‰Í¥µQ¥¬ˆ°€‰É•Ù¥Í¥½¸ˆ°€‰Í…Ù•-•ä‰t°(€€€€€€€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€€€€€€€¥‘•µÁ½Ñ•¹ÐèìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€€€€€€€¥¹¥Ñ¥…±¥é•èìÑåÁ”è€‰‰½½±•…¸ˆ°•¹Õ´èmÑÉÕ•tô°(€€€€€€€€€€€Ý½É±‘%èìÑåÁ”è€‰ÍÑÉ¥¹œˆ°Á…ÑÑ•É¸è€‰y]qq‘ìáôµlÀ´åµuìáôˆô°(€€€€€€€€€€€Ý½É±‘MÑ…Ñ”èìÑåÁ”è€‰ÍÑÉ¥¹œˆ°•¹Õ´èl‰Q%Y‰tô°(€€€€€€€€€€€Í¥µQ¥¬èìÑåÁ”è€‰¥¹Ñ••Èˆ°µ¥¹¥µÕ´è€Àô°(€€€€€€€€€€€É•Ù¥Í¥½¸èìÑåÁ”è€‰¥¹Ñ••Èˆ°µ¥¹¥µÕ´è€Äô°(€€€€€€€€€€€Í…Ù•-•äèìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€€€€€€€Ù…±¥‘…Ñ•‘A…•-•åÌèìÑåÁ”è€‰…ÉÉ…äˆ°¥Ñ•µÌèìÑåÁ”è€‰ÍÑÉ¥¹œˆôô°(€€€€€€€€€€€Ù•É¥™¥…Ñ¥½¸èìÑåÁ”è€‰½‰©•Ðˆ°ÁÉ½Á•ÉÑ¥•Ìèíô°…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”ô°(€€€€€€€€€€€ÍÑ…ÑÕÍ5¥ÉÉ½ÈèìÑåÁ”è€‰½‰©•Ðˆ°ÁÉ½Á•ÉÑ¥•Ìèíô°…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”ô°(€€€€€€€€€€€µ¥ÉÉ½ÈèìÑåÁ”è€‰½‰©•Ðˆ°ÁÉ½Á•ÉÑ¥•Ìèíô°…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”ô°(€€€€€€€€€ô°(€€€€€€€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”°(€€€€€€€ô°(€€€€€€€É•ÅÕ•ÍÑ%èìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€ô°(€€€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•Ìè™…±Í”°(€€€ô°(€€€UÁ‘…Ñ•]½É±‘¹Ù•±½Á”èì(€€€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€€€É•ÅÕ¥É•èl‰½¬ˆ°€‰‘…Ñ„ˆ°€‰É•ÅÕ•ÍÑ%‰t°(€€€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€€€½¬èìÑåÁ”è€‰‰½½±•…¸ˆ°•¹Õ´èmÑÉÕ•tô°(€€€€€€€‘…Ñ„èì(€€€€€€€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€€€€€€€É•ÅÕ¥É•èl‰¥‘•µÁ½Ñ•¹Ðˆ°€‰Í…Ù•-•äˆ°€‰Ý½É±‘MÑ…Ñ”ˆ°€‰Ý½É±‘%ˆ°€‰Ñ¥µ•ÍÑ…µÀ‰t°(€€€€€€€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€€€€€€€¥‘•µÁ½Ñ•¹ÐèìÑåÁ”è€‰‰½½±•…¸ˆô°(€€€€€€€€€€€Í…Ù•-•äèìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€€€€€€€Ý½É±‘MÑ…Ñ”èìÑåÁ”è€‰ÍÑÉ¥¹œˆ°•¹Õ´èl‰Q%Y‰tô°(€€€€€€€€€€€Ý½É±‘%èìÑåÁ”è€‰ÍÑÉ¥¹œˆ°Á…ÑÑ•É¸è€‰y]qq‘ìáôµlÀ´åµuìáôˆô°(€€€€€€€€€€€Ñ¥µ•ÍÑ…µÀèìÑåÁ”è€‰ÍÑÉ¥¹œˆ°™½Éµ…Ðè€‰‘…Ñ”µÑ¥µ”ˆô°(€€€€€€€€€€€¹½Ñ¥½¸èìÑåÁ”è€‰½‰©•Ðˆ°ÁÉ½Á•ÉÑ¥•Ìèíô°…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”ô°(€€€€€€€€€€€¥Ñ¡Õ‰Må¹ŒèìÑåÁ”è€‰½‰©•Ðˆ°ÁÉ½Á•ÉÑ¥•Ìèíô°…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”ô°(€€€€€€€€€€€…¡•¹ÑÉ¥•Í%¹Ù…±¥‘…Ñ•èìÑåÁ”è€‰¥¹Ñ••Èˆ°µ¥¹¥µÕ´è€Àô°(€€€€€€€€€ô°(€€€€€€€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•ÌèÑÉÕ”°(€€€€€€€ô°(€€€€€€€É•ÅÕ•ÍÑ%èìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€ô°(€€€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•Ìè™…±Í”°(€€€ô°(€€€É¡¥Ù•I•Í•Ñ¹Ù•±½Á”èì(€€€€€ÑåÁ”è€‰½‰©•Ðˆ°(€€€€€É•ÅÕ¥É•èl‰½¬ˆ°€‰‘…Ñ„ˆ°€‰É•ÅÕ•ÍÑ%‰t°(€€€€€ÁÉ½Á•ÉÑ¥•Ìèì(€€€€€€€½¬èìÑåÁ”è€‰‰½½±•…¸ˆ°•¹Õ´èmÑÉÕ•tô°(€€€€€€€‘…Ñ„è…É¡¥Ù•…Ñ„°(€€€€€€€É•ÅÕ•ÍÑ%èìÑåÁ”è€‰ÍÑÉ¥¹œˆô°(€€€€€ô°(€€€€€…‘‘¥Ñ¥½¹…±AÉ½Á•ÉÑ¥•Ìè™…±Í”°(€€€ô°(€ôì)ô()™Õ¹Ñ¥½¸½µÁ…ÑI•ÍÁ½¹Í•Ì¡½Á•É…Ñ¥½¹%¤ì(€½¹ÍÐÍÕ•ÍÌ€ô€¡ÍÑ…ÑÕÌ°Í¡•µ„°‘•ÍÉ¥ÁÑ¥½¸¤€ôø€¡ì(€€€mÍÑ…ÑÕÍtèì(€€€€€‘•ÍÉ¥ÁÑ¥½¸°(€€€€€½¹Ñ•¹Ðèì€‰…ÁÁ±¥…Ñ¥½¸½©Í½¸ˆèìÍ¡•µ„èì€‘É•˜è€Œ½½µÁ½¹•¹ÑÌ½Í¡•µ…Ì¼‘íÍ¡•µ…õ€ôôô°(€€€ô°(€ô¤ì(€½¹ÍÐ•ÉÉ½È€ô€¡‘•ÍÉ¥ÁÑ¥½¸¤€ôø€¡ì(€€€‘•ÍÉ¥ÁÑ¥½¸°(€€€½¹Ñ•¹Ðèì€‰…ÁÁ±¥…Ñ¥½¸½©Í½¸ˆèìÍ¡•µ„èì€‘É•˜è€ˆŒ½½µÁ½¹•¹ÑÌ½Í¡•µ…Ì½ÉÉ½É¹Ù•±½Á”ˆôôô°(€ô¤ì(€¥˜€¡½Á•É…Ñ¥½¹%€ôôô€‰…É¡¥Ù•¹‘I•Í•Ñ]½É±ˆ¤ì(€€€É•ÑÕÉ¸ì(€€€€€€¸¸¹ÍÕ•ÍÌ ÈÀÈ°€‰É¡¥Ù•I•Í•Ñ¹Ù•±½Á”ˆ°€‰]½É­™±½Ü…•ÁÑ•½ÈÍ…™•±äÉ•ÍÕµ•ìÁ½±°ÍÑ…ÑÕÌÕ¹Ñ¥°¹•áÑÑ¥½¸¡…¹•Ì¸ˆ¤°(€€€€€€ÐÀÀè•ÉÉ½È ‰%¹Ù…±¥½¹™¥Éµ…Ñ¥½¸°]=I1}%°½È½Á•É…Ñ¥½¹-•äˆ¤°(€€€€€€ÐÀÄè•ÉÉ½È ‰%¹Ù…±¥½Èµ¥ÍÍ¥¹œA$­•äˆ¤°(€€€€€€ÐÀäè•ÉÉ½È ‰Q¡”ÕÉÉ•¹ÐÝ½É±ÍÑ…Ñ”½¹™±¥ÑÌÝ¥Ñ Ñ¡¥Ì½Á•É…Ñ¥½¸ˆ¤°(€€€€€€ÐÈÌè•ÉÉ½È ‰¹½Ñ¡•È…É¡¥Ù”µ…¹µÉ•Í•Ð½Á•É…Ñ¥½¸½Ý¹ÌÑ¡”Ý½É±±½¬ˆ¤°(€€€€€€ÔÀÌè•ÉÉ½È ‰Q¡”‘ÕÉ…‰±”]½É­™±½Ü‰¥¹‘¥¹œ¥ÌÕ¹…Ù…¥±…‰±”ˆ¤°(€€€€€€ÔÀÀè•ÉÉ½È ‰…Ñ•Ý…ä°]½É­•È°½ÈÕÁÍÑÉ•…´Í•ÉÙ¥”•ÉÉ½Èˆ¤°(€€€ôì(€ô(€¥˜€¡½Á•É…Ñ¥½¹%€ôôô€‰•ÑÉ¡¥Ù•¹‘I•Í•ÑMÑ…ÑÕÌˆ¤ì(€€€É•ÑÕÉ¸ì(€€€€€€¸¸¹ÍÕ•ÍÌ ÈÀÀ°€‰É¡¥Ù•I•Í•Ñ¹Ù•±½Á”ˆ°€‰ÕÉÉ•¹Ð‘ÕÉ…‰±”…É¡¥Ù”µ…¹µÉ•Í•ÐÍÑ…ÑÕÌˆ¤°(€€€€€€ÐÀÀè•ÉÉ½È ‰%¹Ù…±¥]=I1}%½È½Á•É…Ñ¥½¹-•äˆ¤°(€€€€€€ÐÀÄè•ÉÉ½È ‰%¹Ù…±¥½Èµ¥ÍÍ¥¹œA$­•äˆ¤°(€€€€€€ÐÀÐè•ÉÉ½È ‰9¼Ý½É­™±½Ü•á¥ÍÑÌ™½ÈÑ¡”ÍÕÁÁ±¥•½É¥¥¹…°½Á•É…Ñ¥½¹-•äˆ¤°(€€€€€€ÔÀÌè•ÉÉ½È ‰Q¡”‘ÕÉ…‰±”]½É­™±½Ü‰¥¹‘¥¹œ¥ÌÕ¹…Ù…¥±…‰±”ˆ¤°(€€€€€€ÔÀÀè•ÉÉ½È ‰…Ñ•Ý…ä°]½É­•È°½ÈÕÁÍÑÉ•…´Í•ÉÙ¥”•ÉÉ½Èˆ¤°(€€€ôì(€ô(€¥˜€¡½Á•É…Ñ¥½¹%€ôôô€‰¥¹¥Ñ¥…±¥é•]½É±ˆ¤ì(€€€É•ÑÕÉ¸ì(€€€€€€¸¸¹ÍÕ•ÍÌ ÈÀÀ°€‰%¹¥Ñ¥…±¥é•]½É±‘¹Ù•±½Á”ˆ°€‰½¹™¥Éµ•¡…É…Ñ•È…¹Ý½É±¥¹¥Ñ¥…±¥é•ˆ¤°(€€€€€€ÐÀÀè•ÉÉ½È ‰%¹Ù…±¥½È¥¹½µÁ±•Ñ”¡…É…Ñ•È¥¹¥Ñ¥…±¥é…Ñ¥½¸É•ÅÕ•ÍÐˆ¤°(€€€€€€ÐÀÄè•ÉÉ½È ‰%¹Ù…±¥½Èµ¥ÍÍ¥¹œA$­•äˆ¤°(€€€€€€ÐÀäè•ÉÉ½È ‰¥á•Á…•Ì…É”¹½ÐÍ…™•±ä5AQd½A9%9½È…¹½Ñ¡•ÈÝ½É±¥Ì…Ñ¥Ù”ˆ¤°(€€€€€€ÐÈÌè•ÉÉ½È ‰É¡¥Ù”µ…¹µÉ•Í•ÐÍÑ¥±°½Ý¹ÌÑ¡”Ý½É±±½¬ˆ¤°(€€€€€€ÔÀÌè•ÉÉ½È ‰É•ÅÕ¥É•‘ÕÉ…‰±”‘•Á•¹‘•¹ä¥ÌÕ¹…Ù…¥±…‰±”ˆ¤°(€€€€€€ÔÀÀè•ÉÉ½È ‰…Ñ•Ý…ä°]½É­•È°½ÈÕÁÍÑÉ•…´Í•ÉÙ¥”•ÉÉ½Èˆ¤°(€€€ôì(€ô(€¥˜€¡½Á•É…Ñ¥½¹%€ôôô€‰ÕÁ‘…Ñ•]½É±‘MÑ…Ñ”ˆ¤ì(€€€É•ÑÕÉ¸ì(€€€€€€¸¸¹ÍÕ•ÍÌ ÈÀÀ°€‰UÁ‘…Ñ•]½É±‘¹Ù•±½Á”ˆ°€‰%¹É•µ•¹Ñ…°Q%YµÝ½É±ÕÁ‘…Ñ”½µµ¥ÑÑ•½ÈÉ•Á±…å•¥‘•µÁ½Ñ•¹Ñ±äˆ¤°(€€€€€€ÐÀÀè•ÉÉ½È ‰%¹Ù…±¥½È•µÁÑä¥¹É•µ•¹Ñ…°ÕÁ‘…Ñ”ˆ¤°(€€€€€€ÐÀÄè•ÉÉ½È ‰%¹Ù…±¥½Èµ¥ÍÍ¥¹œA$­•äˆ¤°(€€€€€€ÐÀäè•ÉÉ½È ‰]=I1}%°ÍÑ…Ñ”°É•Ù¥Í¥½¸°½È‰±½¬ÁÉ•½¹‘¥Ñ¥½¸½¹™±¥Ðˆ¤°(€€€€€€ÐÈÌè•ÉÉ½È ‰É¡¥Ù”µ…¹µÉ•Í•ÐÕÉÉ•¹Ñ±ä±½­ÌÝ½É±ÝÉ¥Ñ•Ìˆ¤°(€€€€€€ÔÀÌè•ÉÉ½È ‰É•ÅÕ¥É•‘•Á•¹‘•¹ä¥ÌÕ¹…Ù…¥±…‰±”ˆ¤°(€€€€€€ÔÀÀè•ÉÉ½È ‰…Ñ•Ý…ä°]½É­•È°½ÈÕÁÍÑÉ•…´Í•ÉÙ¥”•ÉÉ½Èˆ¤°(€€€ôì(€ô(€É•ÑÕÉ¸ì(€€€€¸¸¹ÍÕ•ÍÌ ÈÀÀ°€‰I•…‘¹Ù•±½Á”ˆ°€‰	½Õ¹‘•É•…½µÁ±•Ñ•ˆ¤°(€€€€ÐÀÀè•ÉÉ½È ‰%¹Ù…±¥Á…”¥‘•¹Ñ¥™¥•È½ÈÁ…¥¹…Ñ¥½¸¥¹ÁÕÐˆ¤°(€€€€ÐÀÄè•ÉÉ½È ‰%¹Ù…±¥½Èµ¥ÍÍ¥¹œA$­•äˆ¤°(€€€€ÐÀÐè•ÉÉ½È ‰I•ÅÕ•ÍÑ•Á…”½È‰±½¬Ý…Ì¹½Ð™½Õ¹ˆ¤°(€€€€ÐÈÈè•ÉÉ½È ‰Q¡”É•ÅÕ•ÍÑ•É•…•á••‘•„Í…™•Ñä‰½Õ¹‘…Éäˆ¤°(€€€€ÔÀÀè•ÉÉ½È ‰…Ñ•Ý…ä°]½É­•È°½ÈÕÁÍÑÉ•…´Í•ÉÙ¥”•ÉÉ½Èˆ¤°(€ôì)ô()•áÁ½ÉÐ™Õ¹Ñ¥½¸‰Õ¥±‘½µÁ…ÑÁÑÑ¥½¹MÁ•Œ¡½É¥¥¸¤ì(€½¹ÍÐ…Á¥-•ä€ômì…Á¥-•äèmtõtì(€½¹ÍÐÁ…Ñ¡Ì€ôíôì(€™½È€¡½¹ÍÐmÁ…Ñ °µ•Ñ¡½°½Á•É…Ñ¥½¹%°ÁÉ½Ñ•Ñ•‘I½ÕÑ•t½˜AQ}Q%=9}AQ!L¤ì(€€€½¹ÍÐ½Áä€ôAQ}Q%=9}=Aem½Á•É…Ñ¥½¹%‘tì(€€€Á…Ñ¡ÍmÁ…Ñ¡t€ôì(€€€€€mµ•Ñ¡½‘tèì(€€€€€€€½Á•É…Ñ¥½¹%°(€€€€€€€ÍÕµµ…Éäè½Áä¹ÍÕµµ…Éä°(€€€€€€€‘•ÍÉ¥ÁÑ¥½¸è½Áä¹‘•ÍÉ¥ÁÑ¥½¸°(€€€€€€€€¸¸¸¡ÁÉ½Ñ•Ñ•‘I½ÕÑ”€üìÍ•ÕÉ¥Ñäè…Á¥-•äô€èíô¤°(€€€€€€€€¸¸¸¡µ•Ñ¡½€ôôô€‰•Ðˆ€üìÁ…É…µ•Ñ•ÉÌè½µÁ…ÑA…É…µ•Ñ•ÉÌ¡½Á•É…Ñ¥½¹%¤ô€èíô¤°(€€€€€€€€¸¸¸¡µ•Ñ¡½€ôôô€‰Á½ÍÐˆ€üì(€€€€€€€€€É•ÅÕ•ÍÑ	½‘äèì(€€€€€€€€€€€É•ÅÕ¥É•èÑÉÕ”°(€€€€€€€€€€€½¹Ñ•¹Ðèì(€€€€€€€€€€€€€€‰…ÁÁ±¥…Ñ¥½¸½©Í½¸ˆèì(€€€€€€€€€€€€€€€Í¡•µ„è½µÁ…ÑI•ÅÕ•ÍÑM¡•µ„¡½Á•É…Ñ¥½¹%¤°(€€€€€€€€€€€€€ô°(€€€€€€€€€€€ô°(€€€€€€€€€ô°(€€€€€€€ô€èíô¤°(€€€€€€€É•ÍÁ½¹Í•Ìè½µÁ…ÑI•ÍÁ½¹Í•Ì¡½Á•É…Ñ¥½¹%¤°(€€€€€ô°(€€€ôì(€ô(€É•ÑÕÉ¸ì(€€€½Á•¹…Á¤è€ˆÌ¸Ä¸Àˆ°(€€€¥¹™¼èì(€€€€€Ñ¥Ñ±”è€‰aÕ…¹¡”¹¥¹”APÑ¥½¸ˆ°(€€€€€Ù•ÉÍ¥½¸èQ]e}YIM%=8°(€€€€€‘•ÍÉ¥ÁÑ¥½¸è€‰5¥¹¥µ…°Í…™•ÑäµÍ½Á•ÕÍÑ½´APµ…¹¥™•ÍÐ¸9½Ñ¥½¸¥Ì…ÕÑ¡½É¥Ñ…Ñ¥Ù”ì¥Ñ!Õˆµ¥ÉÉ½ÉÌ°‰É½…ÁÉ½™¥±”±½…‘Ì°¡•…±Ñ ‘¥…¹½ÍÑ¥Ì°…¹É…ÜÝÉ¥Ñ•Ì…É”¥¹Ñ•¹Ñ¥½¹…±±ä¡¥‘‘•¸™É½´Ñ¡”…µ•Á±…äÑ½½°ÍÕÉ™…”¸ˆ°(€€€ô°(€€€Í•ÉÙ•ÉÌèmìÕÉ°è½É¥¥¸õt°(€€€½µÁ½¹•¹ÑÌèì(€€€€€Í¡•µ…Ìè½µÁ…ÑI•ÍÁ½¹Í•M¡•µ…Ì ¤°(€€€€€Í•ÕÉ¥ÑåM¡•µ•Ìèì(€€€€€€€…Á¥-•äèìÑåÁ”è€‰…Á¥-•äˆ°¥¸è€‰¡•…‘•Èˆ°¹…µ”è€‰`µA$µ-•äˆô°(€€€€€ô°(€€€ô°(€€€Á…Ñ¡Ì°(€ôì)ô()™Õ¹Ñ¥½¸ÁÉ¥Ù…åI•ÍÁ½¹Í”¡µ•Ñ¡½¤ì(€½¹ÍÐ¡•…‘•ÉÌ€ô½ÉÍ!•…‘•ÉÌ¡¹•Ü!•…‘•ÉÌ¡ì(€€€€‰½¹Ñ•¹ÐµQåÁ”ˆè€‰Ñ•áÐ½¡Ñµ°ì¡…ÉÍ•ÐõÕÑ˜´àˆ°(€€€€‰½¹Ñ•¹ÐµM•ÕÉ¥ÑäµA½±¥äˆè€‰‘•™…Õ±ÐµÍÉŒ€¹½¹”œìÍÑå±”µÍÉŒ€Õ¹Í…™”µ¥¹±¥¹”œì‰…Í”µÕÉ¤€¹½¹”œì™É…µ”µ…¹•ÍÑ½ÉÌ€¹½¹”œˆ°(€€€€‰I•™•ÉÉ•ÈµA½±¥äˆè€‰¹¼µÉ•™•ÉÉ•Èˆ°(€€€€‰`µ½¹Ñ•¹ÐµQåÁ”µ=ÁÑ¥½¹Ìˆè€‰¹½Í¹¥™˜ˆ°(€ô¤¤ì(€É•ÑÕÉ¸¹•ÜI•ÍÁ½¹Í”¡µ•Ñ¡½€ôôô€‰!ˆ€ü¹Õ±°€èAI%Ye}A=1%e}!Q50°ìÍÑ…ÑÕÌè€ÈÀÀ°¡•…‘•ÉÌô¤ì)ô()…Íå¹Œ™Õ¹Ñ¥½¸™•Ñ¡UÁÍÑÉ•…´¡½¹Ñ•áÐ°É•ÅÕ•ÍÐ¤ì(€¥˜€ …½¹Ñ•áÐ¹•¹Øü¹aU9!}9%9ü¹™•Ñ ¤ì(€€€É•ÑÕÉ¸©Í½¹I•ÍÁ½¹Í” (€€€€€ì½¬è™…±Í”°•ÉÉ½Èè€‰5¥ÍÍ¥¹œ±½Õ‘™±…É”M•ÉÙ¥”‰¥¹‘¥¹œèaU9!}9%9ˆô°(€€€€€€ÔÀÀ°(€€€€¤ì(€ô(€É•ÑÕÉ¸½¹Ñ•áÐ¹•¹Ø¹aU9!}9%9¹™•Ñ ¡É•ÅÕ•ÍÐ¤ì)ô()…Íå¹Œ™Õ¹Ñ¥½¸Í…™•]½É±‘	…­•¹‘I•…‘ä¡½¹Ñ•áÐ°µ¥¹¥µÕµY•ÉÍ¥½¸¤ì(€½¹ÍÐÉ•ÍÁ½¹Í”€ô…Ý…¥Ð™•Ñ¡UÁÍÑÉ•…´ (€€€½¹Ñ•áÐ°(€€€¹•ÜI•ÅÕ•ÍÐ ‰¡ÑÑÁÌè¼½áÕ…¹¡”µ•¹¥¹”¹¥¹Ñ•É¹…°½¡•…±Ñ ˆ¤°(€€¤ì(€¥˜€ …É•ÍÁ½¹Í”¹½¬¤É•ÑÕÉ¸™…±Í”ì(€½¹ÍÐÁ…å±½…€ô…Ý…¥ÐÉ•ÍÁ½¹Í”¹©Í½¸ ¤¹…Ñ   ¤€ôø€¡íô¤¤ì(€É•ÑÕÉ¸Ù•ÉÍ¥½¹Ñ1•…ÍÐ¡Á…å±½…ü¹Ù•ÉÍ¥½¸°µ¥¹¥µÕµY•ÉÍ¥½¸¤ì)ô()•áÁ½ÉÐ…Íå¹Œ™Õ¹Ñ¥½¸½¹I•ÅÕ•ÍÐ¡½¹Ñ•áÐ¤ì(€½¹ÍÐÉ•ÅÕ•ÍÐ€ô½¹Ñ•áÐ¹É•ÅÕ•ÍÐì(€½¹ÍÐ¥¹½µ¥¹œ€ô¹•ÜUI0¡É•ÅÕ•ÍÐ¹ÕÉ°¤ì((€¥˜€¡É•ÅÕ•ÍÐ¹µ•Ñ¡½€ôôô€‰=AQ%=9Lˆ¤ì(€€€É•ÑÕÉ¸¹•ÜI•ÍÁ½¹Í”¡¹Õ±°°ìÍÑ…ÑÕÌè€ÈÀÐ°¡•…‘•ÉÌè½ÉÍ!•…‘•ÉÌ ¤ô¤ì(€ô((€¥˜€ (€€€€¡É•ÅÕ•ÍÐ¹µ•Ñ¡½€ôôô€‰PˆñðÉ•ÅÕ•ÍÐ¹µ•Ñ¡½€ôôô€‰!ˆ¤€˜˜(€€€lˆ½ÁÉ¥Ù…äˆ°€ˆ½ÁÉ¥Ù…ä¼ˆ°€ˆ½ÁÉ¥Ù…ä¹¡Ñµ°‰t¹¥¹±Õ‘•Ì¡¥¹½µ¥¹œ¹Á…Ñ¡¹…µ”¤(€€¤ì(€€€É•ÑÕÉ¸ÁÉ¥Ù…åI•ÍÁ½¹Í”¡É•ÅÕ•ÍÐ¹µ•Ñ¡½¤ì(€ô((€¥˜€¡É•ÅÕ•ÍÐ¹µ•Ñ¡½€ôôô€‰Pˆ€˜˜¥¹½µ¥¹œ¹Á…Ñ¡¹…µ”€ôôô€ˆ½ÁÐµ…Ñ¥½¸µ½Á•¹…Á¤¹©Í½¸ˆ¤ì(€€€É•ÑÕÉ¸©Í½¹I•ÍÁ½¹Í”¡‰Õ¥±‘½µÁ…ÑÁÑÑ¥½¹MÁ•Œ¡¥¹½µ¥¹œ¹½É¥¥¸¤¤ì(€ô((€½¹ÍÐµ¥¹¥µÕµ]½É±‘Y•ÉÍ¥½¸€ôlˆ½Ý½É±½…É¡¥Ù”µÉ•Í•Ðˆ°€ˆ½Ý½É±½…É¡¥Ù”µÉ•Í•Ð½ÍÑ…ÑÕÌ‰t¹¥¹±Õ‘•Ì¡¥¹½µ¥¹œ¹Á…Ñ¡¹…µ”¤(€€€€ü€ˆÀ¸Ô¸ÄØˆ(€€€€è¥¹½µ¥¹œ¹Á…Ñ¡¹…µ”€ôôô€ˆ½Ý½É±½¥¹¥Ñ¥…±¥é”ˆ(€€€€€€ü€ˆÀ¸Ô¸Üˆ(€€€€€€èlˆ½±½…ˆ°€ˆ½Ý½É±½±½…ˆ°€ˆ½Ý½É±½ÕÁ‘…Ñ”‰t¹¥¹±Õ‘•Ì¡¥¹½µ¥¹œ¹Á…Ñ¡¹…µ”¤(€€€€€€€€ü€ˆÀ¸Ô¸Øˆ(€€€€€€€€è¹Õ±°ì(€¥˜€ (€€€µ¥¹¥µÕµ]½É±‘Y•ÉÍ¥½¸€˜˜(€€€€„¡…Ý…¥ÐÍ…™•]½É±‘	…­•¹‘I•…‘ä¡½¹Ñ•áÐ°µ¥¹¥µÕµ]½É±‘Y•ÉÍ¥½¸¤¤(€€¤ì(€€€É•ÑÕÉ¸©Í½¹I•ÍÁ½¹Í”¡ì(€€€€€½¬è™…±Í”°(€€€€€•ÉÉ½Èè€‰Q¡”‰½Õ¹aÕ…¹¡”]½É­•ÈµÕÍÐ‰”‘•Á±½å•…ÐÙ•ÉÍ¥½¸€ˆ€¬µ¥¹¥µÕµ]½É±‘Y•ÉÍ¥½¸€¬€ˆ½È¹•Ý•È‰•™½É”Ñ¡¥ÌÝ½É±½Á•É…Ñ¥½¸¥Ì•¹…‰±•¸ˆ°(€€€ô°€ÔÀÌ¤ì(€ô((€½¹ÍÐÕÁÍÑÉ•…µI•ÅÕ•ÍÐ€ô‰Õ¥±‘UÁÍÑÉ•…µI•ÅÕ•ÍÐ¡É•ÅÕ•ÍÐ¤ì(€½¹ÍÐÕÁÍÑÉ•…µI•ÍÁ½¹Í”€ô…Ý…¥Ð™•Ñ¡UÁÍÑÉ•…´¡½¹Ñ•áÐ°ÕÁÍÑÉ•…µI•ÅÕ•ÍÐ¤ì((€¥˜€¡¥¹½µ¥¹œ¹Á…Ñ¡¹…µ”€ôôô€ˆ½½Á•¹…Á¤¹©Í½¸ˆ€˜˜ÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹½¬¤ì(€€€½¹ÍÐÍÁ•Œ€ô…Ý…¥ÐÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹©Í½¸ ¤ì(€€€É•ÑÕÉ¸©Í½¹I•ÍÁ½¹Í”¡Á…Ñ¡=Á•¹Á¤¡ÍÁ•Œ°¥¹½µ¥¹œ¹½É¥¥¸¤°ÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹ÍÑ…ÑÕÌ¤ì(€ô((€½¹ÍÐÍ¡½Õ±‘½µÁ…Ð€ô(€€€=5AQ}AQ!L¹¡…Ì¡¥¹½µ¥¹œ¹Á…Ñ¡¹…µ”¤ñð¥¹½µ¥¹œ¹Í•…É¡A…É…µÌ¹•Ð ‰½µÁ…Ðˆ¤€ôôô€‰ÑÉÕ”ˆì(€½¹ÍÐ½¹Ñ•¹ÑQåÁ”€ôÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹¡•…‘•ÉÌ¹•Ð ‰½¹Ñ•¹ÐµÑåÁ”ˆ¤€üü€ˆˆì((€¥˜€¡Í¡½Õ±‘½µÁ…Ð€˜˜ÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹½¬€˜˜½¹Ñ•¹ÑQåÁ”¹¥¹±Õ‘•Ì ‰…ÁÁ±¥…Ñ¥½¸½©Í½¸ˆ¤¤ì(€€€½¹ÍÐÁ…å±½…€ô…Ý…¥ÐÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹©Í½¸ ¤ì(€€€½¹ÍÐ½µÁ…Ñ•€ô½µÁ…ÑÑ¥½¹I•ÍÁ½¹Í”¡Á…å±½…°ì(€€€€€½™™Í•Ðè¥¹½µ¥¹œ¹Í•…É¡A…É…µÌ¹•Ð ‰½™™Í•Ðˆ¤°(€€€€€±¥µ¥Ðè¥¹½µ¥¹œ¹Á…Ñ¡¹…µ”€ôôô€ˆ½Á…”ˆ(€€€€€€€€üMÑÉ¥¹œ¡¥¹Ñ••ÉA…É…´ (€€€€€€€€€¥¹½µ¥¹œ¹Í•…É¡A…É…µÌ¹•Ð ‰µ…á9½‘•Ìˆ¤°(€€€€€€€€€U1Q}A}9=L°(€€€€€€€€€€Ä°(€€€€€€€€€5a}A}9=L°(€€€€€€€€¤¤(€€€€€€€€è¥¹½µ¥¹œ¹Í•…É¡A…É…µÌ¹•Ð ‰±¥µ¥Ðˆ¤°(€€€€€µ…á¡…ÉÌè¥¹½µ¥¹œ¹Í•…É¡A…É…µÌ¹•Ð ‰µ…á¡…ÉÌˆ¤°(€€€€€Á…•	…Ñ è¥¹½µ¥¹œ¹Á…Ñ¡¹…µ”€ôôô€ˆ½Á…”ˆ°(€€€ô¤ì(€€€½¹ÍÐ¡•…‘•ÉÌ€ô¹•Ü!•…‘•ÉÌ¡ÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹¡•…‘•ÉÌ¤ì(€€€¡•…‘•ÉÌ¹Í•Ð ‰`µaÕ…¹¡”µ½µÁ…Ñ•ˆ°€‰ÑÉÕ”ˆ¤ì(€€€¡•…‘•ÉÌ¹Í•Ð ‰`µaÕ…¹¡”µI•ÑÕÉ¹•µ¡…ÉÌˆ°MÑÉ¥¹œ¡)M=8¹ÍÑÉ¥¹¥™ä¡½µÁ…Ñ•¤¹±•¹Ñ ¤¤ì(€€€É•ÑÕÉ¸©Í½¹I•ÍÁ½¹Í”¡½µÁ…Ñ•°ÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹ÍÑ…ÑÕÌ°¡•…‘•ÉÌ¤ì(€ô((€½¹ÍÐ¡•…‘•ÉÌ€ô½ÉÍ!•…‘•ÉÌ¡¹•Ü!•…‘•ÉÌ¡ÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹¡•…‘•ÉÌ¤¤ì(€É•ÑÕÉ¸¹•ÜI•ÍÁ½¹Í”¡ÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹‰½‘ä°ì(€€€ÍÑ…ÑÕÌèÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹ÍÑ…ÑÕÌ°(€€€ÍÑ…ÑÕÍQ•áÐèÕÁÍÑÉ•…µI•ÍÁ½¹Í”¹ÍÑ…ÑÕÍQ•áÐ°(€€€¡•…‘•ÉÌ°(€ô¤ì)ô

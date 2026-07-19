@@ -1,20 +1,21 @@
-# Xuanche Engine Gateway v0.5.11
+# Xuanche Engine Gateway v0.5.13
 
 This Cloudflare Pages gateway keeps GPT Action responses below the payload limit and publishes a safety-scoped OpenAPI contract.
 
 ## Public GPT Action operations
 
-- getEngineHealth
 - getNotionTree
 - getNotionPage
 - initializeWorld
-- archiveAndResetWorld (only when the Worker is v0.5.13 or later)
-- loadWorldProfile
+- archiveAndResetWorld
+- getArchiveAndResetStatus
 - updateWorldState
-- listGitHubWorldTree
-- getGitHubWorldFile
 
-Arbitrary Notion page creation, raw block append, and page metadata mutation are excluded. The advertised write paths are the confirmed-character initializer and the SAVE_V3.2 update operation. Both enforce fixed page IDs and SAVE_KEY idempotency in the Worker.
+Health diagnostics, broad profile loads, GitHub mirrors, arbitrary Notion page creation, raw block append, and page metadata mutation are excluded from the gameplay manifest. The complete administration contract remains available separately at `/openapi.json`.
+
+The compact contract declares exact archive/reset status fields. `archiveAndResetWorld` returns HTTP 202 and must be followed only with `getArchiveAndResetStatus` using the original `operationKey`; `archiveId` and `workflowId` are never accepted as substitutes.
+
+Character initialization explicitly preserves the defining motto, core desire, important bonds, weakness or fear, starting style, destiny talents, structured relationships, and director-only opening facts.
 
 ## Bounded reads
 
@@ -24,7 +25,7 @@ Arbitrary Notion page creation, raw block append, and page metadata mutation are
 - Continue the same page with data.cursor until data.has_more is false.
 - The gateway reports any size reduction through data.truncated and _gateway.truncated.
 
-World profile loads are compacted to the same response budget. Use turn_core plus one action-specific TURN_PRELOAD_V1 profile after each player response.
+Directory reads are shallow and only discover child-page links. World content is loaded through bounded `/page` batches.
 
 ## Cloudflare Pages settings
 
@@ -34,7 +35,7 @@ World profile loads are compacted to the same response budget. Use turn_core plu
 - Build output directory: public
 - Service binding: XUANCHE_ENGINE to the Xuanche Worker
 
-After deployment, re-import the Pages /openapi.json URL into GPT Actions and use /privacy as the privacy-policy URL. Confirm that the document reports version 0.5.11 and exposes archiveAndResetWorld only when the bound Worker is v0.5.13 or later.
+After deployment, re-import `https://xuanche-engine-gateway.pages.dev/gpt-action-openapi.json` into GPT Actions and use `/privacy` as the privacy-policy URL. Confirm that the compact document reports version 0.5.13, contains exactly six operations, declares archive HTTP 202, and exposes the structured status response.
 
 ## Verification
 

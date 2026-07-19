@@ -9,9 +9,10 @@
     "deploy": "npx --no-install wrangler deploy",
     "test": "node --test",
     "test:actions": "node gateway/scripts/validate-gpt-action-contract.mjs",
+    "verify:worker-backend": "node gateway/scripts/verify-worker-backend.mjs",
     "verify:actions": "node gateway/scripts/verify-deployed-gpt-action.mjs",
-    "deploy:gateway": "npm run check && npx --no-install wrangler pages deploy gateway/public --project-name xuanche-engine-gateway && npm run verify:actions -- https://xuanche-engine-gateway.pages.dev",
-    "deploy:release": "npm run check && npx --no-install wrangler deploy && npx --no-install wrangler pages deploy gateway/public --project-name xuanche-engine-gateway && npm run verify:actions -- https://xuanche-engine-gateway.pages.dev",
+    "deploy:gateway": "npm --prefix gateway test && npm run test:actions && npm run verify:worker-backend -- https://plain-dew-5810xuanche-api.amber0983310929.workers.dev 0.5.16 && npm --prefix gateway run deploy && npm run verify:actions -- https://xuanche-engine-gateway.pages.dev 0.5.13 0.5.16",
+    "deploy:release": "npm run check && npx --no-install wrangler deploy && npm --prefix gateway run deploy && npm run verify:actions -- https://xuanche-engine-gateway.pages.dev",
     "check": "node --check worker.js && node --test && npm run test:actions"
   },
   "devDependencies": {

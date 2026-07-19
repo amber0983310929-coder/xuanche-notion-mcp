@@ -1,9 +1,10 @@
 {
   "name": "xuanche-engine-gateway",
-  "version": "0.5.12",
+  "version": "0.5.13",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "deploy": "wrangler pages deploy public --project-name xuanche-engine-gateway --branch main"
   }
 }

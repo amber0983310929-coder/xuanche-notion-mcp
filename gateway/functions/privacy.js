@@ -16,27 +16,27 @@ export const PRIVACY_POLICY_HTML = `<!doctype html>
   <body>
     <main>
       <h1>玄澈引擎 Gateway 隱私權政策</h1>
-      <p class="updated">最後更新：2026 年 7 月 16 日</p>
+      <p class="updated">最後更新：2026 年 7 月 19 日</p>
 
       <h2>一、適用範圍</h2>
-      <p>本政策適用於 <code>xuanche-engine-gateway.pages.dev</code> 提供的 Custom GPT Action Gateway 與其 API。Gateway 透過 Cloudflare 處理請求，並依使用者授權連接指定的 Notion 與 GitHub 資源。</p>
+      <p>本政策適用於 <code>xuanche-engine-gateway.pages.dev</code> 提供的 Custom GPT Action Gateway 與其 API。Gateway 透過 Cloudflare 處理請求，並依使用者授權連接指定的 Notion 資源；後端亦可能維護已設定的 GitHub 私有鏡像，但不向 Custom GPT 開放直接瀏覽 GitHub 的 Action。</p>
 
       <h2>二、處理的資料</h2>
       <ul>
         <li><strong>驗證資料：</strong><code>X-API-Key</code> 僅用於驗證 API 請求。Gateway 程式不會把完整 API Key 寫入回應、Notion、GitHub 或 KV，也不主動記錄完整請求標頭。</li>
         <li><strong>Action 請求資料：</strong>可能包含頁面或區塊 ID、讀取參數、玩家明確要求寫入的文字與 Notion 區塊內容。</li>
-        <li><strong>整合資料：</strong>依 Action 讀取或修改獲授權的 Notion 內容；公開 GPT Action Schema 對 GitHub 僅提供儲存庫樹與單一檔案的唯讀存取。</li>
+        <li><strong>整合資料：</strong>依 Action 讀取或修改獲授權的 Notion 內容。精簡遊戲用 GPT Action Schema 不提供 GitHub 瀏覽工具；若後端啟用 GitHub 鏡像，僅由受控的存檔流程在服務端處理。</li>
         <li><strong>技術資料：</strong>Cloudflare 可能依服務設定處理 IP 位址、時間、路徑、狀態碼與安全或診斷紀錄。</li>
       </ul>
 
       <h2>三、處理目的</h2>
-      <p>資料只用於驗證請求、逐頁載入遊戲規則與存檔、執行使用者要求的細粒度 Notion 寫入、讀取 GitHub 長期記憶，以及維護服務安全、可靠性與錯誤診斷。</p>
+      <p>資料只用於驗證請求、逐頁載入遊戲規則與存檔、執行使用者要求的細粒度 Notion 寫入、執行受控的世界初始化與封存流程，以及維護服務安全、可靠性與錯誤診斷。</p>
 
       <h2>四、第三方服務</h2>
       <ul>
         <li><strong>Cloudflare：</strong>代管 Pages Gateway、Worker、Service Binding，並可能提供 KV、日誌與安全防護。</li>
         <li><strong>Notion：</strong>保存並處理使用者授權的世界設定、存檔與頁面內容。</li>
-        <li><strong>GitHub：</strong>保存並處理設定的儲存庫內容；公開 GPT Actions 僅暴露唯讀操作。</li>
+        <li><strong>GitHub：</strong>若管理者啟用後端鏡像，GitHub 會保存並處理設定的儲存庫內容；精簡遊戲用 GPT Actions 不提供直接 GitHub 讀寫操作。</li>
         <li><strong>OpenAI／ChatGPT：</strong>Custom GPT 會將執行 Action 所需的參數傳送至本 Gateway；OpenAI 自身的資料處理由其政策規範。</li>
       </ul>
 

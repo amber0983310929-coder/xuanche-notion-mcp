@@ -3,16 +3,12 @@ import { buildCompactGptActionSpec } from "../functions/[[path]].js";
 const spec = buildCompactGptActionSpec("https://xuanche-engine-gateway.pages.dev");
 const errors = [];
 const expectedOperations = [
-  "getEngineHealth",
   "getNotionTree",
   "getNotionPage",
   "initializeWorld",
   "archiveAndResetWorld",
   "getArchiveAndResetStatus",
-  "loadWorldProfile",
   "updateWorldState",
-  "listGitHubWorldTree",
-  "getGitHubWorldFile",
 ].sort();
 
 function fail(message) {
@@ -42,6 +38,7 @@ if (spec.openapi !== "3.1.0") fail("OpenAPI version must be 3.1.0");
 if (!spec.components?.schemas || typeof spec.components.schemas !== "object" || Array.isArray(spec.components.schemas)) {
   fail("components.schemas must be an object");
 }
+walkSchema(spec.components?.schemas, "components.schemas");
 if (!/^https:\/\//.test(spec.servers?.[0]?.url ?? "")) fail("server URL must use HTTPS");
 
 const actualOperations = [];
@@ -49,6 +46,10 @@ for (const [path, item] of Object.entries(spec.paths ?? {})) {
   for (const [method, operation] of Object.entries(item)) {
     if (!operation?.operationId) continue;
     actualOperations.push(operation.operationId);
+    if (!(operation.summary ?? "").trim() || operation.summary === operation.operationId) {
+      fail(`${operation.operationId}: summary must explain the action instead of repeating operationId`);
+    }
+    if (!(operation.description ?? "").trim()) fail(`${operation.operationId}: description is required`);
     if ((operation.description ?? "").length > 300) fail(`${operation.operationId}: description exceeds 300 characters`);
     for (const parameter of operation.parameters ?? []) {
       if (!parameter.name || !parameter.in || !parameter.schema) fail(`${operation.operationId}: invalid parameter declaration`);
@@ -80,12 +81,83 @@ for (const field of requiredArchiveFields) {
 if (archive?.properties?.confirmation?.enum?.[0] !== "ARCHIVE_AND_RESET") {
   fail("archiveAndResetWorld: confirmation must require ARCHIVE_AND_RESET");
 }
+const archiveOperation = spec.paths?.["/world/archive-reset"]?.post;
+if (!archiveOperation?.responses?.["202"] || archiveOperation?.responses?.["200"]) {
+  fail("archiveAndResetWorld: accepted success must be declared as 202 and not 200");
+}
+for (const code of ["400", "401", "409", "423", "503", "500"]) {
+  if (!archiveOperation?.responses?.[code]) fail(`archiveAndResetWorld: missing ${code} response`);
+}
 
 const archiveStatus = spec.paths?.["/world/archive-reset/status"]?.get;
 for (const field of ["expectedWorldId", "operationKey"]) {
   if (!archiveStatus?.parameters?.some((parameter) => parameter.name === field && parameter.in === "query" && parameter.required === true)) {
     fail(`getArchiveAndResetStatus: missing required query parameter ${field}`);
   }
+}
+for (const code of ["200", "400", "401", "404", "503", "500"]) {
+  if (!archiveStatus?.responses?.[code]) fail(`getArchiveAndResetStatus: missing ${code} response`);
+}
+
+const archiveData = spec.components?.schemas?.ArchiveResetEnvelope?.properties?.data;
+for (const field of [
+  "operationKey", "archiveId", "workflowId", "archiveVerified", "reset",
+  "worldState", "safeToInitialize", "nextAction", "nextPollAfterSeconds",
+]) {
+  if (!archiveData?.required?.includes(field) || !Object.hasOwn(archiveData?.properties ?? {}, field)) {
+    fail(`ArchiveResetEnvelope: missing required status field ${field}`);
+  }
+}
+if (!archiveData?.properties?.nextAction?.enum?.includes("INITIALIZE_WORLD")) {
+  fail("ArchiveResetEnvelope: nextAction must expose INITIALIZE_WORLD");
+}
+
+const initialize = spec.paths?.["/world/initialize"]?.post?.requestBody?.content?.["application/json"]?.schema;
+const character = initialize?.properties?.character;
+for (const field of ["name", "motto", "coreDesire", "weaknessFear"]) {
+  if (!character?.required?.includes(field)) fail(`initializeWorld: missing core required character field ${field}`);
+}
+for (const field of ["motto", "importantBonds", "coreDesire", "weaknessFear", "startingStyle", "destinyTalents", "relationships"]) {
+  if (!Object.hasOwn(character?.properties ?? {}, field)) {
+    fail(`initializeWorld: missing declared character field ${field}`);
+  }
+}
+if (initialize?.required?.includes("opening")) fail("initializeWorld: opening must remain optional for compatible initialization retries");
+const opening = initialize?.properties?.opening;
+for (const field of ["location", "time", "premise"]) {
+  if (!opening?.required?.includes(field)) fail(`initializeWorld: opening must require ${field} when supplied`);
+}
+for (const schema of [initialize?.properties?.saveKey]) {
+  if (schema?.minLength !== 1 || schema?.maxLength !== 200) fail("initializeWorld: saveKey must preserve the Worker 1-200 character contract");
+}
+
+const update = spec.paths?.["/world/update"]?.post?.requestBody?.content?.["application/json"]?.schema;
+if (!update?.required?.includes("expectedRevision")) fail("updateWorldState: expectedRevision must be required");
+if (JSON.stringify(update?.properties?.expectedWorldState?.enum) !== JSON.stringify(["ACTIVE"])) {
+  fail("updateWorldState: GPT contract must restrict expectedWorldState to ACTIVE");
+}
+if (!Array.isArray(update?.anyOf) || update.anyOf.length !== 2) {
+  fail("updateWorldState: request must require children or blockUpdates");
+}
+if (update?.properties?.children?.items?.type !== "string") {
+  fail("updateWorldState: append children must be plain strings that the Worker normalizes into Notion paragraphs");
+}
+if (update?.properties?.children?.items?.maxLength !== 1800) {
+  fail("updateWorldState: append text must stay within the safe Notion rich-text limit");
+}
+if (update?.properties?.saveKey?.minLength !== 1 || update?.properties?.saveKey?.maxLength !== 200) {
+  fail("updateWorldState: saveKey must preserve the Worker 1-200 character contract");
+}
+for (const hidden of ["memoryEvent", "cachePatch", "commitMessage"]) {
+  if (Object.hasOwn(update?.properties ?? {}, hidden)) fail(`updateWorldState: internal field ${hidden} must stay hidden`);
+}
+
+const treeParameters = spec.paths?.["/tree"]?.get?.parameters ?? [];
+if (treeParameters.some((parameter) => parameter.name === "cursor")) {
+  fail("getNotionTree: cursor must not be advertised because the route does not consume it");
+}
+for (const forbidden of ["/health", "/world/load", "/github/tree", "/github/file"]) {
+  if (spec.paths?.[forbidden]) fail(`gameplay manifest must not expose ${forbidden}`);
 }
 
 if (errors.length > 0) {
