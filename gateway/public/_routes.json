@@ -9,6 +9,7 @@
     "/manifest.webmanifest",
     "/sw.js",
     "/icons/*",
+    "/images/*",
     "/gateway.txt"
   ]
 }
