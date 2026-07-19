@@ -1,6 +1,6 @@
-# Xuanche Engine v0.5.17
+# Xuanche Engine v0.5.18
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.17 adds FAST_TURN_V1 page-level caching, compact profile loads, batched world updates, and per-stage latency telemetry.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.18 keeps bounded shallow world-profile reads available when a Notion page grows past its per-turn node cap, returning the first configured window with explicit truncation metadata.
 
 ## Safety model
 
@@ -82,6 +82,11 @@ The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and impor
 ## Verification
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
+
+## Version 0.5.18
+
+- Bounded shallow world-profile reads now return the first `maxNodes` blocks instead of failing the entire profile when more direct children exist.
+- Truncated page trees report both `meta.nodeLimitReached: true` and `meta.truncated: true`, while strict full-child reads retain their HTTP 422 safety behavior.
 
 ## Version 0.5.17
 

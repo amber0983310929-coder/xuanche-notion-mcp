@@ -91,6 +91,25 @@ export class NotionClient {
     return results;
   }
 
+  async listBlockChildrenUpTo(blockId, { maxNodes = 5_000 } = {}) {
+    const results = [];
+    let cursor;
+    do {
+      const remaining = maxNodes - results.length;
+      if (remaining <= 0) return { results, truncated: true, nextCursor: cursor || null };
+      const page = await this.listBlockChildren(blockId, {
+        startCursor: cursor,
+        pageSize: Math.min(100, remaining),
+      });
+      results.push(...page.results.slice(0, remaining));
+      if (page.results.length > remaining || (results.length >= maxNodes && page.has_more)) {
+        return { results, truncated: true, nextCursor: page.next_cursor || null };
+      }
+      cursor = page.has_more ? page.next_cursor : undefined;
+    } while (cursor);
+    return { results, truncated: false, nextCursor: null };
+  }
+
   async getPageTree(pageId, options = {}) {
     const maxDepth = Math.min(20, Math.max(0, Number(options.maxDepth ?? 6)));
     const maxNodes = Math.min(20_000, Math.max(1, Number(options.maxNodes ?? 5_000)));
@@ -98,13 +117,23 @@ export class NotionClient {
     const rootId = normalizeNotionId(pageId);
     const page = options.includePage === false ? undefined : await this.getPage(rootId);
     let nodeCount = 0;
+    let nodeLimitReached = false;
+    let nextCursor = null;
     const visited = new Set();
 
     const walk = async (blockId, depth) => {
       const id = normalizeNotionId(blockId);
       if (visited.has(id)) return [];
       visited.add(id);
-      const children = await this.listAllBlockChildren(id, { maxNodes: maxNodes - nodeCount });
+      let children;
+      if (options.truncateAtMaxNodes && maxDepth === 0 && depth === 0) {
+        const listed = await this.listBlockChildrenUpTo(id, { maxNodes: maxNodes - nodeCount });
+        children = listed.results;
+        nodeLimitReached = listed.truncated;
+        nextCursor = listed.nextCursor;
+      } else {
+        children = await this.listAllBlockChildren(id, { maxNodes: maxNodes - nodeCount });
+      }
       nodeCount += children.length;
       if (nodeCount > maxNodes) throw new ApiError(422, `Notion tree exceeds the ${maxNodes} node safety limit`);
       if (depth >= maxDepth) {
@@ -118,7 +147,18 @@ export class NotionClient {
     };
 
     const children = await walk(rootId, 0);
-    return { page, children, meta: { rootId, nodeCount, maxDepth, truncated: hasTruncated(children) } };
+    return {
+      page,
+      children,
+      meta: {
+        rootId,
+        nodeCount,
+        maxDepth,
+        truncated: nodeLimitReached || hasTruncated(children),
+        nodeLimitReached,
+        nextCursor,
+      },
+    };
   }
 
   createChildPage(parentPageId, input) {

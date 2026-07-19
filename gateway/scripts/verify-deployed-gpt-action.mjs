@@ -1,6 +1,6 @@
 const origin = process.argv[2];
 const expectedGatewayVersion = process.argv[3] || "0.5.14";
-const expectedWorkerVersion = process.argv[4] || "0.5.17";
+const expectedWorkerVersion = process.argv[4] || "0.5.18";
 if (!origin || !/^https:\/\//.test(origin)) {
   console.error("Usage: node gateway/scripts/verify-deployed-gpt-action.mjs https://your-gateway.pages.dev [gatewayVersion] [workerVersion]");
   process.exit(1);

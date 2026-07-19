@@ -210,7 +210,12 @@ export async function loadWorld(env, options = {}) {
     }
 
     cacheMisses += 1;
-    const tree = await notion.getPageTree(entry.id, { maxDepth: pageDepth, maxNodes, concurrency: 3 });
+    const tree = await notion.getPageTree(entry.id, {
+      maxDepth: pageDepth,
+      maxNodes,
+      concurrency: 3,
+      truncateAtMaxNodes: true,
+    });
     assertActivePage(entry, tree.page);
     const page = { key: entry.key, title: entry.title, ...tree };
     const ttl = MUTABLE_PAGE_KEYS.has(entry.key)

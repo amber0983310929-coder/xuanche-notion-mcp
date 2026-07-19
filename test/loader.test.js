@@ -36,7 +36,7 @@ test("turn_core enforces its page-node cap even when a caller requests more", as
   const notion = {
     configured: true,
     async getPageTree(_id, options) {
-      received.push(options.maxNodes);
+      received.push(options);
       return { page: {}, children: worldMarkers("ACTIVE", "W-test"), meta: { nodeCount: 2 } };
     },
   };
@@ -48,7 +48,9 @@ test("turn_core enforces its page-node cap even when a caller requests more", as
     refresh: true,
     maxNodes: 1_500,
   });
-  assert.deepEqual(received, Array(6).fill(60));
+  assert.deepEqual(received.map((options) => options.maxNodes), Array(6).fill(60));
+  assert.equal(received.every((options) => options.maxDepth === 0), true);
+  assert.equal(received.every((options) => options.truncateAtMaxNodes === true), true);
 });
 
 test("turn_dialogue enforces its active-cast page-node cap", async () => {

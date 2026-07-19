@@ -37,6 +37,78 @@ test("recursive Notion reader follows pagination and nested children", async () 
   assert.ok(calls.some((url) => url.includes("start_cursor=next")));
 });
 
+test("bounded shallow trees return the first 60 blocks with explicit node-limit metadata", async () => {
+  const blocks = Array.from({ length: 61 }, (_, index) => ({
+    id: (index + 1).toString(16).padStart(32, "0"),
+    type: "paragraph",
+    has_children: false,
+  }));
+  const requestedPageSizes = [];
+  const mockFetch = async (url) => {
+    if (url.endsWith(`/pages/${PAGE}`)) return response({ id: PAGE, object: "page" });
+    if (url.includes(`/blocks/${PAGE}/children`)) {
+      const parsed = new URL(url);
+      const start = Number(parsed.searchParams.get("start_cursor") || 0);
+      const pageSize = Number(parsed.searchParams.get("page_size"));
+      requestedPageSizes.push(pageSize);
+      const end = Math.min(start + pageSize, blocks.length);
+      return response({
+        results: blocks.slice(start, end),
+        has_more: end < blocks.length,
+        next_cursor: end < blocks.length ? String(end) : null,
+      });
+    }
+    return response({ message: "not found" }, 404);
+  };
+  const notion = new NotionClient({
+    NOTION_TOKEN: "test",
+    NOTION_MIN_REQUEST_INTERVAL_MS: "0",
+  }, mockFetch);
+
+  const tree = await notion.getPageTree(PAGE, {
+    maxDepth: 0,
+    maxNodes: 60,
+    truncateAtMaxNodes: true,
+  });
+
+  assert.deepEqual(
+    tree.children.map((block) => block.id),
+    blocks.slice(0, 60).map((block) => block.id),
+  );
+  assert.equal(tree.meta.nodeCount, 60);
+  assert.equal(tree.meta.nodeLimitReached, true);
+  assert.equal(tree.meta.truncated, true);
+  assert.equal(tree.meta.nextCursor, "60");
+  assert.deepEqual(requestedPageSizes, [60]);
+});
+
+test("strict block-child reads still reject more than 60 blocks with HTTP 422 semantics", async () => {
+  const blocks = Array.from({ length: 61 }, (_, index) => ({
+    id: (index + 1).toString(16).padStart(32, "0"),
+    type: "paragraph",
+    has_children: false,
+  }));
+  const mockFetch = async (url) => {
+    if (url.includes(`/blocks/${PAGE}/children`)) {
+      return response({ results: blocks, has_more: false, next_cursor: null });
+    }
+    return response({ message: "not found" }, 404);
+  };
+  const notion = new NotionClient({
+    NOTION_TOKEN: "test",
+    NOTION_MIN_REQUEST_INTERVAL_MS: "0",
+  }, mockFetch);
+
+  await assert.rejects(
+    notion.listAllBlockChildren(PAGE, { maxNodes: 60 }),
+    (error) => {
+      assert.equal(error.status, 422);
+      assert.match(error.message, /exceeds the 60 node safety limit/);
+      return true;
+    },
+  );
+});
+
 test("Notion client invokes fetch with the Cloudflare global receiver", async () => {
   let receiver;
   const receiverAwareFetch = function () {
