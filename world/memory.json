@@ -1,10 +1,10 @@
 {
   "version": 3,
   "schema": "SAVE_V3.3",
-  "updatedAt": "2026-07-19T22:38:57.248Z",
+  "updatedAt": "2026-07-19T22:39:47.239Z",
   "worldState": "ACTIVE",
   "worldId": "W20260719-9E6FAA5A",
-  "simTick": 22,
+  "simTick": 23,
   "purgeId": "A-W20260719-D88393B4-C53DA2D2",
   "events": [
     {
@@ -119,8 +119,24 @@
         "南側林間先前有兩次短哨應答，之後已安靜下來。",
         "灰衣修士仍留在上方涵石堆附近，楚凌霄尚未確認其現況。"
       ]
+    },
+    {
+      "timestamp": "2026-07-19T22:39:47.239Z",
+      "type": "gameplay_turn",
+      "actionKey": "23d77772-bb19-48d5-bbb5-650958fa81ab",
+      "saveKey": "turn-W20260719-9E6FAA5A-t23-pwa-23d77772-bb19-48d5-bbb5-650958fa81ab",
+      "worldId": "W20260719-9E6FAA5A",
+      "simTick": 23,
+      "playerAction": "沿重獸蹄印查北岔",
+      "summary": "楚凌霄查明北岔重獸主要會穿過一條通往村北田地的狹窄石溝；溝旁石堆已鬆動，可能成為截斷獸道或逼獸下坡的關鍵。另有一頭受傷重獸轉入北林，去向未明。",
+      "facts": [
+        "北岔主獸道經過一條向村北田地下行的狹窄石溝。",
+        "石溝右側亂石堆已有鬆動承重石，受再度撞擊可能崩落。",
+        "至少一頭受傷的重獸由碎石坡轉入北面林子，留下拖痕與黑毛。",
+        "灰衣修士沒有隨楚凌霄進入北岔；南側追兵目前沒有發出哨聲。"
+      ]
     }
   ],
-  "revision": 23,
-  "lastSaveKey": "turn-W20260719-9E6FAA5A-t22-pwa-3fa08083-5271-4363-aa5d-c7ffc5c631c5"
+  "revision": 24,
+  "lastSaveKey": "turn-W20260719-9E6FAA5A-t23-pwa-23d77772-bb19-48d5-bbb5-650958fa81ab"
 }
