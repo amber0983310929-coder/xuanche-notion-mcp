@@ -43,8 +43,8 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.15",
-      description: "Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, durable verified Notion archives, bounded per-turn differential loads, and idempotent allowlisted Notion updates.",
+      version: "0.5.17",
+      description: "Cloudflare Worker bridge for compensated SAVE_V3.2 initialization, durable archives, page-cached FAST_TURN_V1 loads, and batched idempotent Notion updates.",
     },
     servers: [{ url: new URL(origin).origin }],
     components: {
@@ -124,7 +124,7 @@ export function buildOpenApi(origin) {
               ],
               default: "continue",
             },
-            refresh: { type: "boolean", default: true, description: "Read Notion instead of using an unexpired KV snapshot." },
+            refresh: { type: "boolean", default: false, description: "Bypass safe per-page KV entries and read Notion again. Use only for an explicit manual refresh." },
             persist: { type: "boolean", default: false, description: "Commit the loaded snapshot to world/cache.json in GitHub." },
             maxDepth: {
               type: "integer",
@@ -136,9 +136,29 @@ export function buildOpenApi(origin) {
             pageKeys: { type: "array", items: { type: "string" }, uniqueItems: true },
           },
         },
+        WorldPageMutation: {
+          type: "object",
+          required: ["pageId"],
+          properties: {
+            pageId: { $ref: "#/components/schemas/NotionId" },
+            children: { type: "array", minItems: 1, maxItems: 99, items: { $ref: "#/components/schemas/BlockInput" } },
+            blockUpdates: {
+              type: "array",
+              minItems: 1,
+              maxItems: 50,
+              items: { $ref: "#/components/schemas/BlockUpdate" },
+            },
+            after: { $ref: "#/components/schemas/NotionId" },
+          },
+          anyOf: [
+            { required: ["children"] },
+            { required: ["blockUpdates"] },
+          ],
+          additionalProperties: false,
+        },
         WorldUpdateRequest: {
           type: "object",
-          required: ["pageId", "saveKey", "expectedWorldId", "expectedWorldState"],
+          required: ["saveKey", "expectedWorldId", "expectedWorldState"],
           properties: {
             pageId: { $ref: "#/components/schemas/NotionId" },
             saveKey: { type: "string", minLength: 1, maxLength: 200, description: "Unique idempotency key written to the target world page." },
@@ -153,6 +173,14 @@ export function buildOpenApi(origin) {
               items: { $ref: "#/components/schemas/BlockUpdate" },
             },
             after: { $ref: "#/components/schemas/NotionId" },
+            mutations: {
+              type: "array",
+              minItems: 1,
+              maxItems: 9,
+              uniqueItems: true,
+              items: { $ref: "#/components/schemas/WorldPageMutation" },
+              description: "Batch all pages changed by one turn so the canonical save is verified only once.",
+            },
             memoryEvent: {
               description: "String summary or structured append-only long-term-memory event.",
               oneOf: [
@@ -174,8 +202,14 @@ export function buildOpenApi(origin) {
             commitMessage: { type: "string", maxLength: 256 },
           },
           anyOf: [
-            { required: ["children"] },
-            { required: ["blockUpdates"] },
+            {
+              required: ["pageId"],
+              anyOf: [
+                { required: ["children"] },
+                { required: ["blockUpdates"] },
+              ],
+            },
+            { required: ["mutations"] },
           ],
         },
         WorldInitializeRequest: {
@@ -336,7 +370,7 @@ export function buildOpenApi(origin) {
       "/world/load": {
         post: {
           operationId: "loadWorldProfile",
-          summary: "Load a configured world profile and optionally persist its snapshot",
+          summary: "Load a page-cached world profile for FAST_TURN_V1",
           security: apiKeySecurity,
           requestBody: jsonBody("#/components/schemas/WorldLoadRequest"),
           responses: standardResponses,
@@ -355,7 +389,7 @@ export function buildOpenApi(origin) {
       "/world/update": {
         post: {
           operationId: "updateWorldState",
-          summary: "Apply an idempotent, allowlisted SAVE_V3.2 world update",
+          summary: "Apply one or more idempotent FAST_TURN_V1 page mutations",
           security: apiKeySecurity,
           requestBody: jsonBody("#/components/schemas/WorldUpdateRequest", true),
           responses: standardResponses,

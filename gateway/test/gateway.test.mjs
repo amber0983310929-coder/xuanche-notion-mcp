@@ -129,7 +129,7 @@ test("compacts raw Notion blocks and removes noisy metadata", () => {
   assert.equal(result.data.blocks[0].created_time, undefined);
   assert.equal(result.data.blocks[0].parent, undefined);
   assert.equal(result._gateway.compact, true);
-  assert.equal(result._gateway.version, "0.5.13");
+  assert.equal(result._gateway.version, "0.5.14");
   assert.equal(result._gateway.returnedChars, JSON.stringify(result).length);
 });
 
@@ -203,7 +203,7 @@ test("publishes only the safety-scoped GPT Action operations with bounded page r
   const patched = patchOpenApi(openApiFixture(), "https://xuanche-engine-gateway.pages.dev");
   const parameters = patched.paths["/tree"].get.parameters;
 
-  assert.equal(patched.info.version, "0.5.13");
+  assert.equal(patched.info.version, "0.5.14");
   assert.equal(
     patched.externalDocs.url,
     "https://xuanche-engine-gateway.pages.dev/privacy",
@@ -272,7 +272,7 @@ test("publishes only the safety-scoped GPT Action operations with bounded page r
 test("publishes the minimal structured gameplay manifest for ChatGPT Actions", async () => {
   const spec = buildCompactGptActionSpec("https://xuanche-engine-gateway.pages.dev");
   assert.equal(spec.openapi, "3.1.0");
-  assert.equal(spec.info.version, "0.5.13");
+  assert.equal(spec.info.version, "0.5.14");
   assert.deepEqual(spec.servers, [{ url: "https://xuanche-engine-gateway.pages.dev" }]);
   assert.deepEqual(operationIds(spec), [
     "archiveAndResetWorld",
@@ -280,10 +280,11 @@ test("publishes the minimal structured gameplay manifest for ChatGPT Actions", a
     "getNotionPage",
     "getNotionTree",
     "initializeWorld",
+    "loadWorldProfile",
     "updateWorldState",
   ]);
   assert.equal(spec.paths["/health"], undefined);
-  assert.equal(spec.paths["/world/load"], undefined);
+  assert.ok(spec.paths["/world/load"]);
   assert.equal(spec.paths["/github/tree"], undefined);
   assert.equal(spec.paths["/github/file"], undefined);
   assert.ok(spec.components.schemas.ArchiveResetEnvelope);
@@ -291,6 +292,12 @@ test("publishes the minimal structured gameplay manifest for ChatGPT Actions", a
   assert.ok(spec.components.schemas.UpdateWorldEnvelope);
   assert.ok(spec.components.schemas.ReadEnvelope);
   assert.ok(spec.components.schemas.ErrorEnvelope);
+  const loadSchema = spec.paths["/world/load"].post.requestBody.content["application/json"].schema;
+  assert.equal(loadSchema.properties.refresh.default, false);
+  assert.deepEqual(loadSchema.properties.profile.enum, [
+    "turn_core", "turn_combat", "turn_dialogue", "turn_exploration",
+    "turn_cultivation", "turn_trade", "turn_travel",
+  ]);
   assert.deepEqual(spec.paths["/world/archive-reset"].post.security, [{ apiKey: [] }]);
   assert.equal(spec.paths["/world/archive-reset"].post.requestBody.required, true);
   const archiveSchema = spec.paths["/world/archive-reset"].post.requestBody.content["application/json"].schema;
@@ -303,7 +310,6 @@ test("publishes the minimal structured gameplay manifest for ChatGPT Actions", a
   assert.match(spec.paths["/world/archive-reset/status"].get.description, /archiveId/);
   assert.ok(spec.paths["/page"].get.parameters.some((parameter) => parameter.name === "id" && parameter.required));
   assert.equal(spec.paths["/tree"].get.parameters.some((parameter) => parameter.name === "cursor"), false);
-
   const initializeSchema = spec.paths["/world/initialize"].post.requestBody.content["application/json"].schema;
   assert.equal(initializeSchema.required.includes("opening"), false);
   assert.deepEqual(initializeSchema.properties.character.required, ["name", "motto", "coreDesire", "weaknessFear"]);
@@ -319,7 +325,10 @@ test("publishes the minimal structured gameplay manifest for ChatGPT Actions", a
   const updateSchema = spec.paths["/world/update"].post.requestBody.content["application/json"].schema;
   assert.ok(updateSchema.required.includes("expectedRevision"));
   assert.deepEqual(updateSchema.properties.expectedWorldState.enum, ["ACTIVE"]);
-  assert.deepEqual(updateSchema.anyOf, [{ required: ["children"] }, { required: ["blockUpdates"] }]);
+  assert.equal(updateSchema.anyOf.length, 2);
+  assert.deepEqual(updateSchema.anyOf[1], { required: ["mutations"] });
+  assert.ok(updateSchema.properties.mutations);
+  assert.equal(updateSchema.properties.mutations.maxItems, 9);
   assert.equal(updateSchema.properties.children.items.type, "string");
   assert.equal(updateSchema.properties.children.items.maxLength, 1800);
   assert.equal(updateSchema.properties.saveKey.minLength, 1);
@@ -420,7 +429,7 @@ test("archive status preserves the complete v0.5.16 workflow result", async () =
   assert.equal(responseBody.data.nextAction, "INITIALIZE_WORLD");
 });
 
-test("the Pages handler serves the filtered 0.5.13 OpenAPI document", async () => {
+test("the Pages handler serves the filtered 0.5.14 OpenAPI document", async () => {
   const response = await onRequest({
     request: new Request("https://xuanche-engine-gateway.pages.dev/openapi.json"),
     env: {
@@ -434,8 +443,8 @@ test("the Pages handler serves the filtered 0.5.13 OpenAPI document", async () =
   const document = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.13");
-  assert.equal(document.info.version, "0.5.13");
+  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.14");
+  assert.equal(document.info.version, "0.5.14");
   assert.equal(
     document.externalDocs.url,
     "https://xuanche-engine-gateway.pages.dev/privacy",
@@ -499,7 +508,7 @@ test("keeps initialization but hides archive actions on a pre-0.5.16 backend", (
   assert.equal(patched.components.schemas.WorldArchiveResetRequest, undefined);
 });
 
-test("rejects world writes while the bound Worker is older than 0.5.6", async () => {
+test("rejects FAST_TURN_V1 loads and writes while the bound Worker is older than 0.5.17", async () => {
   let updateCalls = 0;
   const response = await onRequest({
     request: new Request("https://xuanche-engine-gateway.pages.dev/world/update", {
@@ -521,7 +530,7 @@ test("rejects world writes while the bound Worker is older than 0.5.6", async ()
   });
   const body = await response.json();
   assert.equal(response.status, 503);
-  assert.match(body.error, /0\.5\.6/);
+  assert.match(body.error, /0\.5\.17/);
   assert.equal(updateCalls, 0);
 });
 
@@ -593,7 +602,7 @@ test("serves a public Traditional Chinese privacy policy without an upstream bin
 
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
-  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.13");
+  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.14");
   assert.match(response.headers.get("content-security-policy"), /default-src 'none'/);
   assert.match(body, /lang="zh-Hant"/);
   assert.match(body, /X-API-Key/);
@@ -647,7 +656,7 @@ test("full Pages handler compacts a large module response before returning it to
   assert.equal(response.headers.get("X-Xuanche-Page-Batch-Sizing"), "true");
   assert.equal(response.headers.get("X-Xuanche-Page-Batch-Limit"), "20");
   assert.equal(response.headers.get("X-Xuanche-Readable-Page-Payload"), "true");
-  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.13");
+  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.14");
   assert.ok(body.length < 72_000);
   assert.equal(parsed.data.items.length, 20);
   assert.equal(parsed.data.items[0].id, "0");
@@ -658,6 +667,6 @@ test("full Pages handler compacts a large module response before returning it to
   assert.equal(parsed.data.cursor, "batch-2");
   assert.equal(parsed.data.truncated, false);
   assert.equal(parsed.data.results, undefined);
-  assert.equal(parsed._gateway.version, "0.5.13");
+  assert.equal(parsed._gateway.version, "0.5.14");
   assert.equal(parsed._gateway.returnedChars, body.length);
 });

@@ -9,7 +9,7 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
-const GATEWAY_VERSION = "0.5.13";
+const GATEWAY_VERSION = "0.5.14";
 
 const SAFE_PUBLIC_OPERATIONS = [
   { path: "/health", method: "get", operationId: "getEngineHealth" },
@@ -27,6 +27,7 @@ const SAFE_PUBLIC_OPERATIONS = [
 const GPT_ACTION_PATHS = [
   ["/tree", "get", "getNotionTree", true],
   ["/page", "get", "getNotionPage", true],
+  ["/world/load", "post", "loadWorldProfile", true],
   ["/world/initialize", "post", "initializeWorld", true],
   ["/world/archive-reset", "post", "archiveAndResetWorld", true],
   ["/world/archive-reset/status", "get", "getArchiveAndResetStatus", true],
@@ -581,7 +582,7 @@ export function patchOpenApi(spec, origin) {
 
   const loadWorld = patched.paths?.["/world/load"]?.post;
   if (loadWorld) {
-    loadWorld.description = "World profile reads are fixed to depth 0. Use the bounded authoritative turn_core after each player reply, then add exactly one action-specific TURN_PRELOAD_V1 profile. turn_core is intentionally capped to prevent a truncated response from disabling normal saves.";
+    loadWorld.description = "Use turn_core once after each player reply with refresh=false. Add at most one action-specific profile only when the current action truly needs it. Reads are shallow, compact, and cached per page.";
   }
 
   const initializeWorld = patched.paths?.["/world/initialize"]?.post;
@@ -601,7 +602,7 @@ export function patchOpenApi(spec, origin) {
 
   const updateWorld = patched.paths?.["/world/update"]?.post;
   if (updateWorld) {
-    updateWorld.description = "Only fixed 02–09, 11, and 31 page IDs are writable. Every call must include expected world identity and a unique SAVE_KEY.";
+    updateWorld.description = "Batch every page changed by the same turn in mutations so 02 is verified once. Ordinary turns update only 02; major events may include other fixed world pages.";
   }
 
   return patched;
@@ -674,6 +675,31 @@ function jsonResponse(value, status = 200, headers = new Headers()) {
 // alternate *description* of the same protected gateway routes, not another
 // backend or a relaxed authorization path.
 function compactRequestSchema(operationId) {
+  if (operationId === "loadWorldProfile") {
+    return {
+      type: "object",
+      required: ["profile"],
+      properties: {
+        profile: {
+          type: "string",
+          enum: [
+            "turn_core", "turn_combat", "turn_dialogue", "turn_exploration",
+            "turn_cultivation", "turn_trade", "turn_travel",
+          ],
+          description: "Load turn_core first. A second call is optional and limited to one action-specific profile.",
+        },
+        refresh: {
+          type: "boolean",
+          default: false,
+          description: "Keep false during normal play so unchanged pages use the safe page-granular cache.",
+        },
+        persist: { type: "boolean", enum: [false], default: false },
+        maxDepth: { type: "integer", enum: [0], default: 0 },
+        maxNodes: { type: "integer", minimum: 1, maximum: 200, default: 60 },
+      },
+      additionalProperties: false,
+    };
+  }
   if (operationId === "archiveAndResetWorld") {
     return {
       type: "object",
@@ -811,19 +837,15 @@ function compactRequestSchema(operationId) {
     };
   }
   if (operationId === "updateWorldState") {
-    return {
+    const pageMutation = {
       type: "object",
-      required: ["pageId", "saveKey", "expectedWorldId", "expectedWorldState", "expectedRevision"],
+      required: ["pageId"],
       properties: {
         pageId: { type: "string", pattern: "^[0-9a-fA-F-]{32,36}$" },
-        saveKey: { type: "string", minLength: 1, maxLength: 200, pattern: "^[^\\r\\n\\s](?:[^\\r\\n]*[^\\r\\n\\s])?$" },
-        expectedWorldId: { type: "string", pattern: "^W\\d{8}-[0-9A-F]{8}$" },
-        expectedWorldState: { type: "string", enum: ["ACTIVE"], description: "Narrative updates are allowed only for the verified ACTIVE world." },
-        expectedRevision: { type: "integer", minimum: 0 },
         children: {
           type: "array", minItems: 1, maxItems: 50,
           items: { type: "string", minLength: 1, maxLength: 1800 },
-          description: "Append-only paragraph text. The Worker converts each string into a valid Notion paragraph block.",
+          description: "Append-only paragraph text. The Worker converts strings into valid Notion blocks.",
         },
         blockUpdates: {
           type: "array",
@@ -846,6 +868,32 @@ function compactRequestSchema(operationId) {
         after: { type: "string", pattern: "^[0-9a-fA-F-]{32,36}$" },
       },
       anyOf: [{ required: ["children"] }, { required: ["blockUpdates"] }],
+      additionalProperties: false,
+    };
+    return {
+      type: "object",
+      required: ["saveKey", "expectedWorldId", "expectedWorldState", "expectedRevision"],
+      properties: {
+        ...pageMutation.properties,
+        saveKey: { type: "string", minLength: 1, maxLength: 200, pattern: "^[^\\r\\n\\s](?:[^\\r\\n]*[^\\r\\n\\s])?$" },
+        expectedWorldId: { type: "string", pattern: "^W\\d{8}-[0-9A-F]{8}$" },
+        expectedWorldState: { type: "string", enum: ["ACTIVE"], description: "Narrative updates are allowed only for the verified ACTIVE world." },
+        expectedRevision: { type: "integer", minimum: 0 },
+        mutations: {
+          type: "array",
+          minItems: 1,
+          maxItems: 9,
+          items: pageMutation,
+          description: "Preferred FAST_TURN_V1 form. Include every page changed by one major event in one action call.",
+        },
+      },
+      anyOf: [
+        {
+          required: ["pageId"],
+          anyOf: [{ required: ["children"] }, { required: ["blockUpdates"] }],
+        },
+        { required: ["mutations"] },
+      ],
       additionalProperties: false,
     };
   }
@@ -883,6 +931,10 @@ function compactParameters(operationId) {
 }
 
 const GPT_ACTION_COPY = {
+  loadWorldProfile: {
+    summary: "Load the cached context for one FAST_TURN_V1 step",
+    description: "Call turn_core once after a player reply with refresh=false. Add at most one specialized profile only when necessary; never scan pages individually when this profile load succeeds.",
+  },
   getNotionTree: {
     summary: "List the shallow Notion world directory",
     description: "Use only to discover direct child-page links from the configured world index. It is not a content loader, is never recursive, and must not be used to scan archives or replace getNotionPage.",
@@ -904,8 +956,8 @@ const GPT_ACTION_COPY = {
     description: "Read-only status check using the original WORLD_ID and operationKey. Never use archiveId or workflowId as operationKey. Initialize only when safeToInitialize is true and nextAction is INITIALIZE_WORLD.",
   },
   updateWorldState: {
-    summary: "Commit one incremental ACTIVE-world update",
-    description: "Apply only the changed blocks of the verified ACTIVE world with exact WORLD_ID, revision, and a unique saveKey. Never initialize, reset, repair WORLD_CONFLICT, rewrite a whole page, or modify rule pages.",
+    summary: "Commit one batched FAST_TURN_V1 world update",
+    description: "Ordinary turns update only 02. For a major event, batch every changed fixed page in mutations so WORLD_ID and revision are verified once. Never modify rule pages.",
   },
 };
 
@@ -1068,6 +1120,7 @@ function compactResponseSchemas() {
             notion: { type: "object", properties: {}, additionalProperties: true },
             githubSync: { type: "object", properties: {}, additionalProperties: true },
             cacheEntriesInvalidated: { type: "integer", minimum: 0 },
+            timings: { type: "object", properties: {}, additionalProperties: true },
           },
           additionalProperties: true,
         },
@@ -1183,7 +1236,7 @@ export function buildCompactGptActionSpec(origin) {
     info: {
       title: "Xuanche Engine GPT Action",
       version: GATEWAY_VERSION,
-      description: "Minimal safety-scoped Custom GPT manifest. Notion is authoritative; GitHub mirrors, broad profile loads, health diagnostics, and raw writes are intentionally hidden from the gameplay tool surface.",
+      description: "Safety-scoped FAST_TURN_V1 Custom GPT manifest. Notion remains authoritative; page-cached profile loads and batched world updates minimize sequential action calls.",
     },
     servers: [{ url: origin }],
     components: {
@@ -1250,7 +1303,7 @@ export async function onRequest(context) {
     : incoming.pathname === "/world/initialize"
       ? "0.5.7"
       : ["/load", "/world/load", "/world/update"].includes(incoming.pathname)
-        ? "0.5.6"
+        ? "0.5.17"
         : null;
   if (
     minimumWorldVersion &&

@@ -27,7 +27,7 @@ test("turn_core contains only the bounded authoritative per-turn state", () => {
 test("turn_dialogue loads the compact active-cast context", () => {
   const pages = selectWorldPages(DEFAULT_WORLD_CONFIG, "turn_dialogue");
   assert.deepEqual(pages.map((page) => page.key), [
-    "relationships", "causality", "director", "npc"
+    "relationships", "causality", "npc"
   ]);
 });
 
@@ -68,7 +68,7 @@ test("turn_dialogue enforces its active-cast page-node cap", async () => {
     refresh: true,
     maxNodes: 1_500,
   });
-  assert.deepEqual(received, Array(4).fill(200));
+  assert.deepEqual(received, Array(3).fill(200));
 });
 
 test("new_game profile loads only the fixed character-creation route", () => {
@@ -254,4 +254,38 @@ test("a KV cache hit can still be persisted to GitHub", async () => {
   assert.equal(result.meta.cache, "hit");
   assert.equal(result.meta.githubCommit, "persisted-sha");
   assert.equal(writes[0].path, "world/cache.json");
+});
+
+test("page-granular cache reloads only a missing page", async () => {
+  const reads = [];
+  const entries = new Map();
+  const cache = {
+    async get(key) { return entries.get(key); },
+    async put(key, value) { entries.set(key, value); },
+  };
+  const notion = {
+    configured: true,
+    async getPageTree(id, options) {
+      reads.push(id);
+      return {
+        page: { id },
+        children: worldMarkers("ACTIVE", "W-fast"),
+        meta: { nodeCount: 2, maxDepth: options.maxDepth },
+      };
+    },
+  };
+
+  await loadWorld({}, { notion, github: { configured: false }, cache, profile: "turn_core", refresh: false });
+  assert.equal(reads.length, 6);
+  reads.length = 0;
+
+  const saveId = DEFAULT_WORLD_CONFIG.catalog.find((page) => page.key === "save").id.replaceAll("-", "");
+  for (const key of entries.keys()) {
+    if (key.replaceAll("-", "").includes(saveId)) entries.delete(key);
+  }
+  const result = await loadWorld({}, { notion, github: { configured: false }, cache, profile: "turn_core", refresh: false });
+  assert.equal(reads.length, 1);
+  assert.equal(result.meta.cache, "partial");
+  assert.equal(result.meta.cacheHits, 5);
+  assert.equal(result.meta.cacheMisses, 1);
 });

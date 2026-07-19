@@ -5,7 +5,7 @@ import { buildOpenApi } from "../src/openapi.js";
 test("OpenAPI is bound to the deployed origin and exposes unique operation IDs", () => {
   const document = buildOpenApi("https://worker.example/openapi.json");
   assert.equal(document.openapi, "3.1.0");
-  assert.equal(document.info.version, "0.5.14");
+  assert.equal(document.info.version, "0.5.17");
   assert.equal(document.servers[0].url, "https://worker.example");
 
   const operationIds = Object.values(document.paths)
@@ -85,6 +85,7 @@ test("WorldLoadRequest fixes profile reads to shallow depth zero", () => {
   const maxDepth = document.components.schemas.WorldLoadRequest.properties.maxDepth;
   assert.deepEqual(maxDepth.enum, [0]);
   assert.equal(maxDepth.default, 0);
+  assert.equal(document.components.schemas.WorldLoadRequest.properties.refresh.default, false);
 });
 
 test("OpenAPI exposes only the safe world mutation routes", () => {
@@ -93,7 +94,6 @@ test("OpenAPI exposes only the safe world mutation routes", () => {
   assert.equal(document.paths["/notion/blocks/{id}/children"], undefined);
   assert.equal(document.paths["/notion/pages/{id}"], undefined);
   assert.deepEqual(document.components.schemas.WorldUpdateRequest.required, [
-    "pageId",
     "saveKey",
     "expectedWorldId",
     "expectedWorldState",
@@ -103,4 +103,5 @@ test("OpenAPI exposes only the safe world mutation routes", () => {
   assert.equal(document.paths["/world/initialize"].post.operationId, "initializeWorld");
   assert.equal(document.paths["/world/archive-reset"].post.operationId, "archiveAndResetWorld");
   assert.ok(document.components.schemas.WorldUpdateRequest.properties.blockUpdates);
+  assert.ok(document.components.schemas.WorldUpdateRequest.properties.mutations);
 });

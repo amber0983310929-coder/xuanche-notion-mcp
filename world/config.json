@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "homePageId": "5f4c8de4a4c246478a4658d1ebc2a1a2",
   "catalog": [
     {
@@ -357,77 +357,30 @@
       "hud"
     ],
     "turn_combat": [
-      "save",
-      "character",
-      "timeline",
       "relationships",
       "causality",
-      "events",
-      "director",
-      "combat",
-      "equipment",
-      "hud",
-      "narrative_combat"
+      "combat"
     ],
     "turn_dialogue": [
       "relationships",
       "causality",
-      "director",
       "npc"
     ],
     "turn_exploration": [
-      "save",
-      "character",
-      "timeline",
       "knowledge",
-      "clues",
-      "events",
-      "director",
-      "world",
-      "regions",
-      "ecology",
-      "intelligence",
-      "hud",
-      "narrative_daily"
+      "clues"
     ],
     "turn_cultivation": [
-      "save",
-      "character",
-      "timeline",
       "causality",
-      "events",
-      "director",
-      "cultivation",
-      "skills",
-      "hud",
-      "narrative_combat"
+      "cultivation"
     ],
     "turn_trade": [
-      "save",
-      "character",
-      "timeline",
       "knowledge",
-      "relationships",
-      "events",
-      "director",
-      "economy",
-      "crafts",
-      "hud",
-      "narrative_power"
+      "economy"
     ],
     "turn_travel": [
-      "save",
-      "character",
-      "timeline",
       "knowledge",
-      "clues",
-      "events",
-      "director",
-      "regions",
-      "society",
-      "ecology",
-      "intelligence",
-      "hud"
+      "regions"
     ],
     "full": [
       "*"
@@ -440,6 +393,7 @@
     "maxNodesPerPage": 1500,
     "concurrency": 2,
     "cacheTtlSeconds": 300,
+    "staticCacheTtlSeconds": 21600,
     "persistSnapshotToGitHub": false,
     "turnCoreMaxNodesPerPage": 60,
     "turnDialogueMaxNodesPerPage": 200

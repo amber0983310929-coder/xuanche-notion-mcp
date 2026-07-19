@@ -2,6 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { archiveAndResetWorld } from "../src/archive-reset.js";
+import {
+  archiveAndVerifyStagedPage,
+  clearStagedPage,
+  finalizeStagedArchiveReset,
+  markStagedPageEmpty,
+  markStagedPageResetting,
+  prepareStagedArchiveReset,
+  verifyStagedArchive,
+} from "../src/archive-reset-staged.js";
 import { STATE_PAGE_KEYS, WORLD_PAGE_IDS, parseWorldMarkers } from "../src/world-state.js";
 
 const WORLD_ID = "W20260717-432D5443";

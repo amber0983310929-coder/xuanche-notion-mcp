@@ -129,14 +129,22 @@ export function validateLoadedWorld(pages, { required = false } = {}) {
 }
 
 export async function resolveBlockPageId(notion, blockId) {
+  return (await resolveBlockTarget(notion, blockId)).pageId;
+}
+
+export async function resolveBlockTarget(notion, blockId) {
   let current = normalizeNotionId(blockId);
+  let targetBlock;
   const visited = new Set();
   for (let depth = 0; depth < 12; depth += 1) {
     if (visited.has(current)) break;
     visited.add(current);
     const block = await notion.getBlock(current);
+    if (!targetBlock) targetBlock = block;
     const parent = block?.parent;
-    if (parent?.type === "page_id") return normalizeNotionId(parent.page_id);
+    if (parent?.type === "page_id") {
+      return { pageId: normalizeNotionId(parent.page_id), block: targetBlock };
+    }
     if (parent?.type === "block_id") {
       current = normalizeNotionId(parent.block_id);
       continue;

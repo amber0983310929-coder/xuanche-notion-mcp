@@ -1,6 +1,6 @@
-# Xuanche Engine v0.5.14
+# Xuanche Engine v0.5.17
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.14 runs verified archive-and-reset work in a durable Cloudflare Workflow, so a GPT Action timeout cannot be mistaken for a reset result.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.17 adds FAST_TURN_V1 page-level caching, compact profile loads, batched world updates, and per-stage latency telemetry.
 
 ## Safety model
 
@@ -32,7 +32,7 @@ All mutations and GitHub reads require X-API-Key. Production should also set PRO
 
 ## Dynamic turn preload
 
-After the player replies, load turn_core and exactly one relevant profile:
+After the player replies, load `turn_core` once with `refresh: false`. Load at most one relevant differential profile only when the current action requires it:
 
 - turn_combat
 - turn_dialogue
@@ -43,17 +43,16 @@ After the player replies, load turn_core and exactly one relevant profile:
 
 Resolve due public events from page 09 and private actor actions from page 11 before resolving the player action. Do not prewrite a player choice.
 
-For dialogue, call `turn_core` first, then `turn_dialogue`. The dialogue profile deliberately contains only relationships, obligations, the private actor queue, and NPC rules; it does not duplicate the core state or load broad narration pages. Keep the scene cast to one to three people.
+For dialogue, call `turn_core` first and add `turn_dialogue` only when relationship or NPC voice detail is required. The dialogue profile contains only relationships, obligations, and NPC rules; page 11 already comes from `turn_core` and is not duplicated.
 
 ## Safe world update fields
 
-Required:
+Required for every update:
 
-- pageId
 - saveKey
 - expectedWorldId
 - expectedWorldState
-- at least one of children or blockUpdates
+- either one pageId with children/blockUpdates, or a mutations array containing up to nine changed fixed pages
 
 Optional:
 
@@ -62,7 +61,7 @@ Optional:
 - cachePatch
 - commitMessage
 
-The service appends the SAVE_KEY marker automatically and invalidates all cached world profiles.
+The service verifies the canonical save once, appends the SAVE_KEY marker to every mutation, and invalidates only changed page caches plus legacy profile entries.
 
 ## Archive and reset
 
@@ -83,6 +82,14 @@ The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and impor
 ## Verification
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
+
+## Version 0.5.17
+
+- Added page-granular KV caching: a normal turn reloads only pages changed by the previous save while unchanged rules and state remain warm.
+- Changed normal profile loads to `refresh: false` and exposed compact `loadWorldProfile` in the gameplay Action manifest.
+- Added batched page mutations to `updateWorldState`, so one major event verifies 02 only once before updating all affected fixed pages.
+- Reduced every action-specific turn profile to a true differential and removed the duplicated director page from dialogue loads.
+- Added cache hit/miss, page timing, canonical-read, mutation, GitHub, and invalidation timings to Worker logs and responses.
 
 ## Version 0.5.14
 

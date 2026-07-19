@@ -45,7 +45,7 @@ test("world update validates GitHub storage before mutating Notion", async () =>
   assert.equal(notionReads, 0);
 });
 
-test("world update invalidates every cached world profile", async () => {
+test("world update invalidates only the changed page cache and legacy profiles", async () => {
   const invalidated = [];
   const appended = [];
   const result = await updateWorld({}, validInput(), {
@@ -65,8 +65,11 @@ test("world update invalidates every cached world profile", async () => {
     },
   });
 
-  assert.deepEqual(invalidated, ["world:"]);
-  assert.equal(result.cacheEntriesInvalidated, 3);
+  assert.deepEqual(invalidated, [
+    "world:page:39fc8450-07ae-81f2-95ec-ef235d229ff2:",
+    "world:v",
+  ]);
+  assert.equal(result.cacheEntriesInvalidated, 6);
   assert.equal(appended[0].children.at(-1), "SAVE_KEY：TEST-SAVE-001");
 });
 
@@ -173,5 +176,35 @@ test("a GitHub mirror failure does not undo the authoritative Notion write", asy
   });
   assert.equal(result.githubSync.status, "pending");
   assert.match(result.githubSync.errors[0].message, /outage/);
-  assert.equal(result.cacheEntriesInvalidated, 1);
+  assert.equal(result.cacheEntriesInvalidated, 2);
+});
+
+test("batched world update verifies the canonical save once", async () => {
+  const reads = [];
+  const appends = [];
+  const result = await updateWorld({}, validInput({
+    pageId: undefined,
+    children: undefined,
+    mutations: [
+      { pageId: WORLD_PAGE_IDS.save, children: ["tick"] },
+      { pageId: WORLD_PAGE_IDS.timeline, children: ["major event"] },
+    ],
+  }), {
+    notion: {
+      async listAllBlockChildren(pageId) {
+        reads.push(pageId);
+        return canonicalBlocks();
+      },
+      async appendBlocks(pageId, children) {
+        appends.push({ pageId, children });
+        return { results: [] };
+      },
+    },
+    github: { configured: false },
+    cache: { deletePrefix: async () => 0 },
+  });
+
+  assert.equal(reads.filter((pageId) => pageId.replaceAll("-", "") === WORLD_PAGE_IDS.save).length, 1);
+  assert.equal(appends.length, 2);
+  assert.equal(result.notion.mutations.length, 2);
 });

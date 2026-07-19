@@ -39,7 +39,7 @@ export function createRouter(dependencies = {}) {
         return json({
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.15",
+          version: "0.5.17",
           protectedReads: readsRequireApiKey(env),
           endpoints: ["/health", "/home", "/tree", "/world/initialize", "/world/load", "/world/update", "/world/archive-reset", "/world/archive-reset/status", "/openapi.json"],
         });
@@ -53,7 +53,7 @@ export function createRouter(dependencies = {}) {
         const result = {
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.15",
+          version: "0.5.17",
           integrations: {
             notion: notion.configured ? "configured" : "missing",
             github: github.configured ? "configured" : "missing",
@@ -63,6 +63,9 @@ export function createRouter(dependencies = {}) {
             shallowPageBatchSizing: true,
             saveSchema: "SAVE_V3.2",
             dynamicTurnPreload: "TURN_PRELOAD_V1",
+            fastTurnRuntime: "FAST_TURN_V1",
+            pageGranularCache: true,
+            batchedWorldUpdates: true,
             activeCastDialoguePreload: "NPC_LIVE_PRELOAD_V1",
             idempotentWorldUpdates: true,
             fixedWorldWriteAllowlist: true,
@@ -115,16 +118,25 @@ export function createRouter(dependencies = {}) {
       if ((request.method === "POST" && ["/load", "/world/load"].includes(url.pathname))) {
         requireApiKey(request, env);
         const body = await readJson(request);
+        const startedAt = Date.now();
         const data = await loadWorld(env, {
           notion,
           github,
-          refresh: body.refresh !== false,
+          refresh: body.refresh === true,
           persist: body.persist === true,
           profile: body.profile,
           pageKeys: body.pageKeys,
           maxDepth: clampInteger(body.maxDepth, 0, 0, 0),
           maxNodes: clampInteger(body.maxNodes, undefined, 1, 20_000),
           cache: dependencies.cache,
+        });
+        console.log("xuanche_profile_loaded", {
+          requestId: id,
+          profile: body.profile || "continue",
+          cache: data.meta?.cache,
+          cacheHits: data.meta?.cacheHits,
+          cacheMisses: data.meta?.cacheMisses,
+          durationMs: Date.now() - startedAt,
         });
         return json({ ok: true, data, requestId: id });
       }
@@ -155,7 +167,15 @@ export function createRouter(dependencies = {}) {
       if (request.method === "POST" && url.pathname === "/world/update") {
         requireApiKey(request, env);
         const body = await readJson(request);
+        const startedAt = Date.now();
         const data = await updateWorld(env, body, { notion, github, cache: dependencies.cache });
+        console.log("xuanche_world_updated", {
+          requestId: id,
+          mutationCount: Array.isArray(body.mutations) ? body.mutations.length : 1,
+          idempotent: data.idempotent,
+          durationMs: Date.now() - startedAt,
+          timings: data.timings,
+        });
         return json({ ok: true, data, requestId: id });
       }
 
@@ -172,7 +192,7 @@ export function createRouter(dependencies = {}) {
         // Never fall back to the old synchronous implementation here. A reset
         // can legitimately outlive a GPT Action response and must therefore
         // be backed by the durable Workflow binding.
-        const data = await startArchiveResetWorkflow(env, body, dependencies.cache);
+        const data = await startArchiveResetWorkflow(env, body, dependencies.cache, notion);
         return json({ ok: true, data, requestId: id }, 202);
       }
 
@@ -251,7 +271,7 @@ export function createRouter(dependencies = {}) {
   };
 }
 
-async function startArchiveResetWorkflow(env, input, injectedCache) {
+async function startArchiveResetWorkflow(env, input, injectedCache, injectedNotion) {
   validateArchiveResetInput(input);
   if (!env.WORLD_RESET_WORKFLOW?.createBatch || !env.WORLD_RESET_WORKFLOW?.get) {
     throw new ApiError(503, "Durable archive workflow binding is not configured");
@@ -263,7 +283,7 @@ async function startArchiveResetWorkflow(env, input, injectedCache) {
   // an already-cleared world into a second archive job: there is no ACTIVE
   // world left to archive, and the caller should initialize its confirmed
   // character immediately instead.
-  const canonical = await readCanonicalWorldState(env);
+  const canonical = await readCanonicalWorldState(env, injectedNotion);
   if (canonical.worldState === "EMPTY" && canonical.worldId === "PENDING") {
     if (active) await cache.delete(ACTIVE_RESET_LOCK);
     throw new ApiError(409, "No archive is required: the fixed world pages are already EMPTY/PENDING. Call initializeWorld now.", {
@@ -326,8 +346,8 @@ async function startArchiveResetWorkflow(env, input, injectedCache) {
   return archiveWorkflowStatusPayload(input, workflowId, status);
 }
 
-async function readCanonicalWorldState(env) {
-  const notion = new NotionClient(env);
+async function readCanonicalWorldState(env, injectedNotion) {
+  const notion = injectedNotion || new NotionClient(env);
   const tree = await notion.getPageTree(WORLD_PAGE_IDS.save, {
     maxDepth: 0,
     maxNodes: 10,

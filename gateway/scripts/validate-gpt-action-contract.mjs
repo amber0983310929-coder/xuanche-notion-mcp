@@ -6,6 +6,7 @@ const expectedOperations = [
   "getNotionTree",
   "getNotionPage",
   "initializeWorld",
+  "loadWorldProfile",
   "archiveAndResetWorld",
   "getArchiveAndResetStatus",
   "updateWorldState",
@@ -151,12 +152,20 @@ if (update?.properties?.saveKey?.minLength !== 1 || update?.properties?.saveKey?
 for (const hidden of ["memoryEvent", "cachePatch", "commitMessage"]) {
   if (Object.hasOwn(update?.properties ?? {}, hidden)) fail(`updateWorldState: internal field ${hidden} must stay hidden`);
 }
+if (update?.properties?.mutations?.maxItems !== 9) {
+  fail("updateWorldState: FAST_TURN_V1 batch must allow at most 9 fixed-page mutations");
+}
+
+const load = spec.paths?.["/world/load"]?.post?.requestBody?.content?.["application/json"]?.schema;
+if (!load?.required?.includes("profile")) fail("loadWorldProfile: profile must be required");
+if (load?.properties?.refresh?.default !== false) fail("loadWorldProfile: normal reads must default refresh to false");
+if (!load?.properties?.profile?.enum?.includes("turn_core")) fail("loadWorldProfile: turn_core must be exposed");
 
 const treeParameters = spec.paths?.["/tree"]?.get?.parameters ?? [];
 if (treeParameters.some((parameter) => parameter.name === "cursor")) {
   fail("getNotionTree: cursor must not be advertised because the route does not consume it");
 }
-for (const forbidden of ["/health", "/world/load", "/github/tree", "/github/file"]) {
+for (const forbidden of ["/health", "/github/tree", "/github/file"]) {
   if (spec.paths?.[forbidden]) fail(`gameplay manifest must not expose ${forbidden}`);
 }
 

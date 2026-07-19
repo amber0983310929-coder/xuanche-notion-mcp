@@ -55,7 +55,18 @@ test("archive reset is queued into a durable workflow and exposes an inspectable
     async delete(key) { records.delete(key); },
     async deletePrefix() { return 0; },
   };
-  const route = createRouter({ cache });
+  const notion = {
+    configured: true,
+    async getPageTree() {
+      return {
+        children: [
+          { type: "paragraph", paragraph: { rich_text: [{ plain_text: "WORLD_STATE：ACTIVE" }] } },
+          { type: "paragraph", paragraph: { rich_text: [{ plain_text: "WORLD_ID：W20260717-432D5443" }] } },
+        ],
+      };
+    },
+  };
+  const route = createRouter({ cache, notion });
   const body = {
     confirmation: "ARCHIVE_AND_RESET",
     expectedWorldId: "W20260717-432D5443",

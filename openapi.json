@@ -2,12 +2,12 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Xuanche Engine API",
-    "version": "0.5.7",
-    "description": "Fail-closed Cloudflare Worker bridge for compensated SAVE_V3.2 world initialization, TURN_PRELOAD_V1 profile loads, and idempotent allowlisted Notion updates."
+    "version": "0.5.17",
+    "description": "Cloudflare Worker bridge for compensated SAVE_V3.2 initialization, durable archives, page-cached FAST_TURN_V1 loads, and batched idempotent Notion updates."
   },
   "servers": [
     {
-      "url": "https://plain-dew-5810xuanche-api.workers.dev"
+      "url": "https://plain-dew-5810xuanche-api.amber0983310929.workers.dev"
     }
   ],
   "components": {
@@ -129,8 +129,8 @@
           },
           "refresh": {
             "type": "boolean",
-            "default": true,
-            "description": "Read Notion instead of using an unexpired KV snapshot."
+            "default": false,
+            "description": "Bypass safe per-page KV entries and read Notion again. Use only for an explicit manual refresh."
           },
           "persist": {
             "type": "boolean",
@@ -139,8 +139,11 @@
           },
           "maxDepth": {
             "type": "integer",
-            "minimum": 0,
-            "maximum": 1
+            "enum": [
+              0
+            ],
+            "default": 0,
+            "description": "World profile loads are always shallow to keep Notion reads bounded."
           },
           "maxNodes": {
             "type": "integer",
@@ -156,10 +159,52 @@
           }
         }
       },
+      "WorldPageMutation": {
+        "type": "object",
+        "required": [
+          "pageId"
+        ],
+        "properties": {
+          "pageId": {
+            "$ref": "#/components/schemas/NotionId"
+          },
+          "children": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 99,
+            "items": {
+              "$ref": "#/components/schemas/BlockInput"
+            }
+          },
+          "blockUpdates": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/BlockUpdate"
+            }
+          },
+          "after": {
+            "$ref": "#/components/schemas/NotionId"
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "children"
+            ]
+          },
+          {
+            "required": [
+              "blockUpdates"
+            ]
+          }
+        ],
+        "additionalProperties": false
+      },
       "WorldUpdateRequest": {
         "type": "object",
         "required": [
-          "pageId",
           "saveKey",
           "expectedWorldId",
           "expectedWorldState"
@@ -209,6 +254,16 @@
           "after": {
             "$ref": "#/components/schemas/NotionId"
           },
+          "mutations": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 9,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/WorldPageMutation"
+            },
+            "description": "Batch all pages changed by one turn so the canonical save is verified only once."
+          },
           "memoryEvent": {
             "description": "String summary or structured append-only long-term-memory event.",
             "oneOf": [
@@ -251,12 +306,24 @@
         "anyOf": [
           {
             "required": [
-              "children"
+              "pageId"
+            ],
+            "anyOf": [
+              {
+                "required": [
+                  "children"
+                ]
+              },
+              {
+                "required": [
+                  "blockUpdates"
+                ]
+              }
             ]
           },
           {
             "required": [
-              "blockUpdates"
+              "mutations"
             ]
           }
         ]
@@ -442,6 +509,36 @@
             "additionalProperties": true
           }
         }
+      },
+      "WorldArchiveResetRequest": {
+        "type": "object",
+        "required": [
+          "confirmation",
+          "expectedWorldId",
+          "operationKey"
+        ],
+        "properties": {
+          "confirmation": {
+            "type": "string",
+            "enum": [
+              "ARCHIVE_AND_RESET"
+            ],
+            "description": "Exact destructive-operation acknowledgement. The engine archives and verifies before clearing any fixed page."
+          },
+          "expectedWorldId": {
+            "type": "string",
+            "pattern": "^W\\d{8}-[0-9A-F]{8}$",
+            "description": "Exact WORLD_ID of the currently ACTIVE world to archive."
+          },
+          "operationKey": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 120,
+            "pattern": "^[A-Za-z0-9._-]+$",
+            "description": "Stable idempotency key. Reuse the same key only to safely resume this exact reset."
+          }
+        },
+        "additionalProperties": false
       },
       "BlockUpdate": {
         "type": "object",
@@ -893,7 +990,7 @@
     "/world/load": {
       "post": {
         "operationId": "loadWorldProfile",
-        "summary": "Load a configured world profile and optionally persist its snapshot",
+        "summary": "Load a page-cached world profile for FAST_TURN_V1",
         "security": [
           {
             "apiKey": []
@@ -939,7 +1036,7 @@
       "post": {
         "operationId": "initializeWorld",
         "summary": "Initialize every fixed SAVE_V3.2 page after explicit character confirmation",
-        "description": "Use exactly once after the player explicitly confirms a character. The engine preflights all fixed state pages, stages the new world, activates the canonical save marker last, validates readback, and compensates every staged write on failure.",
+        "description": "Use exactly once after the player explicitly confirms a character. The engine paces Notion requests, preflights all fixed state pages, stages the new world, activates the canonical save marker last, validates or safely defers transient post-commit readback, reconciles failed compensation, and repairs display and GitHub mirrors idempotently.",
         "security": [
           {
             "apiKey": []
@@ -984,7 +1081,7 @@
     "/world/update": {
       "post": {
         "operationId": "updateWorldState",
-        "summary": "Apply an idempotent, allowlisted SAVE_V3.2 world update",
+        "summary": "Apply one or more idempotent FAST_TURN_V1 page mutations",
         "security": [
           {
             "apiKey": []
@@ -1022,6 +1119,99 @@
           },
           "500": {
             "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/world/archive-reset": {
+      "post": {
+        "operationId": "archiveAndResetWorld",
+        "summary": "Archive and then reset the exact current world",
+        "description": "Destructive operation. It requires an exact ACTIVE WORLD_ID and explicit ARCHIVE_AND_RESET confirmation, copies all fixed world pages to a content-hashed Notion archive, verifies every page, locks normal world writes, then clears fixed pages to EMPTY/PENDING. If clearing is interrupted, retry with the same operationKey; the world stays non-playable rather than becoming mixed.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorldArchiveResetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Xuanche Engine response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/ServerError"
+          }
+        }
+      }
+    },
+    "/world/archive-reset/status": {
+      "get": {
+        "operationId": "getArchiveAndResetStatus",
+        "summary": "Read archive-and-reset workflow status",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "expectedWorldId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^W\\d{8}-[0-9A-F]{8}$"
+            }
+          },
+          {
+            "name": "operationKey",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 120,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": true
+                }
+              }
+            }
           }
         }
       }
