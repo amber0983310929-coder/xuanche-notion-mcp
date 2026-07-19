@@ -18,7 +18,7 @@
 
 * { box-sizing: border-box; }
 
-html { min-height: 100%; background: var(--ink); }
+html { min-height: 100%; background: var(--ink); scroll-behavior: auto; }
 
 body {
   min-width: 320px;
@@ -104,8 +104,8 @@ button:disabled { cursor: not-allowed; }
 
 .shell {
   display: grid;
-  grid-template-columns: minmax(290px, 360px) minmax(0, 860px);
-  gap: clamp(34px, 5vw, 80px);
+  grid-template-columns: minmax(380px, 440px) minmax(0, 860px);
+  gap: clamp(28px, 4vw, 64px);
   width: min(1380px, 100%);
   margin: 0 auto;
   padding: 42px 28px 120px;
@@ -161,13 +161,16 @@ button:disabled { cursor: not-allowed; }
   top: 96px;
   align-self: start;
   display: grid;
-  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  gap: 10px;
   max-height: calc(100dvh - 116px);
   padding-right: 7px;
   overflow-y: auto;
   scrollbar-color: rgba(185, 154, 98, 0.42) transparent;
   scrollbar-width: thin;
 }
+.status-panel { display: contents; }
 .world-panel::-webkit-scrollbar { width: 5px; }
 .world-panel::-webkit-scrollbar-thumb { background: rgba(185, 154, 98, 0.36); border-radius: 999px; }
 .panel-section { padding: 22px; border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); backdrop-filter: blur(12px); }
@@ -176,7 +179,7 @@ button:disabled { cursor: not-allowed; }
 .pulse-card { border-top-color: rgba(185, 154, 98, 0.62); }
 .eyebrow { margin: 0; color: var(--gold); font-size: 15px; font-weight: 650; letter-spacing: 0.24em; text-transform: uppercase; }
 
-.character-card { padding: 0; overflow: hidden; border-top-color: rgba(185, 154, 98, 0.64); }
+.character-card { grid-column: 1 / -1; padding: 0; overflow: hidden; border-top-color: rgba(185, 154, 98, 0.64); }
 .portrait-frame { position: relative; aspect-ratio: 8 / 5; overflow: hidden; background: #0d100d; }
 .portrait-frame img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 31%; filter: saturate(0.78) contrast(1.06); }
 .portrait-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(231, 224, 206, 0.38); font: 600 72px/1 "Iowan Old Style", "Noto Serif TC", serif; background: radial-gradient(circle, rgba(116, 131, 107, 0.14), transparent 58%); }
@@ -187,23 +190,34 @@ button:disabled { cursor: not-allowed; }
 .profile-intro { margin: 0; color: #bdb8aa; font: 400 18px/1.72 "Iowan Old Style", "Noto Serif TC", serif; }
 .profile-motto { margin: 13px 0 0; padding-top: 12px; color: #8f927f; border-top: 1px solid var(--line); font: 400 16.5px/1.65 "Iowan Old Style", "Noto Serif TC", serif; }
 
-.status-card { border-top-color: rgba(116, 131, 107, 0.72); box-shadow: none; }
-.status-heading { display: flex; align-items: start; justify-content: space-between; gap: 14px; }
+.status-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.status-heading { grid-column: 1 / -1; display: flex; align-items: start; justify-content: space-between; gap: 14px; padding: 16px; border: 1px solid var(--line); border-top-color: rgba(116, 131, 107, 0.72); background: var(--panel); }
 .status-heading h2 { margin-bottom: 6px; }
 .sync-badge { flex: 0 0 auto; padding: 5px 8px; color: #8b8d84; border: 1px solid var(--line); border-radius: 999px; font-size: 13.5px; letter-spacing: 0.08em; }
 .sync-badge.synced { color: var(--jade); border-color: rgba(159, 177, 154, 0.32); background: rgba(159, 177, 154, 0.06); }
-.state-list { display: grid; gap: 0; margin: 8px 0 0; }
-.state-list div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 11px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.state-list div:last-child { border-bottom: 0; padding-bottom: 0; }
-.state-list dt { color: #85887d; font-size: 15px; line-height: 1.55; }
+.state-list { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; margin: 0; }
+.state-list div { align-self: start; padding: 14px; border: 1px solid var(--line); background: rgba(25, 28, 24, 0.78); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18); }
+.state-list dt { margin-bottom: 8px; color: #85887d; font-size: 14px; line-height: 1.45; letter-spacing: 0.08em; }
 .state-list dd { margin: 0; color: #d0cbbb; font: 400 16.5px/1.58 "Iowan Old Style", "Noto Serif TC", serif; overflow-wrap: anywhere; }
-.state-list .equipment-state, .state-list .abilities-state { margin-inline: -9px; padding-inline: 9px; border-left: 2px solid rgba(185, 154, 98, 0.55); background: linear-gradient(90deg, rgba(185, 154, 98, 0.07), transparent 72%); }
-.state-list .abilities-state { border-left-color: rgba(116, 131, 107, 0.72); background: linear-gradient(90deg, rgba(116, 131, 107, 0.09), transparent 72%); }
+.state-list .state-card-wide { grid-column: 1 / -1; }
+.state-list .equipment-state, .state-list .constraints-state, .state-list .abilities-state { border-left: 2px solid rgba(185, 154, 98, 0.55); background: linear-gradient(90deg, rgba(185, 154, 98, 0.07), rgba(25, 28, 24, 0.78) 72%); }
+.state-list .abilities-state { border-left-color: rgba(116, 131, 107, 0.72); background: linear-gradient(90deg, rgba(116, 131, 107, 0.09), rgba(25, 28, 24, 0.78) 72%); }
 
-.world-meta { display: grid; gap: 0; margin: 20px 0 0; border-top: 1px solid var(--line); }
-.world-meta div { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-.world-meta dt { color: var(--paper-dim); font-size: 16.5px; }
-.world-meta dd { max-width: 72%; margin: 0; overflow: hidden; color: var(--paper); font-size: 16.5px; text-overflow: ellipsis; white-space: nowrap; }
+.pulse-card, .settings-card, .world-controls-card, .panel-actions { grid-column: 1 / -1; }
+.world-meta { display: grid; grid-template-columns: 1.4fr 0.8fr 0.8fr; gap: 7px; margin: 18px 0 0; }
+.world-meta div { min-width: 0; padding: 10px; border: 1px solid var(--line); background: rgba(13, 15, 12, 0.34); }
+.world-meta dt { color: var(--paper-dim); font-size: 13.5px; }
+.world-meta dd { margin: 5px 0 0; overflow: hidden; color: var(--paper); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 
 .settings-card { display: grid; grid-template-columns: 1fr 1.3fr; align-items: center; gap: 11px 14px; box-shadow: none; }
 .settings-card .eyebrow, .setting-note { grid-column: 1 / -1; }
@@ -482,7 +496,7 @@ textarea::placeholder { color: #62645d; }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; gap: 24px; padding-top: 22px; }
-  .world-panel { position: static; grid-template-columns: 1fr 1fr; max-height: none; padding-right: 0; overflow: visible; }
+  .world-panel { position: static; max-height: none; padding-right: 0; overflow: visible; }
   .panel-actions { grid-column: 1 / -1; grid-template-columns: repeat(3, 1fr); }
   .privacy-link { grid-column: auto; align-self: center; }
 }
@@ -492,12 +506,12 @@ textarea::placeholder { color: #62645d; }
   .brand small, #connection-label { display: none; }
   .brand-seal { width: 36px; height: 36px; font-size: 28.5px; }
   .shell { padding: 14px 13px calc(112px + env(safe-area-inset-bottom)); }
-  .world-panel { grid-template-columns: 1fr; }
+  .world-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .panel-actions { display: none; }
   .panel-section { padding: 17px; }
   .pulse-card { box-shadow: none; }
-  .world-meta { grid-template-columns: repeat(3, 1fr); }
-  .world-meta div { display: block; padding: 10px 7px 0 0; border-bottom: 0; }
+  .world-meta { grid-template-columns: 1.2fr 0.8fr 0.8fr; }
+  .world-meta div { display: block; padding: 10px; }
   .world-meta dd { max-width: 100%; margin-top: 4px; }
   .scene-card { padding: 23px 20px; }
   .narrative-text { font-size: 24px; line-height: 1.92; }
@@ -542,7 +556,7 @@ textarea::placeholder { color: #62645d; }
 
 @media (min-width: 1550px) {
   .shell {
-    grid-template-columns: minmax(240px, 280px) minmax(290px, 360px) minmax(0, 860px);
+    grid-template-columns: minmax(240px, 280px) minmax(380px, 440px) minmax(0, 860px);
     gap: clamp(26px, 2.5vw, 48px);
     width: min(1760px, 100%);
   }

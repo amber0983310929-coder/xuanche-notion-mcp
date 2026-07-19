@@ -251,8 +251,8 @@ async function continueGame() {
   if (game.busy || !isPlayableWorld()) return;
   await loadWorld({ refresh: true });
   if (game.busy || !game.state) return;
-  document.querySelector("#decision-area")?.scrollIntoView({ behavior: "smooth", block: "end" });
-  setTimeout(() => elements.actionInput.focus({ preventScroll: true }), 350);
+  document.querySelector("#decision-area")?.scrollIntoView({ behavior: "auto", block: "end" });
+  requestAnimationFrame(() => elements.actionInput.focus({ preventScroll: true }));
 }
 
 function openHandbook(tab = game.activeHandbookTab) {
@@ -309,12 +309,12 @@ function navigateMobileSurface(event) {
     return;
   }
   const destination = target === "story"
-    ? elements.story
+    ? currentTurnTarget()
     : target === "player"
       ? elements.playerPanel
       : document.querySelector("#decision-area");
-  destination?.scrollIntoView({ behavior: "smooth", block: "start" });
-  if (target === "action") setTimeout(() => elements.actionInput.focus({ preventScroll: true }), 350);
+  destination?.scrollIntoView({ behavior: "auto", block: "start" });
+  if (target === "action") requestAnimationFrame(() => elements.actionInput.focus({ preventScroll: true }));
 }
 
 function openLogin(configuration) {
@@ -937,6 +937,7 @@ function renderCharacterState() {
       elements.stateConstraints,
       elements.stateAbilities,
     ]) element.textContent = "尚未建立";
+    fitStateCards();
     for (const element of [
       elements.quickStateCultivation,
       elements.quickStateBody,
@@ -975,6 +976,7 @@ function renderCharacterState() {
     [elements.stateAbilities, playerState.abilities],
   ];
   for (const [element, value] of fields) element.textContent = value || "待下一回合校準";
+  fitStateCards();
   const quickFields = [
     [elements.quickStateCultivation, playerState.cultivation],
     [elements.quickStateBody, playerState.body],
@@ -984,6 +986,15 @@ function renderCharacterState() {
     [elements.quickStateAbilities, playerState.abilities],
   ];
   for (const [element, value] of quickFields) setQuickDisplay(element, value, "待下一回合校準");
+}
+
+function fitStateCards() {
+  for (const card of elements.playerPanel.querySelectorAll(".state-list > div")) {
+    const text = card.querySelector("dd")?.textContent?.trim() || "";
+    const itemCount = text.split(/[、，；;\n]/u).filter(Boolean).length;
+    const needsMoreRoom = Array.from(text).length > 24 || itemCount > 3;
+    card.classList.toggle("state-card-wide", needsMoreRoom);
+  }
 }
 
 function setQuickDisplay(element, value, fallback = "—") {
@@ -1143,11 +1154,15 @@ function renderStoryFromStorage() {
 }
 
 function scheduleCurrentTurnNavigation() {
-  const currentTurns = elements.story.querySelectorAll(".narrative-card");
-  const target = currentTurns.item(currentTurns.length - 1) || elements.decisionArea;
+  const target = currentTurnTarget();
   requestAnimationFrame(() => requestAnimationFrame(() => {
     target.scrollIntoView({ behavior: "auto", block: "start" });
   }));
+}
+
+function currentTurnTarget() {
+  const currentTurns = elements.story.querySelectorAll(".narrative-card");
+  return currentTurns.item(currentTurns.length - 1) || elements.decisionArea;
 }
 
 async function submitAction(action) {
@@ -1169,7 +1184,7 @@ async function submitAction(action) {
   const narrativeWriter = createNarrativeWriter(card);
   setBusy(true, "世界推演中");
   elements.saveState.textContent = "尚未提交";
-  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  card.scrollIntoView({ behavior: "auto", block: "center" });
 
   try {
     const response = await fetch("/api/game/turn", {

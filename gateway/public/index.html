@@ -65,8 +65,9 @@
         </section>
       </aside>
 
-      <aside id="player-panel" class="world-panel" aria-label="世界狀態">
-        <section class="panel-section character-card" aria-labelledby="profile-name">
+      <aside id="player-panel" class="world-panel" aria-label="角色與世界狀態儀表板">
+        <div id="status-panel-profile" class="status-panel">
+          <section class="panel-section character-card" aria-labelledby="profile-name">
           <div class="portrait-frame">
             <img id="protagonist-portrait" src="/images/chulingxiao-v1.webp" alt="楚凌霄立繪" width="720" height="900">
             <span id="portrait-placeholder" class="portrait-placeholder" aria-hidden="true" hidden>待</span>
@@ -79,70 +80,77 @@
             <p id="profile-intro" class="profile-intro">正在讀取角色資料……</p>
             <p id="profile-motto" class="profile-motto"></p>
           </div>
-        </section>
+          </section>
+        </div>
 
-        <section class="panel-section status-card" aria-labelledby="status-title">
-          <div class="status-heading">
-            <div>
-              <p class="eyebrow">主角狀態</p>
-              <h2 id="status-title">此刻之身</h2>
+        <div id="status-panel-player" class="status-panel">
+          <section class="panel-section status-card" aria-labelledby="status-title">
+            <div class="status-heading">
+              <div>
+                <p class="eyebrow">主角狀態</p>
+                <h2 id="status-title">此刻之身</h2>
+              </div>
+              <span id="player-state-sync" class="sync-badge">待校準</span>
             </div>
-            <span id="player-state-sync" class="sync-badge">待校準</span>
+            <dl class="state-list">
+              <div><dt>修為境界</dt><dd id="state-cultivation">—</dd></div>
+              <div><dt>身體狀況</dt><dd id="state-body">—</dd></div>
+              <div class="equipment-state"><dt>武器裝備</dt><dd id="state-equipment">—</dd></div>
+              <div><dt>所在位置</dt><dd id="state-location">—</dd></div>
+              <div class="constraints-state"><dt>行動限制</dt><dd id="state-constraints">—</dd></div>
+              <div class="abilities-state"><dt>神通／能力</dt><dd id="state-abilities">—</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <div id="status-panel-world" class="status-panel">
+          <section class="panel-section pulse-card">
+            <p class="eyebrow">世界狀態</p>
+            <h2>當前主線</h2>
+            <p id="mainline">正在讀取唯一世界錨點……</p>
+            <dl class="world-meta">
+              <div><dt>世界</dt><dd id="world-id">—</dd></div>
+              <div><dt>修訂</dt><dd id="revision">—</dd></div>
+              <div><dt>存檔</dt><dd id="save-state">未載入</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <div id="status-panel-system" class="status-panel">
+          <section class="panel-section settings-card">
+            <p class="eyebrow">敘事調律</p>
+            <label for="style-select">筆調</label>
+            <select id="style-select">
+              <option value="immersive">沉浸小說</option>
+              <option value="austere">冷冽武俠</option>
+              <option value="swift">節奏緊湊</option>
+            </select>
+            <label for="length-select">篇幅</label>
+            <select id="length-select">
+              <option value="brief">精簡</option>
+              <option value="standard" selected>標準</option>
+              <option value="rich">細膩</option>
+            </select>
+            <p class="setting-note">只改變敘事表現，不改寫世界事實。</p>
+          </section>
+
+          <section class="panel-section world-controls-card" aria-label="世界管理">
+            <p class="eyebrow">世界管理</p>
+            <div class="world-control-grid">
+              <button id="continue-game-button" class="continue-game-button" type="button">繼續遊戲 <span aria-hidden="true">→</span></button>
+              <button id="new-game-button" class="quiet-button" type="button">新的遊戲</button>
+              <button id="restart-game-button" class="quiet-button" type="button">重新遊戲</button>
+              <button id="reset-world-button" class="quiet-button danger" type="button">重置世界</button>
+            </div>
+            <p class="control-note">新的遊戲會封存後進入角色建立；重新遊戲保留主角設定並回到序章；重置世界只封存並清空。</p>
+          </section>
+
+          <div class="panel-actions">
+            <button id="install-button" class="quiet-button" type="button" hidden>安裝到裝置</button>
+            <button id="refresh-button" class="quiet-button" type="button">重新核對世界</button>
+            <button id="logout-button" class="quiet-button danger" type="button">鎖定</button>
+            <a class="privacy-link" href="/privacy">隱私與資料</a>
           </div>
-          <dl class="state-list">
-            <div><dt>修為境界</dt><dd id="state-cultivation">—</dd></div>
-            <div><dt>身體狀況</dt><dd id="state-body">—</dd></div>
-            <div class="equipment-state"><dt>武器裝備</dt><dd id="state-equipment">—</dd></div>
-            <div><dt>所在位置</dt><dd id="state-location">—</dd></div>
-            <div><dt>行動限制</dt><dd id="state-constraints">—</dd></div>
-            <div class="abilities-state"><dt>神通／能力</dt><dd id="state-abilities">—</dd></div>
-          </dl>
-        </section>
-
-        <section class="panel-section pulse-card">
-          <p class="eyebrow">世界脈搏</p>
-          <h2>當前主線</h2>
-          <p id="mainline">正在讀取唯一世界錨點……</p>
-          <dl class="world-meta">
-            <div><dt>世界</dt><dd id="world-id">—</dd></div>
-            <div><dt>修訂</dt><dd id="revision">—</dd></div>
-            <div><dt>存檔</dt><dd id="save-state">未載入</dd></div>
-          </dl>
-        </section>
-
-        <section class="panel-section settings-card">
-          <p class="eyebrow">敘事調律</p>
-          <label for="style-select">筆調</label>
-          <select id="style-select">
-            <option value="immersive">沉浸小說</option>
-            <option value="austere">冷冽武俠</option>
-            <option value="swift">節奏緊湊</option>
-          </select>
-          <label for="length-select">篇幅</label>
-          <select id="length-select">
-            <option value="brief">精簡</option>
-            <option value="standard" selected>標準</option>
-            <option value="rich">細膩</option>
-          </select>
-          <p class="setting-note">只改變敘事表現，不改寫世界事實。</p>
-        </section>
-
-        <section class="panel-section world-controls-card" aria-label="世界管理">
-          <p class="eyebrow">世界管理</p>
-          <div class="world-control-grid">
-            <button id="continue-game-button" class="continue-game-button" type="button">繼續遊戲 <span aria-hidden="true">→</span></button>
-            <button id="new-game-button" class="quiet-button" type="button">新的遊戲</button>
-            <button id="restart-game-button" class="quiet-button" type="button">重新遊戲</button>
-            <button id="reset-world-button" class="quiet-button danger" type="button">重置世界</button>
-          </div>
-          <p class="control-note">新的遊戲會封存後進入角色建立；重新遊戲保留主角設定並回到序章；重置世界只封存並清空。</p>
-        </section>
-
-        <div class="panel-actions">
-          <button id="install-button" class="quiet-button" type="button" hidden>安裝到裝置</button>
-          <button id="refresh-button" class="quiet-button" type="button">重新核對世界</button>
-          <button id="logout-button" class="quiet-button danger" type="button">鎖定</button>
-          <a class="privacy-link" href="/privacy">隱私與資料</a>
         </div>
       </aside>
 
@@ -184,7 +192,7 @@
 
     <nav id="mobile-nav" class="mobile-nav" aria-label="手機主要導覽">
       <button type="button" data-mobile-target="story"><span aria-hidden="true">文</span>劇情</button>
-      <button type="button" data-mobile-target="player"><span aria-hidden="true">人</span>主角</button>
+      <button type="button" data-mobile-target="player"><span aria-hidden="true">態</span>狀態</button>
       <button type="button" data-mobile-target="handbook"><span aria-hidden="true">冊</span>手冊</button>
       <button type="button" data-mobile-target="action"><span aria-hidden="true">行</span>行動</button>
     </nav>

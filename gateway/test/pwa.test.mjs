@@ -70,6 +70,11 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
   assert.match(html, /id="character-dialog"/);
   assert.match(html, /id="handbook-dialog"/);
   assert.match(html, /id="mobile-nav"/);
+  assert.match(html, /aria-label="角色與世界狀態儀表板"/);
+  assert.match(html, /id="status-panel-player" class="status-panel"/);
+  assert.match(html, /id="status-panel-world" class="status-panel"/);
+  assert.match(html, /class="constraints-state"/);
+  assert.match(html, /data-mobile-target="player"[^>]*><span[^>]*>態<\/span>狀態<\/button>/);
   assert.match(html, /id="turn-change-template"/);
   assert.match(html, /id="character-quick-rail"/);
   assert.match(html, /id="quick-mainline"/);
@@ -89,12 +94,19 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
   assert.match(app, /document\.createDocumentFragment\(\)/);
   assert.match(app, /window\.history\.scrollRestoration = "manual"/);
   assert.match(app, /function scheduleCurrentTurnNavigation/);
+  assert.match(app, /function currentTurnTarget/);
   assert.match(app, /target\.scrollIntoView\(\{ behavior: "auto", block: "start" \}\)/);
+  assert.match(app, /function fitStateCards/);
+  assert.match(app, /classList\.toggle\("state-card-wide", needsMoreRoom\)/);
+  assert.doesNotMatch(app, /behavior:\s*["']smooth["']/);
   assert.match(app, /handbookDirty/);
   assert.match(app, /setAttribute\("aria-busy"/);
   assert.match(html, /行動草稿會自動保留/);
   assert.match(css, /@media \(min-width: 1550px\)/);
-  assert.match(css, /grid-template-columns: minmax\(240px, 280px\) minmax\(290px, 360px\) minmax\(0, 860px\)/);
+  assert.match(css, /grid-template-columns: minmax\(240px, 280px\) minmax\(380px, 440px\) minmax\(0, 860px\)/);
+  assert.match(css, /\.world-panel\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
+  assert.match(css, /\.state-list \.state-card-wide\s*\{\s*grid-column:\s*1 \/ -1/);
+  assert.match(css, /html\s*\{[^}]*scroll-behavior:\s*auto/s);
   const decisionRule = css.match(/(?:^|\n)\.decision-area\s*\{([^}]*)\}/s)?.[1] || "";
   assert.match(decisionRule, /position:\s*static/);
   assert.doesNotMatch(decisionRule, /position:\s*sticky/);
@@ -102,7 +114,7 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
 
 test("PWA service worker keeps navigation fresh and returns cached shell assets immediately", async () => {
   const worker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
-  assert.match(worker, /xuanche-pwa-v0\.6\.0-smooth-flow-v1/);
+  assert.match(worker, /xuanche-pwa-v0\.6\.0-status-dashboard-v1/);
   assert.match(worker, /request\.mode === "navigate"/);
   assert.match(worker, /networkFirst\(request, "\/index\.html"\)/);
   assert.match(worker, /staleWhileRevalidate\(event, request\)/);
