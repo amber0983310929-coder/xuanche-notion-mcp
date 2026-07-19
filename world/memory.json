@@ -1,10 +1,10 @@
 {
   "version": 3,
   "schema": "SAVE_V3.3",
-  "updatedAt": "2026-07-19T15:20:09.825Z",
+  "updatedAt": "2026-07-19T16:28:49.452Z",
   "worldState": "ACTIVE",
   "worldId": "W20260719-9E6FAA5A",
-  "simTick": 19,
+  "simTick": 20,
   "purgeId": "A-W20260719-D88393B4-C53DA2D2",
   "events": [
     {
@@ -70,8 +70,25 @@
         "斗笠短弩手仍不信任楚凌霄，但暫未射擊。",
         "兩名追兵正接近谷口。"
       ]
+    },
+    {
+      "timestamp": "2026-07-19T16:28:49.452Z",
+      "type": "gameplay_turn",
+      "actionKey": "f4271935-623a-44e8-a260-4aded9d160c1",
+      "saveKey": "turn-W20260719-9E6FAA5A-t20-pwa-f4271935-623a-44e8-a260-4aded9d160c1",
+      "worldId": "W20260719-9E6FAA5A",
+      "simTick": 20,
+      "playerAction": "加固石堆與斜縫",
+      "summary": "楚凌霄以扁巖、石條與楔石加固舊涵石堆及斜縫，暫時承住野豬一次撞擊；石堆仍可能再被撞開。傷劍修未獲止血，交出沾油麻繩，指出西坡風口可施煙導引獸群。兩名追兵已逼近涵口。",
+      "facts": [
+        "舊涵石堆已由扁巖、橫石與楔石加固，暫時阻住獸群。",
+        "野豬撞擊使橫石滑動半寸，石堆並不穩固。",
+        "傷劍修仍在失血，給出一截沾油麻繩並指出西坡舊風口。",
+        "兩名追兵已接近涵口，尚未現身。",
+        "楚凌霄掌心被石砂磨破。"
+      ]
     }
   ],
-  "revision": 20,
-  "lastSaveKey": "turn-W20260719-9E6FAA5A-t19-pwa-c6a00cfc-373d-469c-a596-3d4d74b3115e"
+  "revision": 21,
+  "lastSaveKey": "turn-W20260719-9E6FAA5A-t20-pwa-f4271935-623a-44e8-a260-4aded9d160c1"
 }
