@@ -1,0 +1,401 @@
+{
+  "version": 11,
+  "homePageId": "5f4c8de4a4c246478a4658d1ebc2a1a2",
+  "catalog": [
+    {
+      "key": "home",
+      "title": "修真世界（首頁）",
+      "id": "5f4c8de4a4c246478a4658d1ebc2a1a2"
+    },
+    {
+      "key": "route",
+      "title": "00｜AI 載入索引與路由",
+      "id": "39cc845007ae8184b97dd0e8c0122768"
+    },
+    {
+      "key": "rules",
+      "title": "01｜修真世界規則（唯一最高規則）",
+      "id": "af1900844075472583e7f30d90a9a7a7"
+    },
+    {
+      "key": "save",
+      "title": "02｜現行世界存檔",
+      "id": "39fc845007ae81f295ecef235d229ff2"
+    },
+    {
+      "key": "character",
+      "title": "03｜主角與角色資料",
+      "id": "39fc845007ae81f2a723dca974a8342a"
+    },
+    {
+      "key": "timeline",
+      "title": "04｜世界時間線",
+      "id": "39fc845007ae8193a691e96f0323561c"
+    },
+    {
+      "key": "knowledge",
+      "title": "05｜主角知識與圖鑑",
+      "id": "3a0c845007ae81518960f13469012b3b"
+    },
+    {
+      "key": "relationships",
+      "title": "06｜NPC關係與名聲",
+      "id": "3a0c845007ae81318eb6c9af267def40"
+    },
+    {
+      "key": "causality",
+      "title": "07｜因果、承諾與代價",
+      "id": "3a0c845007ae81148a7ee469dc58cf2a"
+    },
+    {
+      "key": "clues",
+      "title": "08｜伏筆與未知線索",
+      "id": "3a0c845007ae818cba00fc7ef100b7eb"
+    },
+    {
+      "key": "events",
+      "title": "09｜世界事件與勢力動向",
+      "id": "3a0c845007ae8144a64de3a6c646332c"
+    },
+    {
+      "key": "changelog",
+      "title": "10｜規則與系統更新日誌",
+      "id": "3a0c845007ae81eaa4d4c15a2f3f9b19"
+    },
+    {
+      "key": "director",
+      "title": "11｜導演筆記（AI專用）",
+      "id": "3a0c845007ae81888deaff5b06b6a168"
+    },
+    {
+      "key": "flow",
+      "title": "12｜遊戲流程與回合規則",
+      "id": "39cc845007ae81e7a357c7d4b3a5d6de"
+    },
+    {
+      "key": "npc",
+      "title": "13｜角色、NPC 與對話規則",
+      "id": "39cc845007ae811595cae2aa37672243"
+    },
+    {
+      "key": "cultivation",
+      "title": "14｜修煉、境界與極境體系",
+      "id": "39cc845007ae81439c24d6854fc3f352"
+    },
+    {
+      "key": "skills",
+      "title": "15｜功法、技能與神通體系",
+      "id": "39cc845007ae818d807ee4a9648ecd51"
+    },
+    {
+      "key": "combat",
+      "title": "16｜戰鬥、難度與公平性",
+      "id": "39cc845007ae8146ad02db524906e1b7"
+    },
+    {
+      "key": "protagonist",
+      "title": "17｜主角核心設定",
+      "id": "39cc845007ae8192917ac0f8ec708f9f"
+    },
+    {
+      "key": "world",
+      "title": "18｜世界觀、劇情與事件生成",
+      "id": "39cc845007ae81d59208f786d3303b67"
+    },
+    {
+      "key": "hud",
+      "title": "19｜HUD、狀態與資訊顯示",
+      "id": "39cc845007ae81648196e98ac7349f1d"
+    },
+    {
+      "key": "persistence",
+      "title": "20｜記憶、載入、存檔與一致性",
+      "id": "39cc845007ae8185acf5d7af416b7849"
+    },
+    {
+      "key": "equipment",
+      "title": "21｜武器、防具與法寶體系",
+      "id": "39cc845007ae8108bc7eeb1b7f4c51df"
+    },
+    {
+      "key": "creatures",
+      "title": "22｜靈獸、妖族與契約體系",
+      "id": "39cc845007ae8171a826f644731bc132"
+    },
+    {
+      "key": "crafts",
+      "title": "23｜丹藥、符籙、陣法與修真百藝",
+      "id": "39cc845007ae819aa31ecd7a59a232ac"
+    },
+    {
+      "key": "economy",
+      "title": "24｜資源、貨幣、勢力與世界經濟",
+      "id": "39cc845007ae81f39ac9c4772dfd1048"
+    },
+    {
+      "key": "regions",
+      "title": "25｜地域、氣候與文明差異",
+      "id": "39cc845007ae81e483a4cd72be050b04"
+    },
+    {
+      "key": "society",
+      "title": "26｜日常生活、社會秩序與凡人世界",
+      "id": "39cc845007ae8109bf0dec8624172612"
+    },
+    {
+      "key": "ecology",
+      "title": "27｜生態、天象、災害與環境演化",
+      "id": "39cc845007ae81d899f9dc23218de15d"
+    },
+    {
+      "key": "intelligence",
+      "title": "28｜情報、謠言、秘密與知識傳播",
+      "id": "39cc845007ae818db0a9cb19c1010689"
+    },
+    {
+      "key": "factions",
+      "title": "29｜NPC目標、派系演化與世界脈動",
+      "id": "39cc845007ae81b483e5c8a095ceb409"
+    },
+    {
+      "key": "narrative",
+      "title": "30｜玄澈多源敘事文法",
+      "id": "39fc845007ae817390d5ee71cc4ac498"
+    },
+    {
+      "key": "narrative_daily",
+      "title": "30-1｜日常、時間與成長",
+      "id": "39fc845007ae81a09225ebb826729cd9"
+    },
+    {
+      "key": "narrative_social",
+      "title": "30-2｜人物關係、情緒與對話",
+      "id": "39fc845007ae816e81dbe14636fda7dc"
+    },
+    {
+      "key": "narrative_power",
+      "title": "30-3｜利益、權力與不可兼得選擇",
+      "id": "39fc845007ae810da175ddfaf8608ba2"
+    },
+    {
+      "key": "narrative_combat",
+      "title": "30-4｜修煉、戰鬥、失敗與代價",
+      "id": "39fc845007ae817eb88ae8f8c5cf1403"
+    },
+    {
+      "key": "narrative_long",
+      "title": "30-5｜伏筆、世界運行與長線結構",
+      "id": "39fc845007ae81919641fff5423e565b"
+    },
+    {
+      "key": "originality",
+      "title": "30-6｜原創生成與禁止模仿",
+      "id": "39fc845007ae81748ed5ccd3131a30d0"
+    },
+    {
+      "key": "experience",
+      "title": "31｜敘事經驗索引",
+      "id": "39fc845007ae81eeb4fac2a18a75abd7"
+    },
+    {
+      "key": "character_template",
+      "title": "32｜角色建立與新存檔固定模板",
+      "id": "3a0c845007ae81bb9b11e29e0b10e7d7"
+    }
+  ],
+  "profiles": {
+    "base": [
+      "home",
+      "route",
+      "rules",
+      "save",
+      "timeline",
+      "persistence"
+    ],
+    "state_check": [
+      "save",
+      "character",
+      "timeline",
+      "knowledge",
+      "relationships",
+      "causality",
+      "clues",
+      "events",
+      "director"
+    ],
+    "continue": [
+      "home",
+      "route",
+      "rules",
+      "save",
+      "character",
+      "timeline",
+      "events",
+      "director",
+      "flow",
+      "hud",
+      "persistence"
+    ],
+    "new_game": [
+      "home",
+      "route",
+      "rules",
+      "character_template"
+    ],
+    "character_creation": [
+      "home",
+      "route",
+      "rules",
+      "character_template",
+      "npc",
+      "protagonist",
+      "hud"
+    ],
+    "character_finalize": [
+      "home",
+      "route",
+      "rules",
+      "character_template",
+      "npc",
+      "protagonist",
+      "hud",
+      "world",
+      "narrative_long",
+      "originality"
+    ],
+    "cultivation": [
+      "home",
+      "route",
+      "rules",
+      "save",
+      "timeline",
+      "character",
+      "cultivation",
+      "skills",
+      "protagonist",
+      "world",
+      "hud",
+      "persistence",
+      "narrative",
+      "narrative_combat"
+    ],
+    "combat": [
+      "home",
+      "route",
+      "rules",
+      "save",
+      "timeline",
+      "character",
+      "relationships",
+      "causality",
+      "events",
+      "combat",
+      "equipment",
+      "hud",
+      "persistence",
+      "narrative",
+      "narrative_combat"
+    ],
+    "npc": [
+      "home",
+      "route",
+      "rules",
+      "save",
+      "timeline",
+      "character",
+      "relationships",
+      "causality",
+      "npc",
+      "protagonist",
+      "factions",
+      "hud",
+      "persistence",
+      "narrative",
+      "narrative_social",
+      "narrative_power"
+    ],
+    "exploration": [
+      "home",
+      "route",
+      "rules",
+      "save",
+      "timeline",
+      "character",
+      "knowledge",
+      "clues",
+      "events",
+      "world",
+      "regions",
+      "ecology",
+      "intelligence",
+      "hud",
+      "persistence",
+      "narrative",
+      "narrative_daily"
+    ],
+    "save": [
+      "home",
+      "route",
+      "rules",
+      "save",
+      "character",
+      "timeline",
+      "knowledge",
+      "relationships",
+      "causality",
+      "clues",
+      "events",
+      "director",
+      "persistence"
+    ],
+    "turn_core": [
+      "save",
+      "character",
+      "timeline",
+      "events",
+      "director",
+      "hud"
+    ],
+    "turn_combat": [
+      "relationships",
+      "causality",
+      "combat"
+    ],
+    "turn_dialogue": [
+      "relationships",
+      "causality",
+      "npc"
+    ],
+    "turn_exploration": [
+      "knowledge",
+      "clues"
+    ],
+    "turn_cultivation": [
+      "causality",
+      "cultivation"
+    ],
+    "turn_trade": [
+      "knowledge",
+      "economy"
+    ],
+    "turn_travel": [
+      "knowledge",
+      "regions"
+    ],
+    "full": [
+      "*"
+    ]
+  },
+  "loader": {
+    "defaultProfile": "continue",
+    "maxDepth": 0,
+    "homeMaxDepth": 0,
+    "maxNodesPerPage": 1500,
+    "concurrency": 2,
+    "cacheTtlSeconds": 300,
+    "staticCacheTtlSeconds": 21600,
+    "persistSnapshotToGitHub": false,
+    "turnCoreMaxNodesPerPage": 60,
+    "turnDialogueMaxNodesPerPage": 200
+  }
+}
