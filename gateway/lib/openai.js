@@ -12,6 +12,10 @@ const LENGTH_GUIDES = Object.freeze({
   rich: "敘事正文約 750–1,150 個中文字。",
 });
 
+const PLAYER_STATE_FIELDS = Object.freeze([
+  "name", "cultivation", "body", "equipment", "location", "constraints", "abilities",
+]);
+
 export function normalizeStyle(value) {
   return Object.hasOwn(STYLE_GUIDES, value) ? value : "immersive";
 }
@@ -38,6 +42,7 @@ export function buildTurnRequest({ env, worldContext, playerAction, style, lengt
       "敘事正文直接從當下動作或感官開始。不要先摘要，不要使用『可見結果』『可見代價』『當前局勢』等報告標題。",
       "避免重複角色全名、背景複述、空泛氣勢、網文套語、旁白說教與全知劇透。對話要有目的和潛台詞。",
       "所有供存檔的摘要、結果、代價與局勢必須和敘事正文完全一致。選項 2–4 個，彼此有真正不同的意圖或風險。",
+      "playerState 是回合結束後的主角權威狀態：延續既有傷勢、裝備、限制與能力，只有正文有因果支持時才能改變。equipment 包含武器、裝備與重要隨身物；abilities 包含已掌握神通、法術、功法與凡俗技能。不得把選項或尚未發生之事寫成既成狀態；不明處明寫『未知』『無』或『尚未覺醒』。",
       "不要輸出一般文字；只呼叫 commit_turn 一次。JSON 的 narrative 欄位先寫，方便即時串流。",
       STYLE_GUIDES[selectedStyle],
       LENGTH_GUIDES[selectedLength],
@@ -193,6 +198,7 @@ function normalizeGeneratedTurn(value) {
   if (!Array.isArray(value.choices) || value.choices.length < 2 || value.choices.length > 4) {
     throw new GatewayError(502, "敘事模型沒有產生有效選項。");
   }
+  const playerState = normalizePlayerState(value.playerState);
   return {
     narrative: value.narrative.trim(),
     summary: value.summary.trim(),
@@ -206,7 +212,28 @@ function normalizeGeneratedTurn(value) {
       intent: String(choice?.intent || "").trim(),
     })),
     facts: Array.isArray(value.facts) ? value.facts.map((fact) => String(fact).trim()).filter(Boolean) : [],
+    playerState,
   };
+}
+
+function normalizePlayerState(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new GatewayError(502, "敘事模型缺少主角狀態。");
+  }
+  const extras = Object.keys(value).filter((field) => !PLAYER_STATE_FIELDS.includes(field));
+  if (extras.length) throw new GatewayError(502, "敘事模型回傳了不支援的主角狀態欄位。");
+  const output = {};
+  for (const field of PLAYER_STATE_FIELDS) {
+    const maximum = field === "name" ? 40 : 180;
+    const text = typeof value[field] === "string"
+      ? value[field].replace(/\s+/gu, " ").trim()
+      : "";
+    if (!text || text.length > maximum) {
+      throw new GatewayError(502, `敘事模型的主角狀態 ${field} 無效。`);
+    }
+    output[field] = text;
+  }
+  return output;
 }
 
 function commitTurnTool() {
@@ -244,10 +271,24 @@ function commitTurnTool() {
           maxItems: 8,
           items: { type: "string", minLength: 1, maxLength: 240 },
         },
+        playerState: {
+          type: "object",
+          properties: {
+            name: { type: "string", minLength: 1, maxLength: 40 },
+            cultivation: { type: "string", minLength: 1, maxLength: 180 },
+            body: { type: "string", minLength: 1, maxLength: 180 },
+            equipment: { type: "string", minLength: 1, maxLength: 180 },
+            location: { type: "string", minLength: 1, maxLength: 180 },
+            constraints: { type: "string", minLength: 1, maxLength: 180 },
+            abilities: { type: "string", minLength: 1, maxLength: 180 },
+          },
+          required: PLAYER_STATE_FIELDS,
+          additionalProperties: false,
+        },
       },
       required: [
         "narrative", "summary", "mainline", "visibleResult", "visibleCost",
-        "situation", "choices", "facts",
+        "situation", "choices", "facts", "playerState",
       ],
       additionalProperties: false,
     },

@@ -17,8 +17,15 @@ export function summarizeWorldSnapshot(snapshot) {
   const pages = new Map((snapshot.pages || []).map((page) => [page.key, page]));
   const saveBlocks = pages.get("save")?.children || [];
   const saveTexts = flattenBlockTexts(saveBlocks);
+  const characterTexts = flattenBlockTexts(pages.get("character")?.children || []);
   const mainline = findPrefix(saveTexts, ["當前主線：", "當前主線:"]) || "尚未建立當前主線。";
-  const location = findPrefix(saveTexts, ["當前位置與局勢｜", "當前位置與局勢：", "初始位置："]) || "位置未明";
+  const location = findLastPrefix(saveTexts, ["當前位置與局勢｜", "當前位置與局勢："])
+    || findPrefix(saveTexts, ["初始位置：", "初始位置:"])
+    || "位置未明";
+  const profile = summarizeCharacter(characterTexts, world.playerState);
+  const playerState = world.playerState
+    ? { ...world.playerState, calibrated: true }
+    : legacyPlayerState(profile, characterTexts, stripLabel(location));
   return {
     worldState: world.worldState,
     worldId: world.worldId,
@@ -28,6 +35,8 @@ export function summarizeWorldSnapshot(snapshot) {
     lastActionKey: world.lastActionKey || null,
     mainline: stripLabel(mainline),
     situation: stripLabel(location),
+    profile,
+    playerState,
     loadedAt: snapshot.loadedAt,
     cache: snapshot.meta?.cache || "unknown",
   };
@@ -44,11 +53,13 @@ export function buildModelWorldContext(snapshot) {
       const lines = flattenBlockTexts(page.children || []);
       const selected = lines.filter((line) =>
         line.startsWith("SAVE_SCHEMA_VERSION：") ||
+        line.startsWith("SAVE_SCHEMA_VERSION:") ||
         line.startsWith("當前主線：") ||
+        line.startsWith("當前主線:") ||
         line.startsWith("主角：") ||
         line.startsWith("初始位置：") ||
         line.startsWith("初始時間："));
-      text = selected.join("\n");
+      text = [...new Set([...selected, ...latestTurnContext(lines)])].join("\n");
     } else {
       text = flattenBlockTexts(page.children || []).join("\n");
     }
@@ -87,6 +98,57 @@ function richText(value) {
 
 function findPrefix(lines, prefixes) {
   return lines.find((line) => prefixes.some((prefix) => line.startsWith(prefix))) || null;
+}
+
+function findLastPrefix(lines, prefixes) {
+  return [...lines].reverse().find((line) => prefixes.some((prefix) => line.startsWith(prefix))) || null;
+}
+
+function summarizeCharacter(lines, playerState) {
+  const name = stripLabel(findPrefix(lines, ["姓名：", "姓名:", "主角：", "主角:"]) || playerState?.name || "楚凌霄");
+  const age = stripLabel(findPrefix(lines, ["年齡：", "年齡:"]) || "16歲");
+  const appearance = stripLabel(findPrefix(lines, ["外貌：", "外貌:", "形貌：", "形貌:"]) || "");
+  const background = stripLabel(findPrefix(lines, ["人物簡介：", "人物簡介:", "身世背景：", "身世背景:", "背景：", "背景:"]) || "");
+  const motto = stripLabel(findPrefix(lines, ["座右銘：", "座右銘:", "信念：", "信念:"]) || "山路再險，也要看清下一步。 ");
+  return {
+    name: clampText(name || "楚凌霄", 40),
+    age: clampText(age || "年齡未知", 24),
+    intro: clampText([appearance, background].filter(Boolean).join("；") || "山村採藥少年，善辨草木與山勢，尚未踏入修行。", 180),
+    motto: clampText(motto, 100),
+    portrait: name.includes("楚凌霄") ? "/images/chulingxiao-v1.webp" : null,
+  };
+}
+
+function legacyPlayerState(profile, characterLines, location) {
+  const abilities = stripLabel(findLastPrefix(characterLines, [
+    "玩家已知能力：", "玩家已知能力:", "已知能力：", "已知能力:", "能力：", "能力:",
+  ]) || "待下一回合校準");
+  return {
+    name: profile.name,
+    cultivation: "待下一回合校準",
+    body: "待下一回合校準",
+    equipment: "待下一回合校準",
+    location: clampText(location || "位置未明", 180),
+    constraints: "待下一回合校準",
+    abilities: clampText(abilities, 180),
+    calibrated: false,
+  };
+}
+
+function latestTurnContext(lines) {
+  let index = -1;
+  for (let cursor = lines.length - 1; cursor >= 0; cursor -= 1) {
+    if (/^回合\s+\d+[｜:：]/u.test(lines[cursor])) {
+      index = cursor;
+      break;
+    }
+  }
+  return index < 0 ? [] : lines.slice(index);
+}
+
+function clampText(value, maximum) {
+  const text = String(value || "").replace(/\s+/gu, " ").trim();
+  return text.length <= maximum ? text : `${text.slice(0, maximum - 1)}…`;
 }
 
 function stripLabel(value) {

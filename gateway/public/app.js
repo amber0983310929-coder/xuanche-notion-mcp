@@ -14,6 +14,18 @@ const elements = {
   worldId: document.querySelector("#world-id"),
   revision: document.querySelector("#revision"),
   saveState: document.querySelector("#save-state"),
+  protagonistPortrait: document.querySelector("#protagonist-portrait"),
+  profileName: document.querySelector("#profile-name"),
+  profileAge: document.querySelector("#profile-age"),
+  profileIntro: document.querySelector("#profile-intro"),
+  profileMotto: document.querySelector("#profile-motto"),
+  playerStateSync: document.querySelector("#player-state-sync"),
+  stateCultivation: document.querySelector("#state-cultivation"),
+  stateBody: document.querySelector("#state-body"),
+  stateEquipment: document.querySelector("#state-equipment"),
+  stateLocation: document.querySelector("#state-location"),
+  stateConstraints: document.querySelector("#state-constraints"),
+  stateAbilities: document.querySelector("#state-abilities"),
   style: document.querySelector("#style-select"),
   length: document.querySelector("#length-select"),
   story: document.querySelector("#story"),
@@ -26,6 +38,7 @@ const elements = {
   refreshButton: document.querySelector("#refresh-button"),
   logoutButton: document.querySelector("#logout-button"),
   installButton: document.querySelector("#install-button"),
+  continueGameButton: document.querySelector("#continue-game-button"),
   loginDialog: document.querySelector("#login-dialog"),
   loginForm: document.querySelector("#login-form"),
   passphrase: document.querySelector("#passphrase"),
@@ -92,6 +105,7 @@ function bindEvents() {
   elements.style.addEventListener("change", saveSettings);
   elements.length.addEventListener("change", saveSettings);
   elements.refreshButton.addEventListener("click", () => loadWorld({ refresh: true }));
+  elements.continueGameButton.addEventListener("click", continueGame);
   elements.installButton.addEventListener("click", installApp);
   elements.logoutButton.addEventListener("click", logout);
   elements.loginDialog.addEventListener("cancel", (event) => event.preventDefault());
@@ -130,6 +144,14 @@ async function logout() {
   writeStorage(STORAGE.locked, true);
   setBusy(true, "已鎖定");
   openLogin();
+}
+
+async function continueGame() {
+  if (game.busy) return;
+  await loadWorld({ refresh: true });
+  if (game.busy || !game.state) return;
+  document.querySelector("#decision-area")?.scrollIntoView({ behavior: "smooth", block: "end" });
+  setTimeout(() => elements.actionInput.focus({ preventScroll: true }), 350);
 }
 
 function openLogin(configuration) {
@@ -174,6 +196,31 @@ function renderWorldState() {
   elements.worldId.title = game.state.worldId;
   elements.revision.textContent = `R${game.state.revision}`;
   elements.mainline.textContent = game.state.mainline;
+  renderCharacterState();
+}
+
+function renderCharacterState() {
+  const profile = game.state?.profile || {};
+  const playerState = game.state?.playerState || {};
+  const name = profile.name || playerState.name || "楚凌霄";
+  elements.profileName.textContent = name;
+  elements.profileAge.textContent = profile.age || "年齡未知";
+  elements.profileIntro.textContent = profile.intro || "角色資料尚未載入。";
+  elements.profileMotto.textContent = profile.motto ? `「${profile.motto}」` : "";
+  elements.protagonistPortrait.src = profile.portrait || "/images/chulingxiao-v1.webp";
+  elements.protagonistPortrait.alt = `${name}立繪`;
+
+  elements.playerStateSync.textContent = playerState.calibrated ? "即時同步" : "待校準";
+  elements.playerStateSync.classList.toggle("synced", Boolean(playerState.calibrated));
+  const fields = [
+    [elements.stateCultivation, playerState.cultivation],
+    [elements.stateBody, playerState.body],
+    [elements.stateEquipment, playerState.equipment],
+    [elements.stateLocation, playerState.location],
+    [elements.stateConstraints, playerState.constraints],
+    [elements.stateAbilities, playerState.abilities],
+  ];
+  for (const [element, value] of fields) element.textContent = value || "待下一回合校準";
 }
 
 function renderStoryFromStorage() {
@@ -271,8 +318,13 @@ function finalizeCommittedTurn(card, action, data) {
     worldId: data.worldId,
     simTick: data.simTick,
     revision: data.revision,
+    saveKey: data.saveKey || game.state.saveKey,
+    lastActionKey: data.actionKey || game.state.lastActionKey,
     mainline: data.mainline || game.state.mainline,
     situation: data.situation || game.state.situation,
+    playerState: data.playerState
+      ? { ...data.playerState, calibrated: true }
+      : game.state.playerState,
   };
   game.choices = Array.isArray(data.choices) ? data.choices : [];
   renderWorldState();
@@ -415,6 +467,7 @@ function setBusy(value, status) {
   elements.sendButton.disabled = value || !game.state;
   elements.actionInput.disabled = value || !game.state;
   elements.refreshButton.disabled = value;
+  elements.continueGameButton.disabled = value;
   elements.style.disabled = value;
   elements.length.disabled = value;
   elements.turnStatus.textContent = status;

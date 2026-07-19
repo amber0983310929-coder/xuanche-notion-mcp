@@ -43,6 +43,15 @@ function validInput(overrides = {}) {
       { id: "withdraw", label: "要求先處理傷勢", intent: "用合作作為交換條件" },
     ],
     facts: ["殘缺劍印只能開啟部分禁制"],
+    playerState: {
+      name: "楚凌霄",
+      cultivation: "凡人，尚未引氣入體",
+      body: "左踝重傷，右肩滲血，行動受限",
+      equipment: "採藥短刀、兩片銀脈青葉、碎銀",
+      location: "深夜禁山半圓岩坪",
+      constraints: "左腕與韓峻腰間以布帶相連",
+      abilities: "辨識草藥、熟悉山路、攀爬追蹤、簡單傷口處理；尚無神通法術",
+    },
     ...overrides,
   };
 }
@@ -96,8 +105,11 @@ test("server-managed turn advances the canonical header before appending its eve
   assert.equal(harness.operations[0].id, "header");
   assert.match(harness.operations[0].text, /SAVE_SCHEMA_VERSION：SAVE_V3\.3/);
   assert.match(harness.operations[0].text, /LAST_ACTION_KEY：11111111-/);
+  assert.match(harness.operations[0].text, /PLAYER_STATE_V1：/);
+  assert.deepEqual(result.playerState, validInput().playerState);
   assert.equal(harness.operations.at(-1).kind, "append");
   assert.ok(harness.operations.at(-1).children.some((text) => text.startsWith("TURN_ACTION_KEY：")));
+  assert.ok(harness.operations.at(-1).children.some((text) => text.startsWith("主角狀態｜")));
   assert.equal(textOf(blocks.find((block) => block.id === "tick")), "SIM_TICK：17");
   assert.equal(textOf(blocks.find((block) => block.id === "revision")), "狀態修訂：18");
 });
@@ -145,4 +157,13 @@ test("stale revision is rejected without writes", async () => {
     cache,
   }), /World revision changed/);
   assert.equal(harness.operations.length, 0);
+});
+
+test("turn commit rejects a missing or malformed structured player state", async () => {
+  const missing = validInput();
+  delete missing.playerState;
+  await assert.rejects(commitTurn({}, missing, { notion: {}, github, cache }), /playerState must be a structured object/);
+  await assert.rejects(commitTurn({}, validInput({
+    playerState: { ...validInput().playerState, body: "line one\nline two" },
+  }), { notion: {}, github, cache }), /playerState\.body must be a single line/);
 });

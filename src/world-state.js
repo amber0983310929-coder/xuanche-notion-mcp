@@ -46,6 +46,45 @@ const WRITABLE_IDS = new Set(Object.values(WORLD_PAGE_IDS).map(normalizeNotionId
 // fail closed instead of exposing a mixed world as playable.
 const WORLD_STATES = new Set(["EMPTY", "ACTIVE", "RESETTING", "WORLD_CONFLICT"]);
 
+export const PLAYER_STATE_SCHEMA_VERSION = "PLAYER_STATE_V1";
+export const PLAYER_STATE_FIELDS = Object.freeze([
+  "name",
+  "cultivation",
+  "body",
+  "equipment",
+  "location",
+  "constraints",
+  "abilities",
+]);
+
+export function normalizePlayerState(value, { status = 400 } = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ApiError(status, "playerState must be a structured object");
+  }
+  const extras = Object.keys(value).filter((key) => !PLAYER_STATE_FIELDS.includes(key));
+  if (extras.length) {
+    throw new ApiError(status, "playerState contains unsupported fields", { fields: extras });
+  }
+  const normalized = {};
+  for (const field of PLAYER_STATE_FIELDS) {
+    const maximum = field === "name" ? 40 : 180;
+    if (typeof value[field] !== "string") {
+      throw new ApiError(status, `playerState.${field} must be text`);
+    }
+    const text = value[field].trim();
+    if (!text || text.length > maximum || /[\r\n]/.test(text)) {
+      throw new ApiError(status, `playerState.${field} must be a single line of 1–${maximum} characters`);
+    }
+    normalized[field] = text;
+  }
+  return normalized;
+}
+
+export function serializePlayerStateMarker(value) {
+  const normalized = normalizePlayerState(value);
+  return `${PLAYER_STATE_SCHEMA_VERSION}：${JSON.stringify(normalized)}`;
+}
+
 export function assertWritableWorldPage(pageId) {
   const normalized = normalizeNotionId(pageId);
   if (!WRITABLE_IDS.has(normalized)) {
@@ -154,6 +193,7 @@ export function parseWorldMarkers(blocks) {
   const worldId = marker(text, "WORLD_ID");
   const simTickRaw = marker(text, "SIM_TICK");
   const revisionRaw = text.match(/(?:狀態修訂|STATE_REVISION|REVISION)\s*[：:]\s*(\d+)/i)?.[1];
+  const playerState = parsePlayerStateMarker(text);
   return {
     schemaVersion: marker(text, "SAVE_SCHEMA_VERSION"),
     worldState: WORLD_STATES.has(worldState) ? worldState : worldState || null,
@@ -162,6 +202,7 @@ export function parseWorldMarkers(blocks) {
     revision: revisionRaw != null ? Number(revisionRaw) : null,
     saveKey: marker(text, "SAVE_KEY"),
     lastActionKey: marker(text, "LAST_ACTION_KEY"),
+    playerState,
     canonicalMarkerCount: canonicalMarkers.length,
     text,
     allText,
@@ -241,6 +282,7 @@ export function validateLoadedWorld(pages, { required = false } = {}) {
     revision: save.revision,
     saveKey: save.saveKey,
     lastActionKey: save.lastActionKey,
+    playerState: save.playerState,
     validatedPageKeys: [...byKey.keys()],
   };
 }
@@ -273,6 +315,26 @@ export async function resolveBlockTarget(notion, blockId) {
 
 function marker(text, name) {
   return text.match(new RegExp(name + "\\s*[：:]\\s*([^\\s|｜]+)", "i"))?.[1] || null;
+}
+
+function parsePlayerStateMarker(text) {
+  const matches = String(text).split(/\r?\n/).filter((line) =>
+    line.trimStart().startsWith(`${PLAYER_STATE_SCHEMA_VERSION}：`) ||
+    line.trimStart().startsWith(`${PLAYER_STATE_SCHEMA_VERSION}:`));
+  if (matches.length > 1) {
+    throw new ApiError(409, "Canonical save marker contains duplicate PLAYER_STATE_V1 records", {
+      playerStateMarkerCount: matches.length,
+    });
+  }
+  if (matches.length === 0) return null;
+  const json = matches[0].replace(/^\s*PLAYER_STATE_V1\s*[：:]\s*/, "");
+  let parsed;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new ApiError(409, "Canonical PLAYER_STATE_V1 record is not valid JSON");
+  }
+  return normalizePlayerState(parsed, { status: 409 });
 }
 
 function richTextPlainText(value) {

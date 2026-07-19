@@ -108,6 +108,13 @@ test("OpenAPI exposes only the safe world mutation routes", () => {
   assert.equal(document.paths["/world/archive-reset"].post.operationId, "archiveAndResetWorld");
   assert.equal(document.paths["/world/turn/commit"].post.operationId, "commitWorldTurn");
   assert.equal(document.components.schemas.WorldTurnCommitRequest.properties.pageId, undefined);
+  assert.equal(
+    document.components.schemas.WorldTurnCommitRequest.properties.playerState.$ref,
+    "#/components/schemas/PlayerState",
+  );
+  assert.deepEqual(document.components.schemas.PlayerState.required, [
+    "name", "cultivation", "body", "equipment", "location", "constraints", "abilities",
+  ]);
   assert.ok(document.components.schemas.WorldUpdateRequest.properties.blockUpdates);
   assert.ok(document.components.schemas.WorldUpdateRequest.properties.mutations);
   assert.deepEqual(document.components.schemas.WorldPageKey.enum, [

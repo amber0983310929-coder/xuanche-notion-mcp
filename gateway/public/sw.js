@@ -1,10 +1,11 @@
-const CACHE = "xuanche-pwa-v0.6.0";
+const CACHE = "xuanche-pwa-v0.6.0-player-state-v1";
 const SHELL = [
   "/",
   "/index.html",
   "/app.css",
   "/app.js",
   "/manifest.webmanifest",
+  "/images/chulingxiao-v1.webp",
   "/icons/xuanche-192.png",
   "/icons/xuanche-512.png",
   "/icons/xuanche.svg"

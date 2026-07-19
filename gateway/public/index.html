@@ -28,6 +28,38 @@
 
     <main class="shell">
       <aside class="world-panel" aria-label="世界狀態">
+        <section class="panel-section character-card" aria-labelledby="profile-name">
+          <div class="portrait-frame">
+            <img id="protagonist-portrait" src="/images/chulingxiao-v1.webp" alt="楚凌霄立繪" width="720" height="900">
+            <span class="portrait-vignette" aria-hidden="true"></span>
+            <span id="profile-age" class="profile-age">16歲</span>
+          </div>
+          <div class="character-copy">
+            <p class="eyebrow">此世主角</p>
+            <h2 id="profile-name">楚凌霄</h2>
+            <p id="profile-intro" class="profile-intro">正在讀取角色資料……</p>
+            <p id="profile-motto" class="profile-motto"></p>
+          </div>
+        </section>
+
+        <section class="panel-section status-card" aria-labelledby="status-title">
+          <div class="status-heading">
+            <div>
+              <p class="eyebrow">主角狀態</p>
+              <h2 id="status-title">此刻之身</h2>
+            </div>
+            <span id="player-state-sync" class="sync-badge">待校準</span>
+          </div>
+          <dl class="state-list">
+            <div><dt>修為境界</dt><dd id="state-cultivation">—</dd></div>
+            <div><dt>身體狀況</dt><dd id="state-body">—</dd></div>
+            <div class="equipment-state"><dt>武器裝備</dt><dd id="state-equipment">—</dd></div>
+            <div><dt>所在位置</dt><dd id="state-location">—</dd></div>
+            <div><dt>行動限制</dt><dd id="state-constraints">—</dd></div>
+            <div class="abilities-state"><dt>神通／能力</dt><dd id="state-abilities">—</dd></div>
+          </dl>
+        </section>
+
         <section class="panel-section pulse-card">
           <p class="eyebrow">世界脈搏</p>
           <h2>當前主線</h2>
@@ -54,6 +86,17 @@
             <option value="rich">細膩</option>
           </select>
           <p class="setting-note">只改變敘事表現，不改寫世界事實。</p>
+        </section>
+
+        <section class="panel-section world-controls-card" aria-label="世界管理">
+          <p class="eyebrow">世界管理</p>
+          <div class="world-control-grid">
+            <button id="continue-game-button" class="continue-game-button" type="button">繼續遊戲 <span aria-hidden="true">→</span></button>
+            <button id="new-game-button" class="quiet-button" type="button" disabled>新的遊戲</button>
+            <button id="restart-game-button" class="quiet-button" type="button" disabled>重新遊戲</button>
+            <button id="reset-world-button" class="quiet-button danger" type="button" disabled>重置世界</button>
+          </div>
+          <p class="control-note">三項操作會影響權威存檔，確認各自規則後才會開放。</p>
         </section>
 
         <div class="panel-actions">

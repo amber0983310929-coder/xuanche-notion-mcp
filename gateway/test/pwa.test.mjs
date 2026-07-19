@@ -31,13 +31,23 @@ function snapshot() {
           paragraph("SAVE_SCHEMA_VERSION：SAVE_V3.2｜WORLD_STATE：ACTIVE｜WORLD_ID：W20260719-TEST0001\nSIM_TICK：16｜狀態修訂：17"),
           paragraph("當前主線：楚凌霄與三名修士在岩坪上互相牽制。"),
           paragraph("初始位置：禁山"),
+          paragraph("當前位置與局勢｜村西廢棄石窯"),
+          paragraph("當前位置與局勢｜深夜禁山半圓岩坪"),
           paragraph("VOID｜這一行不能進入模型上下文"),
         ],
       },
       {
         key: "character",
         title: "03｜主角與角色資料",
-        children: [paragraph("楚凌霄左踝重傷，右肩滲血。")],
+        children: [
+          paragraph("姓名：楚凌霄"),
+          paragraph("年齡：16歲"),
+          paragraph("外貌：身形修長，衣著樸素，目光敏銳。"),
+          paragraph("身世背景：山村採藥少年，尚未踏入修行。"),
+          paragraph("座右銘：山路再險，也要看清下一步。"),
+          paragraph("玩家已知能力：辨識草藥、熟悉山路、攀爬追蹤、簡單傷口處理。"),
+          paragraph("楚凌霄左踝重傷，右肩滲血。"),
+        ],
       },
     ],
   };
@@ -91,8 +101,37 @@ test("OpenAI request forces one strict server commit tool", () => {
   assert.equal(request.tools[0].parameters.additionalProperties, false);
   assert.deepEqual(request.tools[0].parameters.required, [
     "narrative", "summary", "mainline", "visibleResult", "visibleCost",
-    "situation", "choices", "facts",
+    "situation", "choices", "facts", "playerState",
   ]);
+  assert.deepEqual(request.tools[0].parameters.properties.playerState.required, [
+    "name", "cultivation", "body", "equipment", "location", "constraints", "abilities",
+  ]);
+});
+
+test("world summary exposes profile and marks a legacy player state for calibration", () => {
+  const state = summarizeWorldSnapshot(snapshot());
+  assert.equal(state.profile.name, "楚凌霄");
+  assert.equal(state.profile.age, "16歲");
+  assert.equal(state.profile.portrait, "/images/chulingxiao-v1.webp");
+  assert.equal(state.situation, "深夜禁山半圓岩坪");
+  assert.equal(state.playerState.calibrated, false);
+  assert.match(state.playerState.abilities, /辨識草藥/);
+});
+
+test("world summary returns a committed canonical player state as calibrated", () => {
+  const source = snapshot();
+  source.meta.world.playerState = {
+    name: "楚凌霄",
+    cultivation: "凡人，尚未引氣",
+    body: "左踝重傷",
+    equipment: "採藥短刀",
+    location: "禁山岩坪",
+    constraints: "行動不便",
+    abilities: "辨識草藥；尚無神通",
+  };
+  const state = summarizeWorldSnapshot(source);
+  assert.equal(state.playerState.calibrated, true);
+  assert.equal(state.playerState.equipment, "採藥短刀");
 });
 
 test("PWA turn streams narrative and commits through the bound engine", async () => {
@@ -109,6 +148,15 @@ test("PWA turn streams narrative and commits through the bound engine", async ()
       { id: "watch", label: "觀察韓峻", intent: "判斷他隱瞞了什麼" },
     ],
     facts: ["殘缺劍印只能開啟遺址外層禁制"],
+    playerState: {
+      name: "楚凌霄",
+      cultivation: "凡人，尚未引氣入體",
+      body: "左踝重傷，右肩滲血",
+      equipment: "採藥短刀、兩片銀脈青葉",
+      location: "深夜禁山岩坪",
+      constraints: "行動不便，受三名修士牽制",
+      abilities: "辨識草藥、熟悉山路、攀爬追蹤；尚無神通法術",
+    },
   };
   const args = JSON.stringify(generated);
   const split = Math.floor(args.length / 2);
@@ -144,6 +192,7 @@ test("PWA turn streams narrative and commits through the bound engine", async ()
               revision: 18,
               actionKey: committedInput.actionKey,
               choices: committedInput.choices,
+              playerState: committedInput.playerState,
             },
           });
         }
@@ -188,6 +237,7 @@ test("PWA turn streams narrative and commits through the bound engine", async ()
     assert.match(streamText, /event: done/);
     assert.equal(committedInput.expectedSimTick, 16);
     assert.equal(committedInput.narrative, narrative);
+    assert.deepEqual(committedInput.playerState, generated.playerState);
     assert.equal(openAiRequest.model, "gpt-5.6-terra");
     assert.equal(openAiRequest.tools[0].strict, true);
   } finally {

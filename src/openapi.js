@@ -300,12 +300,28 @@ export function buildOpenApi(origin) {
           },
           additionalProperties: false,
         },
+        PlayerState: {
+          type: "object",
+          required: [
+            "name", "cultivation", "body", "equipment", "location", "constraints", "abilities",
+          ],
+          properties: {
+            name: { type: "string", minLength: 1, maxLength: 40 },
+            cultivation: { type: "string", minLength: 1, maxLength: 180 },
+            body: { type: "string", minLength: 1, maxLength: 180 },
+            equipment: { type: "string", minLength: 1, maxLength: 180 },
+            location: { type: "string", minLength: 1, maxLength: 180 },
+            constraints: { type: "string", minLength: 1, maxLength: 180 },
+            abilities: { type: "string", minLength: 1, maxLength: 180 },
+          },
+          additionalProperties: false,
+        },
         WorldTurnCommitRequest: {
           type: "object",
           required: [
             "expectedWorldId", "expectedSimTick", "expectedRevision", "actionKey",
             "playerAction", "narrative", "summary", "mainline", "visibleResult",
-            "visibleCost", "situation", "choices", "facts",
+            "visibleCost", "situation", "choices", "facts", "playerState",
           ],
           properties: {
             expectedWorldId: { type: "string", minLength: 1, maxLength: 80 },
@@ -321,6 +337,7 @@ export function buildOpenApi(origin) {
             situation: { type: "string", minLength: 10, maxLength: 900 },
             choices: { type: "array", minItems: 2, maxItems: 4, items: { $ref: "#/components/schemas/TurnChoice" } },
             facts: { type: "array", maxItems: 8, items: { type: "string", minLength: 1, maxLength: 240 } },
+            playerState: { $ref: "#/components/schemas/PlayerState" },
           },
           additionalProperties: false,
         },

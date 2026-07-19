@@ -10,7 +10,9 @@ import {
   blockPlainText,
   blocksPlainText,
   findCanonicalMarkerBlock,
+  normalizePlayerState,
   parseWorldMarkers,
+  serializePlayerStateMarker,
 } from "./world-state.js";
 
 const EDITABLE_TEXT_TYPES = new Set([
@@ -82,6 +84,9 @@ export async function commitTurn(env, rawInput, dependencies = {}) {
   const saveKey = repairingLatestCommit
     ? markers.saveKey || createTurnSaveKey(markers.worldId, tick, input.actionKey)
     : createTurnSaveKey(markers.worldId, tick, input.actionKey);
+  const playerState = repairingLatestCommit && markers.playerState
+    ? markers.playerState
+    : input.playerState;
   const timestamp = nowIso();
 
   // Resolve every mutable target before advancing the authoritative header.
@@ -96,13 +101,14 @@ export async function commitTurn(env, rawInput, dependencies = {}) {
   const mainlineMirror = findUniqueMirror(blocks, ["當前主線：", "當前主線:"], "current mainline");
 
   const repaired = [];
-  if (!repairingLatestCommit) {
+  if (!repairingLatestCommit || !markers.playerState) {
     await updateTextBlock(notion, header, canonicalHeader({
       worldId: markers.worldId,
       tick,
       revision,
       saveKey,
       actionKey: input.actionKey,
+      playerState,
       timestamp,
     }));
     repaired.push("canonical");
@@ -121,11 +127,11 @@ export async function commitTurn(env, rawInput, dependencies = {}) {
 
   let eventAppended = false;
   if (!hasTurnActionKey(pageText, input.actionKey)) {
-    await notion.appendBlocks(savePageId, turnEventBlocks(input, tick, saveKey));
+    await notion.appendBlocks(savePageId, turnEventBlocks({ ...input, playerState }, tick, saveKey));
     eventAppended = true;
   }
 
-  const mirror = await mirrorTurnToGitHub(github, input, {
+  const mirror = await mirrorTurnToGitHub(github, { ...input, playerState }, {
     worldId: markers.worldId,
     tick,
     revision,
@@ -136,7 +142,7 @@ export async function commitTurn(env, rawInput, dependencies = {}) {
 
   return turnResult({
     input,
-    markers: { ...markers, simTick: tick, revision, saveKey },
+    markers: { ...markers, simTick: tick, revision, saveKey, playerState },
     saveKey,
     idempotent: repairingLatestCommit,
     historicalReplay: false,
@@ -165,6 +171,7 @@ export function validateTurnCommitInput(input = {}) {
   const situation = boundedText(input.situation, "situation", 10, 900);
   const choices = validateChoices(input.choices);
   const facts = validateFacts(input.facts);
+  const playerState = normalizePlayerState(input.playerState);
   return {
     expectedWorldId,
     expectedSimTick,
@@ -179,6 +186,7 @@ export function validateTurnCommitInput(input = {}) {
     situation,
     choices,
     facts,
+    playerState,
   };
 }
 
@@ -187,11 +195,12 @@ export function createTurnSaveKey(worldId, tick, actionKey) {
   return `turn-${safeWorldId}-t${tick}-pwa-${actionKey}`.slice(0, 200);
 }
 
-function canonicalHeader({ worldId, tick, revision, saveKey, actionKey, timestamp }) {
+function canonicalHeader({ worldId, tick, revision, saveKey, actionKey, playerState, timestamp }) {
   return [
     `SAVE_SCHEMA_VERSION：SAVE_V3.3｜WORLD_STATE：ACTIVE｜WORLD_ID：${worldId}`,
     `SIM_TICK：${tick}｜狀態修訂：${revision}｜SAVE_KEY：${saveKey}`,
     `LAST_ACTION_KEY：${actionKey}｜UPDATED_AT：${timestamp}`,
+    serializePlayerStateMarker(playerState),
   ].join("\n");
 }
 
@@ -206,6 +215,7 @@ function turnEventBlocks(input, tick, saveKey) {
     `可見結果｜${input.visibleResult}`,
     `可見代價｜${input.visibleCost}`,
     `當前位置與局勢｜${input.situation}`,
+    `主角狀態｜${JSON.stringify(input.playerState)}`,
     `可選行動｜${choiceText}`,
   ];
   if (input.facts.length) blocks.push(`世界事實｜${input.facts.join("；")}`);
@@ -235,6 +245,7 @@ function turnResult({
     revision: markers.revision,
     saveKey: saveKey || null,
     actionKey: input.actionKey,
+    playerState: markers.playerState || null,
     choices: input.choices,
     repaired,
     eventAppended,
@@ -282,7 +293,8 @@ async function mirrorTurnToGitHub(github, input, state) {
       version: 3,
       events: [],
     };
-    if ((existing.events || []).some((event) => event?.actionKey === input.actionKey)) {
+    const existingEvent = (existing.events || []).find((event) => event?.actionKey === input.actionKey);
+    if (existingEvent?.playerState && JSON.stringify(existing.playerState) === JSON.stringify(input.playerState)) {
       return { status: "complete", idempotent: true };
     }
     existing.version = Math.max(3, Number(existing.version || 0));
@@ -292,18 +304,24 @@ async function mirrorTurnToGitHub(github, input, state) {
     existing.simTick = state.tick;
     existing.revision = state.revision;
     existing.lastSaveKey = state.saveKey;
+    existing.playerState = input.playerState;
     existing.updatedAt = state.timestamp;
-    existing.events = [...(existing.events || []), {
-      timestamp: state.timestamp,
-      type: "gameplay_turn",
-      actionKey: input.actionKey,
-      saveKey: state.saveKey,
-      worldId: state.worldId,
-      simTick: state.tick,
-      playerAction: input.playerAction,
-      summary: input.summary,
-      facts: input.facts,
-    }].slice(-1_000);
+    if (existingEvent) {
+      existingEvent.playerState = input.playerState;
+    } else {
+      existing.events = [...(existing.events || []), {
+        timestamp: state.timestamp,
+        type: "gameplay_turn",
+        actionKey: input.actionKey,
+        saveKey: state.saveKey,
+        worldId: state.worldId,
+        simTick: state.tick,
+        playerAction: input.playerAction,
+        summary: input.summary,
+        facts: input.facts,
+        playerState: input.playerState,
+      }].slice(-1_000);
+    }
     const saved = await github.putJson("world/memory.json", existing, {
       message: `chore(world): record ${state.saveKey}`,
     });
