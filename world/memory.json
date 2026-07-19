@@ -1,24 +1,18 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-19T00:21:58.750Z",
-  "worldState": "ACTIVE",
-  "worldId": "W20260719-3DD3CA62",
+  "updatedAt": "2026-07-19T02:46:18.746Z",
+  "worldState": "EMPTY",
+  "worldId": "PENDING",
   "simTick": 0,
-  "purgeId": "PURGE-20260719-FULL-RESET",
+  "purgeId": "A-W20260719-BDAE6FCD-8E25A09D",
   "events": [
     {
-      "timestamp": "2026-07-18T23:17:36.920Z",
-      "type": "world_initialize",
-      "summary": "Initialized world for 沐卿塵",
-      "saveKey": "沐卿塵-20260719-01",
-      "worldId": "W20260718-89858DE4"
-    },
-    {
-      "timestamp": "2026-07-19T00:21:58.750Z",
-      "summary": "沐卿塵在後巷三方對峙中擲劍瞬殺持弩灰袍傷者，斗笠男子仍存活。",
-      "saveKey": "muqingchen-world-reset-20260719-3DD3CA",
-      "worldId": "W20260719-3DD3CA62"
+      "timestamp": "2026-07-19T02:46:18.746Z",
+      "type": "world_archive_reset",
+      "summary": "Archived and reset W20260719-BDAE6FCD",
+      "worldId": "W20260719-BDAE6FCD",
+      "archiveId": "A-W20260719-BDAE6FCD-8E25A09D"
     }
   ]
 }
