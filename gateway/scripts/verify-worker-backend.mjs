@@ -1,6 +1,6 @@
 const [
   baseUrl = "https://plain-dew-5810xuanche-api.amber0983310929.workers.dev",
-  expectedVersion = "0.5.18",
+  expectedVersion = "0.5.19",
 ] = process.argv.slice(2);
 
 const healthUrl = new URL("/health?deep=0", baseUrl);

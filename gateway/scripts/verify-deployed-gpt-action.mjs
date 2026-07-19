@@ -1,6 +1,6 @@
 const origin = process.argv[2];
-const expectedGatewayVersion = process.argv[3] || "0.5.14";
-const expectedWorkerVersion = process.argv[4] || "0.5.18";
+const expectedGatewayVersion = process.argv[3] || "0.5.15";
+const expectedWorkerVersion = process.argv[4] || "0.5.19";
 if (!origin || !/^https:\/\//.test(origin)) {
   console.error("Usage: node gateway/scripts/verify-deployed-gpt-action.mjs https://your-gateway.pages.dev [gatewayVersion] [workerVersion]");
   process.exit(1);
@@ -73,6 +73,18 @@ if (JSON.stringify(update?.properties?.expectedWorldState?.enum) !== JSON.string
 if (update?.properties?.children?.items?.maxLength !== 1800) throw new Error("Update text limit is not Notion-safe");
 if (update?.properties?.saveKey?.minLength !== 1 || update?.properties?.saveKey?.maxLength !== 200) throw new Error("Update saveKey compatibility bounds are wrong");
 if (update?.properties?.mutations?.maxItems !== 9) throw new Error("FAST_TURN_V1 batch update is missing");
+const expectedPageKeys = [
+  "save", "character", "timeline", "knowledge", "relationships",
+  "causality", "clues", "events", "director", "experience",
+];
+if (JSON.stringify(update?.properties?.pageKey?.enum) !== JSON.stringify(expectedPageKeys)) {
+  throw new Error("Update contract does not expose the stable fixed pageKey enum");
+}
+if (Object.hasOwn(update?.properties ?? {}, "pageId")) throw new Error("Update contract still exposes raw pageId");
+const semanticUpdate = update?.properties?.blockUpdates?.items;
+if (!semanticUpdate?.required?.includes("matchPrefix") || Object.hasOwn(semanticUpdate?.properties ?? {}, "blockId")) {
+  throw new Error("Update contract still relies on raw blockId");
+}
 const load = spec.paths?.["/world/load"]?.post?.requestBody?.content?.["application/json"]?.schema;
 if (load?.properties?.refresh?.default !== false || !load?.properties?.profile?.enum?.includes("turn_core")) {
   throw new Error("FAST_TURN_V1 cached turn_core load is missing");
@@ -80,5 +92,8 @@ if (load?.properties?.refresh?.default !== false || !load?.properties?.profile?.
 if (health?.ok !== true || health?.service !== "xuanche-engine") throw new Error("Health payload is not the Xuanche Engine");
 if (health?.version !== expectedWorkerVersion) throw new Error(`Worker version ${health?.version} does not match ${expectedWorkerVersion}`);
 if (health?.capabilities?.durableArchiveReset !== true) throw new Error("Durable archive Workflow binding is not enabled");
+if (health?.capabilities?.stableWorldPageKeys !== true) throw new Error("Stable world pageKey writes are not enabled");
+if (health?.capabilities?.semanticBlockTargets !== true) throw new Error("Semantic block targets are not enabled");
+if (health?.capabilities?.idempotentRevisionReplay !== true) throw new Error("Revision-safe idempotent replay is not enabled");
 
 console.log("Deployed GPT Action verification passed");

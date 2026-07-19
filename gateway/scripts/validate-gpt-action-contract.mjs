@@ -146,6 +146,20 @@ if (update?.properties?.children?.items?.type !== "string") {
 if (update?.properties?.children?.items?.maxLength !== 1800) {
   fail("updateWorldState: append text must stay within the safe Notion rich-text limit");
 }
+const pageKeys = [
+  "save", "character", "timeline", "knowledge", "relationships",
+  "causality", "clues", "events", "director", "experience",
+];
+if (JSON.stringify(update?.properties?.pageKey?.enum) !== JSON.stringify(pageKeys)) {
+  fail("updateWorldState: GPT contract must use stable fixed pageKey values");
+}
+if (Object.hasOwn(update?.properties ?? {}, "pageId")) {
+  fail("updateWorldState: GPT contract must not expose raw Notion pageId");
+}
+const blockUpdate = update?.properties?.blockUpdates?.items;
+if (!blockUpdate?.required?.includes("matchPrefix") || Object.hasOwn(blockUpdate?.properties ?? {}, "blockId")) {
+  fail("updateWorldState: GPT contract must use semantic matchPrefix instead of raw blockId");
+}
 if (update?.properties?.saveKey?.minLength !== 1 || update?.properties?.saveKey?.maxLength !== 200) {
   fail("updateWorldState: saveKey must preserve the Worker 1-200 character contract");
 }

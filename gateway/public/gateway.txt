@@ -1,1 +1,1 @@
-Xuanche Engine Cloudflare Pages Gateway v0.5.14
+Xuanche Engine Cloudflare Pages Gateway v0.5.15

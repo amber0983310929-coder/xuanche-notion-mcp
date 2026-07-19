@@ -129,7 +129,7 @@ test("compacts raw Notion blocks and removes noisy metadata", () => {
   assert.equal(result.data.blocks[0].created_time, undefined);
   assert.equal(result.data.blocks[0].parent, undefined);
   assert.equal(result._gateway.compact, true);
-  assert.equal(result._gateway.version, "0.5.14");
+  assert.equal(result._gateway.version, "0.5.15");
   assert.equal(result._gateway.returnedChars, JSON.stringify(result).length);
 });
 
@@ -203,7 +203,7 @@ test("publishes only the safety-scoped GPT Action operations with bounded page r
   const patched = patchOpenApi(openApiFixture(), "https://xuanche-engine-gateway.pages.dev");
   const parameters = patched.paths["/tree"].get.parameters;
 
-  assert.equal(patched.info.version, "0.5.14");
+  assert.equal(patched.info.version, "0.5.15");
   assert.equal(
     patched.externalDocs.url,
     "https://xuanche-engine-gateway.pages.dev/privacy",
@@ -272,7 +272,7 @@ test("publishes only the safety-scoped GPT Action operations with bounded page r
 test("publishes the minimal structured gameplay manifest for ChatGPT Actions", async () => {
   const spec = buildCompactGptActionSpec("https://xuanche-engine-gateway.pages.dev");
   assert.equal(spec.openapi, "3.1.0");
-  assert.equal(spec.info.version, "0.5.14");
+  assert.equal(spec.info.version, "0.5.15");
   assert.deepEqual(spec.servers, [{ url: "https://xuanche-engine-gateway.pages.dev" }]);
   assert.deepEqual(operationIds(spec), [
     "archiveAndResetWorld",
@@ -334,6 +334,13 @@ test("publishes the minimal structured gameplay manifest for ChatGPT Actions", a
   assert.equal(updateSchema.properties.saveKey.minLength, 1);
   assert.equal(updateSchema.properties.saveKey.maxLength, 200);
   assert.equal(updateSchema.properties.cachePatch, undefined);
+  assert.deepEqual(updateSchema.properties.pageKey.enum, [
+    "save", "character", "timeline", "knowledge", "relationships",
+    "causality", "clues", "events", "director", "experience",
+  ]);
+  assert.equal(updateSchema.properties.pageId, undefined);
+  assert.ok(updateSchema.properties.blockUpdates.items.required.includes("matchPrefix"));
+  assert.equal(updateSchema.properties.blockUpdates.items.properties.blockId, undefined);
 
   const response = await onRequest({
     request: new Request("https://xuanche-engine-gateway.pages.dev/gpt-action-openapi.json"),
@@ -429,7 +436,7 @@ test("archive status preserves the complete v0.5.16 workflow result", async () =
   assert.equal(responseBody.data.nextAction, "INITIALIZE_WORLD");
 });
 
-test("the Pages handler serves the filtered 0.5.14 OpenAPI document", async () => {
+test("the Pages handler serves the filtered 0.5.15 OpenAPI document", async () => {
   const response = await onRequest({
     request: new Request("https://xuanche-engine-gateway.pages.dev/openapi.json"),
     env: {
@@ -443,8 +450,8 @@ test("the Pages handler serves the filtered 0.5.14 OpenAPI document", async () =
   const document = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.14");
-  assert.equal(document.info.version, "0.5.14");
+  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.15");
+  assert.equal(document.info.version, "0.5.15");
   assert.equal(
     document.externalDocs.url,
     "https://xuanche-engine-gateway.pages.dev/privacy",
@@ -602,7 +609,7 @@ test("serves a public Traditional Chinese privacy policy without an upstream bin
 
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type"), /text\/html/);
-  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.14");
+  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.15");
   assert.match(response.headers.get("content-security-policy"), /default-src 'none'/);
   assert.match(body, /lang="zh-Hant"/);
   assert.match(body, /X-API-Key/);
@@ -656,7 +663,7 @@ test("full Pages handler compacts a large module response before returning it to
   assert.equal(response.headers.get("X-Xuanche-Page-Batch-Sizing"), "true");
   assert.equal(response.headers.get("X-Xuanche-Page-Batch-Limit"), "20");
   assert.equal(response.headers.get("X-Xuanche-Readable-Page-Payload"), "true");
-  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.14");
+  assert.equal(response.headers.get("X-Xuanche-Gateway-Version"), "0.5.15");
   assert.ok(body.length < 72_000);
   assert.equal(parsed.data.items.length, 20);
   assert.equal(parsed.data.items[0].id, "0");
@@ -667,6 +674,6 @@ test("full Pages handler compacts a large module response before returning it to
   assert.equal(parsed.data.cursor, "batch-2");
   assert.equal(parsed.data.truncated, false);
   assert.equal(parsed.data.results, undefined);
-  assert.equal(parsed._gateway.version, "0.5.14");
+  assert.equal(parsed._gateway.version, "0.5.15");
   assert.equal(parsed._gateway.returnedChars, body.length);
 });

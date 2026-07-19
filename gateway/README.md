@@ -1,4 +1,4 @@
-# Xuanche Engine Gateway v0.5.14
+# Xuanche Engine Gateway v0.5.15
 
 This Cloudflare Pages gateway keeps GPT Action responses below the payload limit and publishes a safety-scoped OpenAPI contract.
 
@@ -18,6 +18,8 @@ The compact contract declares exact archive/reset status fields. `archiveAndRese
 
 Character initialization explicitly preserves the defining motto, core desire, important bonds, weakness or fear, starting style, destiny talents, structured relationships, and director-only opening facts.
 
+World updates expose only stable fixed `pageKey` values and semantic `matchPrefix` block selectors. Raw Notion page IDs and block IDs are deliberately hidden from the gameplay contract so a player option number cannot be mistaken for an identifier.
+
 ## Bounded reads
 
 - Page reads always send depth 0 upstream.
@@ -36,7 +38,7 @@ Directory reads are shallow and only discover child-page links. Normal gameplay 
 - Build output directory: public
 - Service binding: XUANCHE_ENGINE to the Xuanche Worker
 
-After deployment, re-import `https://xuanche-engine-gateway.pages.dev/gpt-action-openapi.json` into GPT Actions and use `/privacy` as the privacy-policy URL. Confirm that the compact document reports version 0.5.14, contains exactly seven operations, declares archive HTTP 202, and exposes the structured status response.
+After deployment, re-import `https://xuanche-engine-gateway.pages.dev/gpt-action-openapi.json` into GPT Actions and use `/privacy` as the privacy-policy URL. Confirm that the compact document reports version 0.5.15, contains exactly seven operations, declares archive HTTP 202, and exposes the structured status response.
 
 ## Verification
 

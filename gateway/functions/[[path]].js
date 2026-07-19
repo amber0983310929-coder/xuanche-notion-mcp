@@ -9,7 +9,12 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
-const GATEWAY_VERSION = "0.5.14";
+const GATEWAY_VERSION = "0.5.15";
+
+const WORLD_PAGE_KEYS = [
+  "save", "character", "timeline", "knowledge", "relationships",
+  "causality", "clues", "events", "director", "experience",
+];
 
 const SAFE_PUBLIC_OPERATIONS = [
   { path: "/health", method: "get", operationId: "getEngineHealth" },
@@ -602,7 +607,7 @@ export function patchOpenApi(spec, origin) {
 
   const updateWorld = patched.paths?.["/world/update"]?.post;
   if (updateWorld) {
-    updateWorld.description = "Batch every page changed by the same turn in mutations so 02 is verified once. Ordinary turns update only 02; major events may include other fixed world pages.";
+    updateWorld.description = "Batch every page changed by the same turn in mutations so 02 is verified once. Use stable pageKey values and semantic block prefixes; never copy raw Notion IDs into gameplay writes.";
   }
 
   return patched;
@@ -839,9 +844,13 @@ function compactRequestSchema(operationId) {
   if (operationId === "updateWorldState") {
     const pageMutation = {
       type: "object",
-      required: ["pageId"],
+      required: ["pageKey"],
       properties: {
-        pageId: { type: "string", pattern: "^[0-9a-fA-F-]{32,36}$" },
+        pageKey: {
+          type: "string",
+          enum: WORLD_PAGE_KEYS,
+          description: "Fixed world page target. Ordinary turns use save; never put a player choice number or Notion ID here.",
+        },
         children: {
           type: "array", minItems: 1, maxItems: 50,
           items: { type: "string", minLength: 1, maxLength: 1800 },
@@ -853,9 +862,14 @@ function compactRequestSchema(operationId) {
           maxItems: 25,
           items: {
             type: "object",
-            required: ["blockId", "type"],
+            required: ["matchPrefix", "type"],
             properties: {
-              blockId: { type: "string", pattern: "^[0-9a-fA-F-]{32,36}$" },
+              matchPrefix: {
+                type: "string",
+                minLength: 2,
+                maxLength: 120,
+                description: "Unique stable text label at the start of the target block, such as SIM_TICK： or 當前主線：. Never send a Notion block ID.",
+              },
               type: { type: "string", enum: ["paragraph", "callout", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote", "toggle", "to_do", "table_row"] },
               text: { type: "string", maxLength: 1800 },
               cells: { type: "array", minItems: 1, maxItems: 30, items: { type: "string", maxLength: 1800 } },
@@ -865,7 +879,6 @@ function compactRequestSchema(operationId) {
             additionalProperties: false,
           },
         },
-        after: { type: "string", pattern: "^[0-9a-fA-F-]{32,36}$" },
       },
       anyOf: [{ required: ["children"] }, { required: ["blockUpdates"] }],
       additionalProperties: false,
@@ -889,7 +902,7 @@ function compactRequestSchema(operationId) {
       },
       anyOf: [
         {
-          required: ["pageId"],
+          required: ["pageKey"],
           anyOf: [{ required: ["children"] }, { required: ["blockUpdates"] }],
         },
         { required: ["mutations"] },
@@ -957,7 +970,7 @@ const GPT_ACTION_COPY = {
   },
   updateWorldState: {
     summary: "Commit one batched FAST_TURN_V1 world update",
-    description: "Ordinary turns update only 02. For a major event, batch every changed fixed page in mutations so WORLD_ID and revision are verified once. Never modify rule pages.",
+    description: "Ordinary turns use pageKey save. For a major event, batch every changed fixed page in mutations. Use semantic matchPrefix selectors for existing blocks; never send player option numbers or raw Notion IDs.",
   },
 };
 
