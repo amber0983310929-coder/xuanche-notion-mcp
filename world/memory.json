@@ -1,10 +1,10 @@
 {
   "version": 3,
   "schema": "SAVE_V3.3",
-  "updatedAt": "2026-07-19T16:29:29.670Z",
+  "updatedAt": "2026-07-19T22:38:57.248Z",
   "worldState": "ACTIVE",
   "worldId": "W20260719-9E6FAA5A",
-  "simTick": 21,
+  "simTick": 22,
   "purgeId": "A-W20260719-D88393B4-C53DA2D2",
   "events": [
     {
@@ -103,8 +103,24 @@
         "南側林間追兵已察覺西坡煙火，尚未現身。",
         "灰衣修士左肋傷口仍在滲血。"
       ]
+    },
+    {
+      "timestamp": "2026-07-19T22:38:57.248Z",
+      "type": "gameplay_turn",
+      "actionKey": "3fa08083-5271-4363-aa5d-c7ffc5c631c5",
+      "saveKey": "turn-W20260719-9E6FAA5A-t22-pwa-3fa08083-5271-4363-aa5d-c7ffc5c631c5",
+      "worldId": "W20260719-9E6FAA5A",
+      "simTick": 22,
+      "playerAction": "沿北岔下撤示警",
+      "summary": "楚凌霄沿北岔下撤，避開明顯足跡並向獵戶周嶺示警，村中將低調加固西口、撤人並避開北岔。南側追兵仍在上方，疑似開始向石堆與北岔搜尋。",
+      "facts": [
+        "楚凌霄親眼確認北岔中段有數道重獸蹄印朝下方延伸。",
+        "周嶺與兩名村民已收到示警，正回村通知加固西口並撤離老弱。",
+        "南側林間先前有兩次短哨應答，之後已安靜下來。",
+        "灰衣修士仍留在上方涵石堆附近，楚凌霄尚未確認其現況。"
+      ]
     }
   ],
-  "revision": 22,
-  "lastSaveKey": "turn-W20260719-9E6FAA5A-t21-pwa-42946b05-7a66-4bcf-a9bc-9de4ad316b6d"
+  "revision": 23,
+  "lastSaveKey": "turn-W20260719-9E6FAA5A-t22-pwa-3fa08083-5271-4363-aa5d-c7ffc5c631c5"
 }
