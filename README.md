@@ -1,11 +1,14 @@
-# Xuanche Engine v0.5.19
+# Xuanche Engine v0.6.0
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.19 makes gameplay writes resilient to model-generated Notion identifier mistakes by resolving stable page keys and unique semantic block prefixes inside the Worker.
+Xuanche Engine is the Cloudflare Worker and installable PWA for the Notion-based cultivation world. Version 0.6.0 adds streamed server-side storytelling, serialized turn commits, and one unique canonical save marker while retaining the existing GPT Action gateway during migration.
 
 ## Safety model
 
 - Notion pages 02–09, 11, and 31 are the only world-state pages accepted by the safe update endpoint.
 - Every update requires WORLD_ID, WORLD_STATE, and a unique SAVE_KEY. Retrying the same SAVE_KEY is idempotent.
+- The PWA uses `/world/turn/commit`; the model never receives or supplies a Notion page/block ID. The Worker calculates the next tick, revision, and save key.
+- SAVE_V3.3 reads only the unique `SAVE_SCHEMA_VERSION` block as authoritative. Stale SIM_TICK and revision mirrors elsewhere on a page cannot override it.
+- A per-world Durable Object serializes PWA commits. Replaying the same actionKey repairs an interrupted mirror or event append without creating another turn.
 - Optional block updates verify that every block belongs to the declared fixed page and support optimistic expected-text checks.
 - Public raw page creation, arbitrary block append, and page metadata mutation are disabled by default. They exist only behind ALLOW_RAW_NOTION_WRITES=true and are never advertised by OpenAPI.
 - World loads reject archived pages and mixed save identities.
@@ -24,6 +27,7 @@ Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation 
 - GET /world/archive-reset/status
 - POST /world/load
 - POST /world/update
+- POST /world/turn/commit (private PWA backend)
 - GET /github/tree
 - GET /github/file
 - GET /openapi.json
@@ -73,15 +77,25 @@ Call POST /world/initialize exactly once after explicit character confirmation. 
 
 ## Deployment
 
-Store NOTION_TOKEN, GITHUB_TOKEN, and XUANCHE_API_KEY as Cloudflare secrets. Keep compatibility_date current, keep observability enabled, and bind XUANCHE_CACHE when durable low-latency snapshots are needed.
+Store NOTION_TOKEN, GITHUB_TOKEN, and XUANCHE_API_KEY as Worker secrets. Keep compatibility_date current, keep observability enabled, bind XUANCHE_CACHE, and deploy the configured WORLD_TURN_COORDINATOR Durable Object migration.
 
 NOTION_MIN_REQUEST_INTERVAL_MS defaults to 400 so one Worker instance stays below Notion's documented average of three requests per second. The client also honors Retry-After for HTTP 429 and 529 responses.
 
-The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and import the gateway /openapi.json into GPT Actions. The gateway exposes bounded reads, confirmed-character initialization, verified archive/reset, safe profile loads, safe world updates, and read-only GitHub inspection.
+The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker. Its PWA requires the same XUANCHE_API_KEY plus OPENAI_API_KEY and PWA_ACCESS_KEY as encrypted Pages secrets. Set PWA_SESSION_SECRET independently in production; Cloudflare Access may additionally guard the whole project. OPENAI_MODEL defaults to gpt-5.6-terra and can be changed without rebuilding.
+
+The existing GPT Action manifest remains at `/gpt-action-openapi.json`. It deliberately excludes `/world/turn/commit`; only the authenticated PWA calls that server-managed route.
 
 ## Verification
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
+
+## Version 0.6.0
+
+- Added a mobile-first installable PWA with streamed narrative, style/length controls, offline shell caching, local reading history, and recoverable pending-save checkpoints.
+- Added private HttpOnly/SameSite session authentication and kept the OpenAI and engine API keys server-side.
+- Added strict Responses API function output so prose, summaries, costs, facts, and choices are one internally consistent payload.
+- Added a serialized `/world/turn/commit` path with server-generated tick/revision/save keys and actionKey replay repair.
+- Changed marker parsing to trust only one canonical SAVE_SCHEMA_VERSION block, fixing stale lower-page tick selection.
 
 ## Version 0.5.19
 

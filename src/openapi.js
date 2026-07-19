@@ -43,8 +43,8 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.19",
-      description: "Cloudflare Worker bridge for compensated SAVE_V3.2 initialization, durable archives, page-cached FAST_TURN_V1 loads, and batched idempotent Notion updates.",
+      version: "0.6.0",
+      description: "Cloudflare Worker bridge for unique canonical SAVE_V3.3 markers, serialized server-managed turns, durable archives, and page-cached world loads.",
     },
     servers: [{ url: new URL(origin).origin }],
     components: {
@@ -290,6 +290,40 @@ export function buildOpenApi(origin) {
           },
           additionalProperties: false,
         },
+        TurnChoice: {
+          type: "object",
+          required: ["id", "label", "intent"],
+          properties: {
+            id: { type: "string", minLength: 1, maxLength: 40 },
+            label: { type: "string", minLength: 2, maxLength: 120 },
+            intent: { type: "string", minLength: 2, maxLength: 240 },
+          },
+          additionalProperties: false,
+        },
+        WorldTurnCommitRequest: {
+          type: "object",
+          required: [
+            "expectedWorldId", "expectedSimTick", "expectedRevision", "actionKey",
+            "playerAction", "narrative", "summary", "mainline", "visibleResult",
+            "visibleCost", "situation", "choices", "facts",
+          ],
+          properties: {
+            expectedWorldId: { type: "string", minLength: 1, maxLength: 80 },
+            expectedSimTick: { type: "integer", minimum: 0 },
+            expectedRevision: { type: "integer", minimum: 0 },
+            actionKey: { type: "string", minLength: 8, maxLength: 100, pattern: "^[A-Za-z0-9_-]+$" },
+            playerAction: { type: "string", minLength: 1, maxLength: 800 },
+            narrative: { type: "string", minLength: 80, maxLength: 1_800 },
+            summary: { type: "string", minLength: 10, maxLength: 500 },
+            mainline: { type: "string", minLength: 20, maxLength: 900 },
+            visibleResult: { type: "string", minLength: 1, maxLength: 700 },
+            visibleCost: { type: "string", minLength: 1, maxLength: 700 },
+            situation: { type: "string", minLength: 10, maxLength: 900 },
+            choices: { type: "array", minItems: 2, maxItems: 4, items: { $ref: "#/components/schemas/TurnChoice" } },
+            facts: { type: "array", maxItems: 8, items: { type: "string", minLength: 1, maxLength: 240 } },
+          },
+          additionalProperties: false,
+        },
         BlockUpdate: {
           type: "object",
           required: ["type"],
@@ -407,6 +441,16 @@ export function buildOpenApi(origin) {
           summary: "Apply one or more idempotent FAST_TURN_V1 page mutations",
           security: apiKeySecurity,
           requestBody: jsonBody("#/components/schemas/WorldUpdateRequest", true),
+          responses: standardResponses,
+        },
+      },
+      "/world/turn/commit": {
+        post: {
+          operationId: "commitWorldTurn",
+          summary: "Commit one serialized server-managed gameplay turn",
+          description: "Internal PWA route. The caller supplies no Notion IDs or arbitrary block mutations. The engine advances one unique canonical marker, repairs fixed mirrors on actionKey replay, and appends the event exactly once.",
+          security: apiKeySecurity,
+          requestBody: jsonBody("#/components/schemas/WorldTurnCommitRequest", true),
           responses: standardResponses,
         },
       },

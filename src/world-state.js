@@ -134,18 +134,53 @@ export function blocksPlainText(blocks) {
 }
 
 export function parseWorldMarkers(blocks) {
-  const text = blocksPlainText(blocks);
+  const allText = blocksPlainText(blocks);
+  const canonicalMarkers = flattenBlocks(blocks).filter((block) =>
+    blockPlainText(block).trimStart().startsWith("SAVE_SCHEMA_VERSION：") ||
+    blockPlainText(block).trimStart().startsWith("SAVE_SCHEMA_VERSION:"));
+  if (canonicalMarkers.length > 1) {
+    throw new ApiError(409, "World page contains more than one canonical save marker", {
+      canonicalMarkerCount: canonicalMarkers.length,
+    });
+  }
+  // SAVE_V3.2 and newer place every authoritative marker in one block.  Old
+  // pages and test fixtures used one block per marker, so retain a read-only
+  // fallback only when the canonical block does not exist.  Once present, a
+  // stale mirror elsewhere on the page can never override it.
+  const text = canonicalMarkers.length === 1
+    ? blockPlainText(canonicalMarkers[0])
+    : allText;
   const worldState = marker(text, "WORLD_STATE")?.toUpperCase();
   const worldId = marker(text, "WORLD_ID");
   const simTickRaw = marker(text, "SIM_TICK");
   const revisionRaw = text.match(/(?:狀態修訂|STATE_REVISION|REVISION)\s*[：:]\s*(\d+)/i)?.[1];
   return {
+    schemaVersion: marker(text, "SAVE_SCHEMA_VERSION"),
     worldState: WORLD_STATES.has(worldState) ? worldState : worldState || null,
     worldId: worldId || null,
     simTick: simTickRaw != null && /^\d+$/.test(simTickRaw) ? Number(simTickRaw) : null,
     revision: revisionRaw != null ? Number(revisionRaw) : null,
+    saveKey: marker(text, "SAVE_KEY"),
+    lastActionKey: marker(text, "LAST_ACTION_KEY"),
+    canonicalMarkerCount: canonicalMarkers.length,
     text,
+    allText,
   };
+}
+
+export function findCanonicalMarkerBlock(blocks) {
+  const matches = flattenBlocks(blocks).filter((block) => {
+    const text = blockPlainText(block).trimStart();
+    return text.startsWith("SAVE_SCHEMA_VERSION：") || text.startsWith("SAVE_SCHEMA_VERSION:");
+  });
+  if (matches.length !== 1) {
+    throw new ApiError(409, matches.length === 0
+      ? "Canonical save page is missing its unique SAVE_SCHEMA_VERSION marker"
+      : "Canonical save page contains duplicate SAVE_SCHEMA_VERSION markers", {
+      canonicalMarkerCount: matches.length,
+    });
+  }
+  return matches[0];
 }
 
 export function assertExpectedWorld(markers, expected = {}) {
@@ -199,10 +234,13 @@ export function validateLoadedWorld(pages, { required = false } = {}) {
     });
   }
   return {
+    schemaVersion: save.schemaVersion,
     worldState: save.worldState,
     worldId: save.worldId,
     simTick: save.simTick,
     revision: save.revision,
+    saveKey: save.saveKey,
+    lastActionKey: save.lastActionKey,
     validatedPageKeys: [...byKey.keys()],
   };
 }
@@ -240,4 +278,13 @@ function marker(text, name) {
 function richTextPlainText(value) {
   if (!Array.isArray(value)) return "";
   return value.map((item) => item?.plain_text ?? item?.text?.content ?? "").join("");
+}
+
+function flattenBlocks(blocks) {
+  const output = [];
+  for (const block of Array.isArray(blocks) ? blocks : []) {
+    output.push(block);
+    if (Array.isArray(block?.children)) output.push(...flattenBlocks(block.children));
+  }
+  return output;
 }

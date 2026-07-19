@@ -1,13 +1,130 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Xuanche Engine Gateway</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#111310">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="玄澈修真世界——私人的持續世界敘事遊戲。">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icons/xuanche.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icons/xuanche-192.png">
+    <link rel="stylesheet" href="/app.css">
+    <title>玄澈 · 修真世界</title>
   </head>
   <body>
-    <h1>Xuanche Engine Gateway v0.5.15</h1>
-    <p>Safety-scoped GPT Actions gateway is online.</p>
-    <p><a href="/privacy">隱私權政策</a></p>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="玄澈首頁">
+        <span class="brand-seal">玄</span>
+        <span><strong>玄澈</strong><small>修真世界</small></span>
+      </a>
+      <div class="topbar-status">
+        <span id="connection-dot" class="connection-dot" aria-hidden="true"></span>
+        <span id="connection-label">連線中</span>
+        <span id="tick-badge" class="tick-badge">T—</span>
+      </div>
+    </header>
+
+    <main class="shell">
+      <aside class="world-panel" aria-label="世界狀態">
+        <section class="panel-section pulse-card">
+          <p class="eyebrow">世界脈搏</p>
+          <h2>當前主線</h2>
+          <p id="mainline">正在讀取唯一世界錨點……</p>
+          <dl class="world-meta">
+            <div><dt>世界</dt><dd id="world-id">—</dd></div>
+            <div><dt>修訂</dt><dd id="revision">—</dd></div>
+            <div><dt>存檔</dt><dd id="save-state">未載入</dd></div>
+          </dl>
+        </section>
+
+        <section class="panel-section settings-card">
+          <p class="eyebrow">敘事調律</p>
+          <label for="style-select">筆調</label>
+          <select id="style-select">
+            <option value="immersive">沉浸小說</option>
+            <option value="austere">冷冽武俠</option>
+            <option value="swift">節奏緊湊</option>
+          </select>
+          <label for="length-select">篇幅</label>
+          <select id="length-select">
+            <option value="brief">精簡</option>
+            <option value="standard" selected>標準</option>
+            <option value="rich">細膩</option>
+          </select>
+          <p class="setting-note">只改變敘事表現，不改寫世界事實。</p>
+        </section>
+
+        <div class="panel-actions">
+          <button id="install-button" class="quiet-button" type="button" hidden>安裝到裝置</button>
+          <button id="refresh-button" class="quiet-button" type="button">重新核對世界</button>
+          <button id="logout-button" class="quiet-button danger" type="button">鎖定</button>
+          <a class="privacy-link" href="/privacy">隱私與資料</a>
+        </div>
+      </aside>
+
+      <section class="play-panel" aria-label="遊戲敘事">
+        <div id="alert" class="alert" role="status" hidden></div>
+        <div id="story" class="story" aria-live="polite" aria-relevant="additions text">
+          <article class="scene-card loading-card" id="opening-card">
+            <p class="scene-kicker">載入世界</p>
+            <div class="loading-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+          </article>
+        </div>
+
+        <section id="decision-area" class="decision-area" aria-label="可選行動">
+          <div class="decision-heading">
+            <p class="eyebrow">此刻，你要——</p>
+            <span id="turn-status">等待世界載入</span>
+          </div>
+          <div id="choices" class="choices"></div>
+
+          <form id="action-form" class="action-form">
+            <label class="sr-only" for="action-input">輸入楚凌霄的行動</label>
+            <textarea
+              id="action-input"
+              name="action"
+              rows="2"
+              maxlength="800"
+              placeholder="輸入楚凌霄要做或要說的事……"
+              autocomplete="off"
+              required
+            ></textarea>
+            <button id="send-button" class="send-button" type="submit" disabled>
+              <span>推進世界</span><span aria-hidden="true">→</span>
+            </button>
+          </form>
+          <p class="composer-note">送出後，伺服器會核對世界修訂，再生成並保存唯一結果。</p>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="login-dialog" class="login-dialog">
+      <form id="login-form" method="dialog">
+        <span class="login-seal" aria-hidden="true">玄</span>
+        <p class="eyebrow">私人世界</p>
+        <h1>解鎖玄澈</h1>
+        <p>通行詞只用來建立這台裝置的安全工作階段，不會保存在瀏覽器。</p>
+        <label for="passphrase">通行詞</label>
+        <input id="passphrase" name="passphrase" type="password" autocomplete="current-password" required>
+        <p id="login-error" class="form-error" role="alert"></p>
+        <button class="send-button" type="submit">進入世界</button>
+      </form>
+    </dialog>
+
+    <template id="narrative-template">
+      <article class="scene-card narrative-card">
+        <header><span class="turn-label"></span><span class="card-status"></span></header>
+        <div class="narrative-text"></div>
+        <div class="card-actions"></div>
+      </article>
+    </template>
+
+    <template id="player-template">
+      <article class="player-action"><span>你的行動</span><p></p></article>
+    </template>
+
+    <script type="module" src="/app.js"></script>
   </body>
 </html>
