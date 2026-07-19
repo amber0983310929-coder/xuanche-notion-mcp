@@ -7,11 +7,11 @@ import { ApiError, mergeDeep, normalizeNotionId, nowIso } from "./utils.js";
 import {
   WORLD_PAGE_IDS,
   assertExpectedWorld,
-  assertWritableWorldPage,
   blockPlainText,
   blocksPlainText,
   parseWorldMarkers,
   resolveBlockTarget,
+  resolveWritableWorldPageReference,
 } from "./world-state.js";
 
 export async function updateWorld(env, input, dependencies = {}) {
@@ -30,10 +30,13 @@ export async function updateWorld(env, input, dependencies = {}) {
   const canonicalSaveId = normalizeNotionId(WORLD_PAGE_IDS.save);
   const canonicalBlocks = await notion.listAllBlockChildren(canonicalSaveId, { maxNodes: 5_000 });
   const markers = parseWorldMarkers(canonicalBlocks);
+  const canonicalIdempotent = hasSaveKey(canonicalBlocks, input.saveKey);
   assertExpectedWorld(markers, {
     worldState: input.expectedWorldState,
     worldId: input.expectedWorldId,
-    revision: input.expectedRevision,
+    // A response can be lost after Notion commits. The same SAVE_KEY must be
+    // replayable even though the canonical revision has already advanced.
+    revision: canonicalIdempotent ? undefined : input.expectedRevision,
   });
   const canonicalReadMs = Date.now() - canonicalReadStartedAt;
 
@@ -48,24 +51,33 @@ export async function updateWorld(env, input, dependencies = {}) {
   const mutationStartedAt = Date.now();
   const notionMutations = [];
   let allIdempotent = true;
-  for (const mutation of mutations) {
+  const orderedMutations = [...mutations].sort((left, right) =>
+    Number(right.pageId === canonicalSaveId) - Number(left.pageId === canonicalSaveId));
+  for (const mutation of orderedMutations) {
     const targetBlocks = targetBlocksByPage.get(mutation.pageId) || [];
     const idempotent = hasSaveKey(targetBlocks, input.saveKey);
     allIdempotent = allIdempotent && idempotent;
     const notionResult = { updated: [], append: null };
+    const preparedUpdates = await prepareBlockUpdates(
+      notion,
+      mutation.pageId,
+      mutation.blockUpdates || [],
+      targetBlocks,
+    );
     if (!idempotent) {
-      const preparedUpdates = await prepareBlockUpdates(notion, mutation.pageId, mutation.blockUpdates || []);
-      for (const update of preparedUpdates) {
-        if (update.alreadyApplied) {
-          notionResult.updated.push({ blockId: update.blockId, alreadyApplied: true });
-          continue;
-        }
-        const result = await notion.updateBlock(update.blockId, update.input);
-        notionResult.updated.push({ blockId: update.blockId, result });
-      }
-
       const children = [...(mutation.children || []), "SAVE_KEY：" + input.saveKey];
       notionResult.append = await notion.appendBlocks(mutation.pageId, children, mutation.after);
+    }
+    // Append the idempotency marker before replacing mutable summary blocks.
+    // If a Notion update commits but its response is lost, a retry sees the
+    // SAVE_KEY and can safely finish or confirm these replacements.
+    for (const update of preparedUpdates) {
+      if (update.alreadyApplied) {
+        notionResult.updated.push({ blockId: update.blockId, alreadyApplied: true });
+        continue;
+      }
+      const result = await notion.updateBlock(update.blockId, update.input);
+      notionResult.updated.push({ blockId: update.blockId, result });
     }
     notionMutations.push({ pageId: mutation.pageId, idempotent, ...notionResult });
   }
@@ -191,7 +203,10 @@ function validateInput(input = {}) {
   }
 
   const usingBatch = input.mutations !== undefined;
-  if (usingBatch && (input.pageId !== undefined || input.children !== undefined || input.blockUpdates !== undefined || input.after !== undefined)) {
+  if (usingBatch && (
+    input.pageId !== undefined || input.pageKey !== undefined || input.children !== undefined ||
+    input.blockUpdates !== undefined || input.after !== undefined
+  )) {
     throw new ApiError(400, "Use either mutations or a single page update, not both");
   }
   const rawMutations = usingBatch ? input.mutations : [input];
@@ -206,10 +221,19 @@ function validateInput(input = {}) {
 }
 
 function validateMutation(input = {}) {
-  if (typeof input.pageId !== "string" || !input.pageId.trim()) {
-    throw new ApiError(400, "Every world update requires pageId");
+  const target = resolveWritableWorldPageReference(input);
+  const pageId = target.pageId;
+  let after = input.after;
+  if (after !== undefined) {
+    try {
+      after = normalizeNotionId(after);
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.message !== "Invalid Notion page or block ID") throw error;
+      // Turn logs are append-only. A malformed model-supplied anchor should
+      // fall back to the safe end of the fixed page instead of losing a save.
+      after = undefined;
+    }
   }
-  const pageId = assertWritableWorldPage(input.pageId);
   if (input.children !== undefined && (!Array.isArray(input.children) || input.children.length > 99)) {
     throw new ApiError(400, "children must be an array with at most 99 blocks");
   }
@@ -219,41 +243,112 @@ function validateMutation(input = {}) {
   if (!(input.children?.length || input.blockUpdates?.length)) {
     throw new ApiError(400, "At least one child append or block update is required");
   }
-  return { ...input, pageId };
+  return { ...input, pageId, pageKey: target.pageKey, after };
 }
 
-async function prepareBlockUpdates(notion, pageId, updates) {
+async function prepareBlockUpdates(notion, pageId, updates, pageBlocks = []) {
   const prepared = [];
   for (const input of updates) {
-    if (!input?.blockId || !input?.type) throw new ApiError(400, "Every block update requires blockId and type");
-    const resolved = await resolveBlockTarget(notion, input.blockId);
+    if (!input?.type) throw new ApiError(400, "Every block update requires type");
+    const desiredText = input.type === "table_row"
+      ? (input.cells || []).map((cell) => Array.isArray(cell) ? cell.join("") : String(cell ?? "")).join(" | ")
+      : String(input.text ?? "");
+    const resolved = await resolveUpdateTarget(notion, pageId, input, pageBlocks, desiredText);
     const ownerPageId = resolved.pageId;
     if (ownerPageId !== pageId) {
       throw new ApiError(403, "A block update cannot cross fixed world-page boundaries", {
-        blockId: normalizeNotionId(input.blockId),
+        blockId: resolved.block?.id || input.blockId || null,
         expectedPageId: pageId,
         actualPageId: ownerPageId,
       });
     }
     const current = resolved.block;
     const currentText = blockPlainText(current);
-    const desiredText = input.type === "table_row"
-      ? (input.cells || []).map((cell) => Array.isArray(cell) ? cell.join("") : String(cell ?? "")).join(" | ")
-      : String(input.text ?? "");
     if (input.expectedText !== undefined && currentText !== input.expectedText && currentText !== desiredText) {
       throw new ApiError(409, "A Notion block changed before this update could be applied", {
-        blockId: normalizeNotionId(input.blockId),
+        blockId: normalizeNotionId(current.id),
         expectedText: input.expectedText,
         actualText: currentText,
       });
     }
     prepared.push({
-      blockId: normalizeNotionId(input.blockId),
+      blockId: normalizeNotionId(current.id),
       input,
       alreadyApplied: currentText === desiredText,
     });
   }
   return prepared;
+}
+
+async function resolveUpdateTarget(notion, pageId, input, pageBlocks, desiredText) {
+  if (input.blockId) {
+    try {
+      return await resolveBlockTarget(notion, input.blockId);
+    } catch (error) {
+      if (!hasSemanticBlockSelector(input, desiredText)) throw error;
+    }
+  }
+
+  const selector = semanticBlockSelector(input, desiredText);
+  if (!selector) {
+    throw new ApiError(400, "Every block update requires blockId, matchText, or matchPrefix");
+  }
+  const candidates = flattenBlocks(pageBlocks).filter((block) => selector.matches(blockPlainText(block)));
+  if (candidates.length !== 1) {
+    throw new ApiError(409, candidates.length === 0
+      ? "No block matched the semantic update target"
+      : "The semantic update target matched more than one block", {
+      pageId,
+      selector: selector.description,
+      matchCount: candidates.length,
+    });
+  }
+  if (!candidates[0]?.id) {
+    throw new ApiError(409, "The matched Notion block has no stable ID", { pageId });
+  }
+  return { pageId, block: candidates[0] };
+}
+
+function hasSemanticBlockSelector(input, desiredText) {
+  return Boolean(semanticBlockSelector(input, desiredText));
+}
+
+function semanticBlockSelector(input, desiredText) {
+  if (typeof input.matchText === "string" && input.matchText) {
+    return {
+      description: { matchText: input.matchText },
+      matches: (text) => text === input.matchText,
+    };
+  }
+  if (typeof input.matchPrefix === "string" && input.matchPrefix) {
+    return {
+      description: { matchPrefix: input.matchPrefix },
+      matches: (text) => text.startsWith(input.matchPrefix),
+    };
+  }
+  if (typeof input.expectedText === "string" && input.expectedText) {
+    return {
+      description: { expectedText: input.expectedText },
+      matches: (text) => text === input.expectedText,
+    };
+  }
+
+  const firstLine = String(desiredText || "").split(/\r?\n/, 1)[0].trimStart();
+  const label = firstLine.match(/^([^：:\r\n]{1,80}[：:])/u)?.[1];
+  if (!label) return null;
+  return {
+    description: { inferredPrefix: label },
+    matches: (text) => text.startsWith(label),
+  };
+}
+
+function flattenBlocks(blocks) {
+  const output = [];
+  for (const block of Array.isArray(blocks) ? blocks : []) {
+    output.push(block);
+    if (Array.isArray(block?.children)) output.push(...flattenBlocks(block.children));
+  }
+  return output;
 }
 
 function hasSaveKey(blocks, saveKey) {

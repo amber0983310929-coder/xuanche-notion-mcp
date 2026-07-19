@@ -13,6 +13,27 @@ export const WORLD_PAGE_IDS = Object.freeze({
   experience: "39fc845007ae81eeb4fac2a18a75abd7",
 });
 
+export const WORLD_PAGE_KEYS = Object.freeze(Object.keys(WORLD_PAGE_IDS));
+
+const PAGE_KEY_ALIASES = new Map([
+  ...WORLD_PAGE_KEYS.map((key) => [key, key]),
+  ["2", "save"],
+  ["02", "save"],
+  ["03", "character"],
+  ["04", "timeline"],
+  ["05", "knowledge"],
+  ["06", "relationships"],
+  ["07", "causality"],
+  ["08", "clues"],
+  ["09", "events"],
+  ["11", "director"],
+  ["31", "experience"],
+]);
+
+const PAGE_KEY_BY_ID = new Map(
+  Object.entries(WORLD_PAGE_IDS).map(([key, id]) => [normalizeNotionId(id), key]),
+);
+
 export const STATE_PAGE_KEYS = Object.freeze([
   "save", "character", "timeline", "knowledge", "relationships",
   "causality", "clues", "events", "director",
@@ -34,6 +55,64 @@ export function assertWritableWorldPage(pageId) {
     });
   }
   return normalized;
+}
+
+export function resolveWritableWorldPageReference(input = {}) {
+  const pageKey = input.pageKey === undefined ? null : normalizeWritablePageKey(input.pageKey);
+  const pageId = input.pageId === undefined ? null : resolveWritablePageIdOrAlias(input.pageId);
+  if (!pageKey && !pageId) {
+    throw new ApiError(400, "Every world update requires pageKey or pageId", {
+      allowedPageKeys: WORLD_PAGE_KEYS,
+    });
+  }
+
+  const keyId = pageKey ? normalizeNotionId(WORLD_PAGE_IDS[pageKey]) : null;
+  if (pageId && keyId && pageId !== keyId) {
+    throw new ApiError(400, "pageKey and pageId refer to different fixed world pages", {
+      pageKey,
+      pageId,
+    });
+  }
+
+  const resolvedPageId = keyId || pageId;
+  return {
+    pageId: resolvedPageId,
+    pageKey: pageKey || PAGE_KEY_BY_ID.get(resolvedPageId),
+  };
+}
+
+function normalizeWritablePageKey(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new ApiError(400, "pageKey must name a fixed world page", {
+      allowedPageKeys: WORLD_PAGE_KEYS,
+    });
+  }
+  const key = PAGE_KEY_ALIASES.get(value.trim().toLowerCase());
+  if (!key) {
+    throw new ApiError(400, "Unknown fixed world pageKey", {
+      pageKey: value,
+      allowedPageKeys: WORLD_PAGE_KEYS,
+    });
+  }
+  return key;
+}
+
+function resolveWritablePageIdOrAlias(value) {
+  if (typeof value === "string") {
+    const alias = PAGE_KEY_ALIASES.get(value.trim().toLowerCase());
+    if (alias) return normalizeNotionId(WORLD_PAGE_IDS[alias]);
+  }
+  try {
+    return assertWritableWorldPage(value);
+  } catch (error) {
+    if (error instanceof ApiError && error.message === "Invalid Notion page or block ID") {
+      throw new ApiError(400, "Invalid world page target; use pageKey instead of a Notion ID", {
+        pageId: value,
+        allowedPageKeys: WORLD_PAGE_KEYS,
+      });
+    }
+    throw error;
+  }
 }
 
 export function blockPlainText(block) {

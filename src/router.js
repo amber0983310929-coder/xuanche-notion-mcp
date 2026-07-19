@@ -39,7 +39,7 @@ export function createRouter(dependencies = {}) {
         return json({
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.18",
+          version: "0.5.19",
           protectedReads: readsRequireApiKey(env),
           endpoints: ["/health", "/home", "/tree", "/world/initialize", "/world/load", "/world/update", "/world/archive-reset", "/world/archive-reset/status", "/openapi.json"],
         });
@@ -53,7 +53,7 @@ export function createRouter(dependencies = {}) {
         const result = {
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.18",
+          version: "0.5.19",
           integrations: {
             notion: notion.configured ? "configured" : "missing",
             github: github.configured ? "configured" : "missing",
@@ -66,6 +66,9 @@ export function createRouter(dependencies = {}) {
             fastTurnRuntime: "FAST_TURN_V1",
             pageGranularCache: true,
             batchedWorldUpdates: true,
+            stableWorldPageKeys: true,
+            semanticBlockTargets: true,
+            idempotentRevisionReplay: true,
             activeCastDialoguePreload: "NPC_LIVE_PRELOAD_V1",
             idempotentWorldUpdates: true,
             fixedWorldWriteAllowlist: true,

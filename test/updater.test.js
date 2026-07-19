@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { updateWorld } from "../src/updater.js";
 import { WORLD_PAGE_IDS } from "../src/world-state.js";
 
-function paragraph(text) {
-  return { type: "paragraph", paragraph: { rich_text: [{ plain_text: text }] } };
+function paragraph(text, id) {
+  return { id, type: "paragraph", paragraph: { rich_text: [{ plain_text: text }] } };
 }
 
 function canonicalBlocks(worldState = "EMPTY", worldId = "PENDING") {
@@ -80,6 +80,71 @@ test("world update rejects pages outside the fixed write allowlist", async () =>
   );
 });
 
+test("world update resolves pageKey and semantic block prefixes without caller-supplied Notion IDs", async () => {
+  const updates = [];
+  const blocks = canonicalBlocks("ACTIVE", "W20260719-12345678");
+  blocks[2].id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const result = await updateWorld({}, validInput({
+    pageId: undefined,
+    pageKey: "save",
+    expectedWorldState: "ACTIVE",
+    expectedWorldId: "W20260719-12345678",
+    children: ["turn"],
+    blockUpdates: [{
+      matchPrefix: "SIM_TICK：",
+      type: "paragraph",
+      text: "SIM_TICK：1",
+      expectedText: "SIM_TICK：0",
+    }],
+  }), {
+    notion: {
+      listAllBlockChildren: async () => blocks,
+      updateBlock: async (blockId, input) => {
+        updates.push({ blockId, input });
+        return { id: blockId };
+      },
+      appendBlocks: async () => ({ results: [] }),
+    },
+    github: { configured: false },
+    cache: { deletePrefix: async () => 0 },
+  });
+
+  assert.equal(result.idempotent, false);
+  assert.equal(updates[0].blockId, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+  assert.equal(updates[0].input.text, "SIM_TICK：1");
+});
+
+test("legacy pageId 2 and malformed blockId fall back to the fixed save page and expected text", async () => {
+  const updates = [];
+  const blocks = canonicalBlocks("ACTIVE", "W20260719-12345678");
+  blocks[2].id = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  await updateWorld({}, validInput({
+    pageId: "2",
+    expectedWorldState: "ACTIVE",
+    expectedWorldId: "W20260719-12345678",
+    children: ["turn"],
+    blockUpdates: [{
+      blockId: "2",
+      type: "paragraph",
+      text: "SIM_TICK：1",
+      expectedText: "SIM_TICK：0",
+    }],
+  }), {
+    notion: {
+      listAllBlockChildren: async () => blocks,
+      updateBlock: async (blockId) => {
+        updates.push(blockId);
+        return { id: blockId };
+      },
+      appendBlocks: async () => ({ results: [] }),
+    },
+    github: { configured: false },
+    cache: { deletePrefix: async () => 0 },
+  });
+
+  assert.deepEqual(updates, ["bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"]);
+});
+
 test("world update is idempotent when SAVE_KEY already exists", async () => {
   let writes = 0;
   const result = await updateWorld({}, validInput(), {
@@ -93,6 +158,76 @@ test("world update is idempotent when SAVE_KEY already exists", async () => {
   });
   assert.equal(result.idempotent, true);
   assert.equal(writes, 0);
+});
+
+test("same SAVE_KEY remains idempotent after the canonical revision advances", async () => {
+  let writes = 0;
+  const result = await updateWorld({}, validInput({
+    expectedRevision: 0,
+    expectedWorldState: "ACTIVE",
+    expectedWorldId: "W20260719-12345678",
+  }), {
+    notion: {
+      listAllBlockChildren: async () => {
+        const blocks = canonicalBlocks("ACTIVE", "W20260719-12345678");
+        blocks[3] = paragraph("狀態修訂：1");
+        return [...blocks, paragraph("SAVE_KEY：TEST-SAVE-001")];
+      },
+      appendBlocks: async () => {
+        writes += 1;
+      },
+    },
+    github: { configured: false },
+  });
+  assert.equal(result.idempotent, true);
+  assert.equal(writes, 0);
+});
+
+test("a retry repairs a response-lost block update without appending the turn twice", async () => {
+  const blocks = canonicalBlocks("ACTIVE", "W20260719-12345678");
+  blocks[3].id = "cccccccccccccccccccccccccccccccc";
+  let appends = 0;
+  let firstUpdate = true;
+  const notion = {
+    listAllBlockChildren: async () => blocks,
+    appendBlocks: async (_pageId, children) => {
+      appends += 1;
+      blocks.push(paragraph(children.at(-1)));
+      return { results: [] };
+    },
+    updateBlock: async (blockId, input) => {
+      blocks[3] = paragraph(input.text, blockId);
+      if (firstUpdate) {
+        firstUpdate = false;
+        throw new Error("response lost after commit");
+      }
+      return { id: blockId };
+    },
+  };
+  const input = validInput({
+    expectedWorldState: "ACTIVE",
+    expectedWorldId: "W20260719-12345678",
+    blockUpdates: [{
+      matchPrefix: "狀態修訂：",
+      type: "paragraph",
+      text: "狀態修訂：1",
+      expectedText: "狀態修訂：0",
+    }],
+  });
+
+  await assert.rejects(updateWorld({}, input, {
+    notion,
+    github: { configured: false },
+    cache: { deletePrefix: async () => 0 },
+  }), /response lost/);
+  const replay = await updateWorld({}, input, {
+    notion,
+    github: { configured: false },
+    cache: { deletePrefix: async () => 0 },
+  });
+
+  assert.equal(replay.idempotent, true);
+  assert.equal(appends, 1);
 });
 
 test("an idempotent retry repairs a missing GitHub mirror without rewriting Notion", async () => {

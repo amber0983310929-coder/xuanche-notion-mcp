@@ -16,6 +16,9 @@ test("health reports integrations without exposing secrets", async () => {
   assert.equal(body.integrations.github, "configured");
   assert.equal(body.capabilities.shallowPageBatchSizing, true);
   assert.equal(body.capabilities.atomicWorldInitialization, true);
+  assert.equal(body.capabilities.stableWorldPageKeys, true);
+  assert.equal(body.capabilities.semanticBlockTargets, true);
+  assert.equal(body.capabilities.idempotentRevisionReplay, true);
   assert.equal(JSON.stringify(body).includes("secret"), false);
 });
 

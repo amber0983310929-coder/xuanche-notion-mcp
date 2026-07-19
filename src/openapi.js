@@ -43,7 +43,7 @@ export function buildOpenApi(origin) {
     openapi: "3.1.0",
     info: {
       title: "Xuanche Engine API",
-      version: "0.5.18",
+      version: "0.5.19",
       description: "Cloudflare Worker bridge for compensated SAVE_V3.2 initialization, durable archives, page-cached FAST_TURN_V1 loads, and batched idempotent Notion updates.",
     },
     servers: [{ url: new URL(origin).origin }],
@@ -81,6 +81,14 @@ export function buildOpenApi(origin) {
           type: "string",
           description: "Notion page or block ID, with or without hyphens.",
           pattern: "^[0-9a-fA-F-]{32,36}$",
+        },
+        WorldPageKey: {
+          type: "string",
+          enum: [
+            "save", "character", "timeline", "knowledge", "relationships",
+            "causality", "clues", "events", "director", "experience",
+          ],
+          description: "Stable fixed-page key. Prefer this over copying raw Notion page IDs.",
         },
         BlockInput: {
           description: "A string becomes a paragraph block; an object is passed as a Notion block.",
@@ -138,9 +146,9 @@ export function buildOpenApi(origin) {
         },
         WorldPageMutation: {
           type: "object",
-          required: ["pageId"],
           properties: {
             pageId: { $ref: "#/components/schemas/NotionId" },
+            pageKey: { $ref: "#/components/schemas/WorldPageKey" },
             children: { type: "array", minItems: 1, maxItems: 99, items: { $ref: "#/components/schemas/BlockInput" } },
             blockUpdates: {
               type: "array",
@@ -150,9 +158,9 @@ export function buildOpenApi(origin) {
             },
             after: { $ref: "#/components/schemas/NotionId" },
           },
-          anyOf: [
-            { required: ["children"] },
-            { required: ["blockUpdates"] },
+          allOf: [
+            { anyOf: [{ required: ["pageKey"] }, { required: ["pageId"] }] },
+            { anyOf: [{ required: ["children"] }, { required: ["blockUpdates"] }] },
           ],
           additionalProperties: false,
         },
@@ -161,6 +169,7 @@ export function buildOpenApi(origin) {
           required: ["saveKey", "expectedWorldId", "expectedWorldState"],
           properties: {
             pageId: { $ref: "#/components/schemas/NotionId" },
+            pageKey: { $ref: "#/components/schemas/WorldPageKey" },
             saveKey: { type: "string", minLength: 1, maxLength: 200, description: "Unique idempotency key written to the target world page." },
             expectedWorldId: { type: "string", minLength: 1 },
             expectedWorldState: { type: "string", enum: ["EMPTY", "ACTIVE", "WORLD_CONFLICT"] },
@@ -203,10 +212,9 @@ export function buildOpenApi(origin) {
           },
           anyOf: [
             {
-              required: ["pageId"],
-              anyOf: [
-                { required: ["children"] },
-                { required: ["blockUpdates"] },
+              allOf: [
+                { anyOf: [{ required: ["pageKey"] }, { required: ["pageId"] }] },
+                { anyOf: [{ required: ["children"] }, { required: ["blockUpdates"] }] },
               ],
             },
             { required: ["mutations"] },
@@ -284,9 +292,11 @@ export function buildOpenApi(origin) {
         },
         BlockUpdate: {
           type: "object",
-          required: ["blockId", "type"],
+          required: ["type"],
           properties: {
             blockId: { $ref: "#/components/schemas/NotionId" },
+            matchText: { type: "string", minLength: 1, description: "Select the unique block whose current plain text exactly matches this value." },
+            matchPrefix: { type: "string", minLength: 1, description: "Select the unique block whose current plain text starts with this stable label." },
             type: {
               type: "string",
               enum: ["paragraph", "callout", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item", "quote", "toggle", "to_do", "table_row"],
@@ -296,6 +306,11 @@ export function buildOpenApi(origin) {
             checked: { type: "boolean" },
             expectedText: { type: "string", description: "Optional optimistic-concurrency check." },
           },
+          anyOf: [
+            { required: ["blockId"] },
+            { required: ["matchText"] },
+            { required: ["matchPrefix"] },
+          ],
         },
       },
       responses: {

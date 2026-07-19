@@ -1,6 +1,6 @@
-# Xuanche Engine v0.5.18
+# Xuanche Engine v0.5.19
 
-Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.18 keeps bounded shallow world-profile reads available when a Notion page grows past its per-turn node cap, returning the first configured window with explicit truncation metadata.
+Xuanche Engine is the Cloudflare Worker bridge for the Notion-based cultivation world. Version 0.5.19 makes gameplay writes resilient to model-generated Notion identifier mistakes by resolving stable page keys and unique semantic block prefixes inside the Worker.
 
 ## Safety model
 
@@ -52,7 +52,7 @@ Required for every update:
 - saveKey
 - expectedWorldId
 - expectedWorldState
-- either one pageId with children/blockUpdates, or a mutations array containing up to nine changed fixed pages
+- either one stable pageKey (preferred) or legacy pageId with children/blockUpdates, or a mutations array containing up to nine changed fixed pages
 
 Optional:
 
@@ -82,6 +82,13 @@ The Pages gateway lives in gateway/. Bind XUANCHE_ENGINE to the Worker and impor
 ## Verification
 
 Run npm test at the repository root. The same test suite includes the gateway tests.
+
+## Version 0.5.19
+
+- Added stable `pageKey` targets for every fixed world page and retained legacy raw `pageId` compatibility.
+- Added unique `matchPrefix` and `matchText` block resolution, with safe recovery from malformed legacy block IDs.
+- Made same-SAVE_KEY retries remain idempotent after the canonical revision has already advanced.
+- Changed the GPT Action write contract to hide raw Notion page and block IDs.
 
 ## Version 0.5.18
 

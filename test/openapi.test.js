@@ -5,7 +5,7 @@ import { buildOpenApi } from "../src/openapi.js";
 test("OpenAPI is bound to the deployed origin and exposes unique operation IDs", () => {
   const document = buildOpenApi("https://worker.example/openapi.json");
   assert.equal(document.openapi, "3.1.0");
-  assert.equal(document.info.version, "0.5.18");
+  assert.equal(document.info.version, "0.5.19");
   assert.equal(document.servers[0].url, "https://worker.example");
 
   const operationIds = Object.values(document.paths)
@@ -104,4 +104,10 @@ test("OpenAPI exposes only the safe world mutation routes", () => {
   assert.equal(document.paths["/world/archive-reset"].post.operationId, "archiveAndResetWorld");
   assert.ok(document.components.schemas.WorldUpdateRequest.properties.blockUpdates);
   assert.ok(document.components.schemas.WorldUpdateRequest.properties.mutations);
+  assert.deepEqual(document.components.schemas.WorldPageKey.enum, [
+    "save", "character", "timeline", "knowledge", "relationships",
+    "causality", "clues", "events", "director", "experience",
+  ]);
+  assert.ok(document.components.schemas.WorldUpdateRequest.properties.pageKey);
+  assert.ok(document.components.schemas.BlockUpdate.properties.matchPrefix);
 });
