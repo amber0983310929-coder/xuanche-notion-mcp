@@ -1,10 +1,10 @@
 {
   "version": 3,
   "schema": "SAVE_V3.3",
-  "updatedAt": "2026-07-19T16:28:49.452Z",
+  "updatedAt": "2026-07-19T16:29:29.670Z",
   "worldState": "ACTIVE",
   "worldId": "W20260719-9E6FAA5A",
-  "simTick": 20,
+  "simTick": 21,
   "purgeId": "A-W20260719-D88393B4-C53DA2D2",
   "events": [
     {
@@ -87,8 +87,24 @@
         "兩名追兵已接近涵口，尚未現身。",
         "楚凌霄掌心被石砂磨破。"
       ]
+    },
+    {
+      "timestamp": "2026-07-19T16:29:29.670Z",
+      "type": "gameplay_turn",
+      "actionKey": "42946b05-7a66-4bcf-a9bc-9de4ad316b6d",
+      "saveKey": "turn-W20260719-9E6FAA5A-t21-pwa-42946b05-7a66-4bcf-a9bc-9de4ad316b6d",
+      "worldId": "W20260719-9E6FAA5A",
+      "simTick": 21,
+      "playerAction": "帶油繩去西坡施煙",
+      "summary": "楚凌霄在西坡以油繩覆濕苔施煙，將多數小獸逼入北岔谷，暫緩其衝向村路；石堆仍受重獸撞擊而鬆動，南林追兵已循煙發現谷口尚有人。",
+      "facts": [
+        "西坡施煙已成功分散多數小獸至北岔谷。",
+        "涵石堆下層涵石向內滑動半寸，仍有重獸在近處衝撞。",
+        "南側林間追兵已察覺西坡煙火，尚未現身。",
+        "灰衣修士左肋傷口仍在滲血。"
+      ]
     }
   ],
-  "revision": 21,
-  "lastSaveKey": "turn-W20260719-9E6FAA5A-t20-pwa-f4271935-623a-44e8-a260-4aded9d160c1"
+  "revision": 22,
+  "lastSaveKey": "turn-W20260719-9E6FAA5A-t21-pwa-42946b05-7a66-4bcf-a9bc-9de4ad316b6d"
 }
