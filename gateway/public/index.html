@@ -30,6 +30,41 @@
     </header>
 
     <main class="shell">
+      <aside id="character-quick-rail" class="character-quick-rail" aria-label="角色速覽">
+        <section class="quick-rail-card quick-character-card">
+          <div class="quick-character-heading">
+            <div>
+              <p class="eyebrow">角色速覽</p>
+              <h2 id="quick-profile-name">楚凌霄</h2>
+            </div>
+            <span id="quick-profile-age" class="quick-age">16歲</span>
+          </div>
+          <span id="quick-player-sync" class="sync-badge">待校準</span>
+          <dl class="quick-state-list">
+            <div><dt>修為</dt><dd id="quick-state-cultivation">—</dd></div>
+            <div><dt>身體</dt><dd id="quick-state-body">—</dd></div>
+            <div><dt>位置</dt><dd id="quick-state-location">—</dd></div>
+            <div><dt>限制</dt><dd id="quick-state-constraints">—</dd></div>
+            <div><dt>兵裝</dt><dd id="quick-state-equipment">—</dd></div>
+            <div><dt>能力</dt><dd id="quick-state-abilities">—</dd></div>
+          </dl>
+          <div class="quick-rail-actions">
+            <button type="button" data-open-handbook="inventory">查看行囊</button>
+            <button type="button" data-open-handbook="abilities">查看能力</button>
+          </div>
+        </section>
+
+        <section class="quick-rail-card quick-objective-card">
+          <p class="eyebrow">此行所求</p>
+          <h2>目前目標</h2>
+          <p id="quick-mainline">正在讀取唯一世界錨點……</p>
+          <dl class="quick-world-meta">
+            <div><dt>回合</dt><dd id="quick-tick">T—</dd></div>
+            <div><dt>修訂</dt><dd id="quick-revision">R—</dd></div>
+          </dl>
+        </section>
+      </aside>
+
       <aside id="player-panel" class="world-panel" aria-label="世界狀態">
         <section class="panel-section character-card" aria-labelledby="profile-name">
           <div class="portrait-frame">
@@ -223,20 +258,142 @@
         <p class="eyebrow">新世界 · 角色建立</p>
         <h2 id="character-dialog-title">建立此世主角</h2>
         <p class="dialog-lead">舊世界已安全封存。完成下列設定後才會建立新的 ACTIVE 世界；取消則維持空白世界。</p>
+        <p class="character-preset-note">每一欄都能從範例快速帶入，也能直接在輸入框自行填寫或改寫。</p>
         <div class="character-form-grid">
-          <label>姓名<input name="name" maxlength="40" autocomplete="off" required></label>
-          <label>性別<input name="gender" maxlength="20" value="男" autocomplete="off"></label>
-          <label>年齡<input name="age" maxlength="20" value="16歲" autocomplete="off"></label>
-          <label class="wide">外貌<textarea name="appearance" rows="2" maxlength="240" placeholder="外觀、衣著與氣質"></textarea></label>
-          <label class="wide">性格關鍵詞<input name="personality" maxlength="260" placeholder="沉著、敏銳、重視家人" autocomplete="off"></label>
-          <label class="wide">身世背景<textarea name="background" rows="3" maxlength="500" placeholder="主角從何而來，珍視什麼"></textarea></label>
-          <label class="wide">人生目標<input name="motivation" maxlength="240" placeholder="守護珍視之人並踏上修行之路" autocomplete="off"></label>
-          <label class="wide">不可跨越的底線<input name="bottomLine" maxlength="240" placeholder="不主動傷害無辜，不背棄珍視之人" autocomplete="off"></label>
-          <label class="wide">初始武器裝備<input name="equipment" maxlength="240" placeholder="藥簍、短刀、火摺子" autocomplete="off"></label>
-          <label class="wide">已知能力<input name="knownAbilities" maxlength="600" placeholder="辨識草藥、熟悉山路、攀爬與追蹤" autocomplete="off"></label>
-          <label>初始位置<input name="location" maxlength="160" value="山村外圍" autocomplete="off"></label>
-          <label>初始時間<input name="time" maxlength="80" value="清晨" autocomplete="off"></label>
-          <label class="wide">開局前提<textarea name="premise" rows="3" maxlength="600" placeholder="一場尚未發生的異變，即將把主角推向修行之路。"></textarea></label>
+          <fieldset class="character-field">
+            <legend>姓名</legend>
+            <select class="character-preset" data-character-target="name" aria-label="姓名快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="楚凌霄">楚凌霄</option>
+              <option value="沈青禾">沈青禾</option>
+              <option value="顧長夜">顧長夜</option>
+              <option value="蘇晚照">蘇晚照</option>
+            </select>
+            <input name="name" maxlength="40" autocomplete="off" placeholder="自行輸入姓名" required>
+          </fieldset>
+          <fieldset class="character-field">
+            <legend>性別</legend>
+            <select class="character-preset" data-character-target="gender" aria-label="性別快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="男">男</option>
+              <option value="女">女</option>
+              <option value="未定">未定</option>
+            </select>
+            <input name="gender" maxlength="20" value="男" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field">
+            <legend>年齡</legend>
+            <select class="character-preset" data-character-target="age" aria-label="年齡快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="16歲">16歲</option>
+              <option value="18歲">18歲</option>
+              <option value="21歲">21歲</option>
+              <option value="25歲">25歲</option>
+            </select>
+            <input name="age" maxlength="20" value="16歲" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>外貌</legend>
+            <select class="character-preset" data-character-target="appearance" aria-label="外貌快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="眉目清俊，身形修長，常穿便於入山的素色短衣。">山村採藥者</option>
+              <option value="青衣束髮，腰背挺直，神色沉靜而目光鋒利。">冷靜劍客</option>
+              <option value="衣著乾淨素雅，隨身帶著書卷與舊木簪，氣質溫和。">遊學書生</option>
+            </select>
+            <textarea name="appearance" rows="2" maxlength="240" placeholder="外觀、衣著與氣質"></textarea>
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>性格關鍵詞</legend>
+            <select class="character-preset" data-character-target="personality" aria-label="性格快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="沉著、敏銳、重視家人">沉著守護型</option>
+              <option value="冷靜、果決、不輕信他人">冷靜果決型</option>
+              <option value="溫和、好奇、遇強不退">溫和堅韌型</option>
+            </select>
+            <input name="personality" maxlength="260" placeholder="沉著、敏銳、重視家人" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>身世背景</legend>
+            <select class="character-preset" data-character-target="background" aria-label="身世背景快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="出身幽靜山村的藥農之家，自幼辨草木、熟山路。">山村藥農</option>
+              <option value="出身衰敗修真世家，只留下殘缺傳承與未解舊案。">沒落世家</option>
+              <option value="在河港小城由商隊撫養長大，熟悉人情與遠行風險。">河港商隊</option>
+            </select>
+            <textarea name="background" rows="3" maxlength="500" placeholder="主角從何而來，珍視什麼"></textarea>
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>人生目標</legend>
+            <select class="character-preset" data-character-target="motivation" aria-label="人生目標快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="守護珍視之人並踏上修行之路">守護家人</option>
+              <option value="查清親人遇害真相，讓真正的兇手付出代價">追查真相</option>
+              <option value="尋得真正長生之道，親眼看遍九州山河">求道長生</option>
+            </select>
+            <input name="motivation" maxlength="240" placeholder="守護珍視之人並踏上修行之路" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>不可跨越的底線</legend>
+            <select class="character-preset" data-character-target="bottomLine" aria-label="底線快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="不主動傷害無辜，不背棄珍視之人">不傷無辜</option>
+              <option value="不以弱者性命換取自己的修為與生路">不以弱換強</option>
+              <option value="可以欺敵，但絕不背棄親口立下的承諾">信守承諾</option>
+            </select>
+            <input name="bottomLine" maxlength="240" placeholder="不主動傷害無辜，不背棄珍視之人" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>初始武器裝備</legend>
+            <select class="character-preset" data-character-target="equipment" aria-label="初始裝備快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="藥簍、採藥短刀、火摺子、粗布水囊">採藥行裝</option>
+              <option value="舊鐵劍、磨刀石、斗笠、三日乾糧">旅人劍裝</option>
+              <option value="短弓、六支獵箭、繩索、獸皮披肩">山林獵裝</option>
+            </select>
+            <input name="equipment" maxlength="240" placeholder="藥簍、短刀、火摺子" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>已知能力</legend>
+            <select class="character-preset" data-character-target="knownAbilities" aria-label="已知能力快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="辨識草藥、熟悉山路、攀爬與追蹤、簡單傷口處理">山野生存</option>
+              <option value="基礎劍術、步法、辨別兵器、臨敵觀察">凡俗劍術</option>
+              <option value="察言觀色、記帳估價、辨識貨物、熟悉水路">商旅見聞</option>
+            </select>
+            <input name="knownAbilities" maxlength="600" placeholder="辨識草藥、熟悉山路、攀爬與追蹤" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field">
+            <legend>初始位置</legend>
+            <select class="character-preset" data-character-target="location" aria-label="初始位置快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="山村外圍">山村外圍</option>
+              <option value="河港小城">河港小城</option>
+              <option value="邊境驛站">邊境驛站</option>
+              <option value="荒山古廟">荒山古廟</option>
+            </select>
+            <input name="location" maxlength="160" value="山村外圍" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field">
+            <legend>初始時間</legend>
+            <select class="character-preset" data-character-target="time" aria-label="初始時間快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="清晨">清晨</option>
+              <option value="正午">正午</option>
+              <option value="黃昏">黃昏</option>
+              <option value="深夜">深夜</option>
+            </select>
+            <input name="time" maxlength="80" value="清晨" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>開局前提</legend>
+            <select class="character-preset" data-character-target="premise" aria-label="開局前提快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="山中獸群反常逃竄，一件不屬於凡俗世界的異物隨之現世。">獸潮異物</option>
+              <option value="一名重傷修士倒在附近，臨死前將帶血信物交到主角手中。">修士遺物</option>
+              <option value="熟悉的人在一夜之間失蹤，只留下指向禁地的凌亂痕跡。">親友失蹤</option>
+            </select>
+            <textarea name="premise" rows="3" maxlength="600" placeholder="一場尚未發生的異變，即將把主角推向修行之路。"></textarea>
+          </fieldset>
         </div>
         <p id="character-error" class="form-error" role="alert"></p>
         <div class="dialog-actions">

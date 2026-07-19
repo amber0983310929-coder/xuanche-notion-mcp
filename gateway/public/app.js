@@ -12,6 +12,20 @@ const elements = {
   connectionLabel: document.querySelector("#connection-label"),
   tickBadge: document.querySelector("#tick-badge"),
   handbookButton: document.querySelector("#handbook-button"),
+  handbookOpeners: document.querySelectorAll("[data-open-handbook]"),
+  characterQuickRail: document.querySelector("#character-quick-rail"),
+  quickProfileName: document.querySelector("#quick-profile-name"),
+  quickProfileAge: document.querySelector("#quick-profile-age"),
+  quickPlayerSync: document.querySelector("#quick-player-sync"),
+  quickStateCultivation: document.querySelector("#quick-state-cultivation"),
+  quickStateBody: document.querySelector("#quick-state-body"),
+  quickStateLocation: document.querySelector("#quick-state-location"),
+  quickStateConstraints: document.querySelector("#quick-state-constraints"),
+  quickStateEquipment: document.querySelector("#quick-state-equipment"),
+  quickStateAbilities: document.querySelector("#quick-state-abilities"),
+  quickMainline: document.querySelector("#quick-mainline"),
+  quickTick: document.querySelector("#quick-tick"),
+  quickRevision: document.querySelector("#quick-revision"),
   playerPanel: document.querySelector("#player-panel"),
   mainline: document.querySelector("#mainline"),
   worldId: document.querySelector("#world-id"),
@@ -61,6 +75,7 @@ const elements = {
   characterError: document.querySelector("#character-error"),
   characterCancelButton: document.querySelector("#character-cancel-button"),
   characterSubmitButton: document.querySelector("#character-submit-button"),
+  characterPresets: document.querySelectorAll("[data-character-target]"),
   handbookDialog: document.querySelector("#handbook-dialog"),
   handbookCloseButton: document.querySelector("#handbook-close-button"),
   handbookTabs: document.querySelector(".handbook-tabs"),
@@ -156,6 +171,9 @@ function bindEvents() {
   elements.restartGameButton.addEventListener("click", () => requestWorldOperation("restart_game"));
   elements.resetWorldButton.addEventListener("click", () => requestWorldOperation("reset_world"));
   elements.handbookButton.addEventListener("click", () => openHandbook());
+  for (const button of elements.handbookOpeners) {
+    button.addEventListener("click", () => openHandbook(button.dataset.openHandbook));
+  }
   elements.handbookCloseButton.addEventListener("click", closeHandbook);
   elements.handbookDialog.addEventListener("cancel", closeHandbook);
   elements.handbookDialog.addEventListener("click", (event) => {
@@ -175,6 +193,7 @@ function bindEvents() {
   elements.characterDialog.addEventListener("cancel", cancelCharacterCreation);
   elements.characterForm.addEventListener("submit", submitCharacterCreation);
   elements.characterCancelButton.addEventListener("click", cancelCharacterCreation);
+  for (const preset of elements.characterPresets) preset.addEventListener("change", applyCharacterPreset);
 }
 
 async function login(event) {
@@ -556,6 +575,14 @@ function openCharacterCreation(operation) {
   updateWorldControlState();
 }
 
+function applyCharacterPreset(event) {
+  const preset = event.currentTarget;
+  const target = elements.characterForm.elements.namedItem(preset.dataset.characterTarget);
+  if (!target || !preset.value) return;
+  target.value = preset.value;
+  target.focus({ preventScroll: true });
+}
+
 function cancelCharacterCreation(event) {
   event?.preventDefault?.();
   if (game.busy || game.worldOperation?.phase !== "character_creation") return;
@@ -857,6 +884,9 @@ function renderWorldState() {
   elements.worldId.title = game.state.worldId;
   elements.revision.textContent = playable ? `R${game.state.revision}` : "R—";
   elements.mainline.textContent = game.state.mainline;
+  setQuickDisplay(elements.quickMainline, game.state.mainline, "尚未建立世界");
+  setQuickDisplay(elements.quickTick, playable ? `T${game.state.simTick}` : "T—");
+  setQuickDisplay(elements.quickRevision, playable ? `R${game.state.revision}` : "R—");
   renderCharacterState();
   renderHandbook();
   updateWorldControlState();
@@ -872,6 +902,10 @@ function renderCharacterState() {
     elements.portraitPlaceholder.hidden = false;
     elements.playerStateSync.textContent = "空白世界";
     elements.playerStateSync.classList.remove("synced");
+    elements.quickPlayerSync.textContent = "空白世界";
+    elements.quickPlayerSync.classList.remove("synced");
+    setQuickDisplay(elements.quickProfileName, "等待主角");
+    setQuickDisplay(elements.quickProfileAge, "未建立");
     for (const element of [
       elements.stateCultivation,
       elements.stateBody,
@@ -880,6 +914,14 @@ function renderCharacterState() {
       elements.stateConstraints,
       elements.stateAbilities,
     ]) element.textContent = "尚未建立";
+    for (const element of [
+      elements.quickStateCultivation,
+      elements.quickStateBody,
+      elements.quickStateLocation,
+      elements.quickStateConstraints,
+      elements.quickStateEquipment,
+      elements.quickStateAbilities,
+    ]) setQuickDisplay(element, "尚未建立");
     return;
   }
   const profile = game.state?.profile || {};
@@ -889,6 +931,8 @@ function renderCharacterState() {
   elements.profileAge.textContent = profile.age || "年齡未知";
   elements.profileIntro.textContent = profile.intro || "角色資料尚未載入。";
   elements.profileMotto.textContent = profile.motto ? `「${profile.motto}」` : "";
+  setQuickDisplay(elements.quickProfileName, name);
+  setQuickDisplay(elements.quickProfileAge, profile.age || "年齡未知");
   elements.protagonistPortrait.hidden = !profile.portrait;
   elements.portraitPlaceholder.hidden = Boolean(profile.portrait);
   if (profile.portrait) elements.protagonistPortrait.src = profile.portrait;
@@ -897,6 +941,8 @@ function renderCharacterState() {
 
   elements.playerStateSync.textContent = playerState.calibrated ? "即時同步" : "待校準";
   elements.playerStateSync.classList.toggle("synced", Boolean(playerState.calibrated));
+  elements.quickPlayerSync.textContent = playerState.calibrated ? "即時同步" : "待校準";
+  elements.quickPlayerSync.classList.toggle("synced", Boolean(playerState.calibrated));
   const fields = [
     [elements.stateCultivation, playerState.cultivation],
     [elements.stateBody, playerState.body],
@@ -906,6 +952,21 @@ function renderCharacterState() {
     [elements.stateAbilities, playerState.abilities],
   ];
   for (const [element, value] of fields) element.textContent = value || "待下一回合校準";
+  const quickFields = [
+    [elements.quickStateCultivation, playerState.cultivation],
+    [elements.quickStateBody, playerState.body],
+    [elements.quickStateLocation, playerState.location],
+    [elements.quickStateConstraints, playerState.constraints],
+    [elements.quickStateEquipment, playerState.equipment],
+    [elements.quickStateAbilities, playerState.abilities],
+  ];
+  for (const [element, value] of quickFields) setQuickDisplay(element, value, "待下一回合校準");
+}
+
+function setQuickDisplay(element, value, fallback = "—") {
+  const text = String(value || fallback);
+  element.textContent = text;
+  element.title = text;
 }
 
 function renderHandbook() {

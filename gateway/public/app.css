@@ -111,6 +111,51 @@ button:disabled { cursor: not-allowed; }
   padding: 42px 28px 120px;
 }
 
+.character-quick-rail { display: none; }
+.quick-rail-card {
+  padding: 22px;
+  border: 1px solid var(--line);
+  background: rgba(21, 24, 20, 0.76);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+.quick-character-card { border-top-color: rgba(185, 154, 98, 0.62); }
+.quick-character-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.quick-character-heading h2, .quick-objective-card h2 { margin: 4px 0 10px; font: 600 27px/1.35 "Iowan Old Style", "Noto Serif TC", serif; letter-spacing: 0.07em; }
+.quick-age { flex: 0 0 auto; margin-top: 2px; padding: 4px 7px; color: #c9c2b0; border: 1px solid var(--line); font-size: 14px; letter-spacing: 0.08em; }
+.quick-character-card > .sync-badge { display: inline-block; margin: 2px 0 8px; }
+.quick-state-list { display: grid; gap: 0; margin: 7px 0 0; }
+.quick-state-list div { padding: 11px 0; border-bottom: 1px solid var(--line); }
+.quick-state-list div:last-child { border-bottom: 0; }
+.quick-state-list dt { margin-bottom: 4px; color: #777b71; font-size: 13.5px; letter-spacing: 0.09em; }
+.quick-state-list dd {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #cbc6b7;
+  font: 400 16px/1.55 "Iowan Old Style", "Noto Serif TC", serif;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.quick-rail-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.quick-rail-actions button { min-height: 42px; padding: 8px; color: #bdb6a5; border: 1px solid rgba(185, 154, 98, 0.25); background: rgba(185, 154, 98, 0.055); font-size: 14.5px; }
+.quick-rail-actions button:hover, .quick-rail-actions button:focus-visible { color: var(--paper); border-color: rgba(185, 154, 98, 0.54); outline: none; }
+.quick-objective-card { border-top-color: rgba(116, 131, 107, 0.68); box-shadow: none; }
+.quick-objective-card > p:not(.eyebrow) {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #b8b3a5;
+  font: 400 17px/1.7 "Iowan Old Style", "Noto Serif TC", serif;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 7;
+}
+.quick-world-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 17px 0 0; padding-top: 13px; border-top: 1px solid var(--line); }
+.quick-world-meta div { display: flex; justify-content: space-between; gap: 8px; }
+.quick-world-meta dt { color: #777a70; font-size: 13.5px; }
+.quick-world-meta dd { margin: 0; color: #c7c1b3; font-size: 14px; font-variant-numeric: tabular-nums; }
+
 .world-panel {
   position: sticky;
   top: 96px;
@@ -408,8 +453,13 @@ textarea::placeholder { color: #62645d; }
 
 .character-dialog { width: min(820px, calc(100% - 32px)); max-height: min(92dvh, 980px); }
 .character-dialog form { max-height: min(92dvh, 980px); overflow-y: auto; }
+.character-preset-note { margin: -4px 0 1px; padding: 12px 14px; color: #a8a595; border-left: 2px solid rgba(185, 154, 98, 0.58); background: rgba(185, 154, 98, 0.055); font-size: 15px; line-height: 1.55; }
 .character-form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
 .character-form-grid .wide { grid-column: 1 / -1; }
+.character-form-grid .character-field { display: grid; min-width: 0; gap: 7px; margin: 0; padding: 0; border: 0; }
+.character-form-grid .character-field legend { padding: 0; color: #c9c4b6; font-size: 16.5px; }
+.character-form-grid .character-preset { min-height: 44px; color: #a9a594; border-color: rgba(185, 154, 98, 0.2); background-color: #141612; font-size: 15.5px; }
+.character-form-grid .character-preset:focus { color: var(--paper); border-color: var(--gold); }
 
 .login-dialog { width: min(430px, calc(100% - 32px)); padding: 0; color: var(--paper); border: 1px solid rgba(185, 154, 98, 0.36); background: #171a16; box-shadow: 0 30px 100px rgba(0, 0, 0, 0.7); }
 .login-dialog form { display: grid; gap: 13px; padding: 38px; }
@@ -487,6 +537,26 @@ textarea::placeholder { color: #62645d; }
   .character-form-grid .wide { grid-column: auto; }
   .dialog-actions { grid-template-columns: 1fr; }
   .operation-safety dl div { grid-template-columns: 1fr; gap: 2px; }
+}
+
+@media (min-width: 1550px) {
+  .shell {
+    grid-template-columns: minmax(240px, 280px) minmax(290px, 360px) minmax(0, 860px);
+    gap: clamp(26px, 2.5vw, 48px);
+    width: min(1760px, 100%);
+  }
+  .character-quick-rail {
+    position: sticky;
+    top: 96px;
+    align-self: start;
+    display: grid;
+    gap: 18px;
+    max-height: calc(100dvh - 116px);
+    padding-right: 5px;
+    overflow-y: auto;
+    scrollbar-color: rgba(185, 154, 98, 0.34) transparent;
+    scrollbar-width: thin;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
