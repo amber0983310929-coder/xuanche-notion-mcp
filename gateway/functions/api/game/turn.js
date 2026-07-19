@@ -61,9 +61,14 @@ export async function onRequest(context) {
           await send("committed", {
             ...committed,
             narrative: generated.narrative,
+            summary: generated.summary,
             mainline: generated.mainline,
+            visibleResult: generated.visibleResult,
+            visibleCost: generated.visibleCost,
             situation: generated.situation,
             choices: generated.choices,
+            facts: generated.facts,
+            playerState: committed.playerState || generated.playerState,
           });
           console.log("xuanche_pwa_turn_complete", {
             actionKey: body.actionKey,

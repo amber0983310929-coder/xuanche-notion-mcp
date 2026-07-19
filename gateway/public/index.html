@@ -19,15 +19,18 @@
         <span class="brand-seal">玄</span>
         <span><strong>玄澈</strong><small>修真世界</small></span>
       </a>
-      <div class="topbar-status">
-        <span id="connection-dot" class="connection-dot" aria-hidden="true"></span>
-        <span id="connection-label">連線中</span>
-        <span id="tick-badge" class="tick-badge">T—</span>
+      <div class="topbar-actions">
+        <button id="handbook-button" class="handbook-trigger" type="button">世界手冊</button>
+        <div class="topbar-status">
+          <span id="connection-dot" class="connection-dot" aria-hidden="true"></span>
+          <span id="connection-label">連線中</span>
+          <span id="tick-badge" class="tick-badge">T—</span>
+        </div>
       </div>
     </header>
 
     <main class="shell">
-      <aside class="world-panel" aria-label="世界狀態">
+      <aside id="player-panel" class="world-panel" aria-label="世界狀態">
         <section class="panel-section character-card" aria-labelledby="profile-name">
           <div class="portrait-frame">
             <img id="protagonist-portrait" src="/images/chulingxiao-v1.webp" alt="楚凌霄立繪" width="720" height="900">
@@ -144,6 +147,55 @@
       </section>
     </main>
 
+    <nav id="mobile-nav" class="mobile-nav" aria-label="手機主要導覽">
+      <button type="button" data-mobile-target="story"><span aria-hidden="true">文</span>劇情</button>
+      <button type="button" data-mobile-target="player"><span aria-hidden="true">人</span>主角</button>
+      <button type="button" data-mobile-target="handbook"><span aria-hidden="true">冊</span>手冊</button>
+      <button type="button" data-mobile-target="action"><span aria-hidden="true">行</span>行動</button>
+    </nav>
+
+    <dialog id="handbook-dialog" class="handbook-dialog" aria-labelledby="handbook-title">
+      <div class="handbook-shell">
+        <header class="handbook-header">
+          <div>
+            <p class="eyebrow">玩家已知資料</p>
+            <h2 id="handbook-title">世界手冊</h2>
+          </div>
+          <button id="handbook-close-button" class="handbook-close" type="button" aria-label="關閉世界手冊">×</button>
+        </header>
+        <div class="handbook-tabs" role="tablist" aria-label="世界手冊分類">
+          <button id="handbook-tab-inventory" type="button" role="tab" aria-selected="true" aria-controls="handbook-panel-inventory" data-handbook-tab="inventory">行囊</button>
+          <button id="handbook-tab-abilities" type="button" role="tab" aria-selected="false" aria-controls="handbook-panel-abilities" data-handbook-tab="abilities" tabindex="-1">能力</button>
+          <button id="handbook-tab-people" type="button" role="tab" aria-selected="false" aria-controls="handbook-panel-people" data-handbook-tab="people" tabindex="-1">人物</button>
+          <button id="handbook-tab-clues" type="button" role="tab" aria-selected="false" aria-controls="handbook-panel-clues" data-handbook-tab="clues" tabindex="-1">線索</button>
+          <button id="handbook-tab-journey" type="button" role="tab" aria-selected="false" aria-controls="handbook-panel-journey" data-handbook-tab="journey" tabindex="-1">旅程</button>
+        </div>
+        <div class="handbook-panels">
+          <section id="handbook-panel-inventory" role="tabpanel" aria-labelledby="handbook-tab-inventory">
+            <p class="handbook-section-lead">目前已確認的武器、裝備與重要隨身物。</p>
+            <div id="handbook-equipment" class="handbook-token-list"></div>
+          </section>
+          <section id="handbook-panel-abilities" role="tabpanel" aria-labelledby="handbook-tab-abilities" hidden>
+            <p class="handbook-section-lead">已掌握的神通、法術、功法與凡俗技能。</p>
+            <div id="handbook-abilities" class="handbook-token-list"></div>
+          </section>
+          <section id="handbook-panel-people" role="tabpanel" aria-labelledby="handbook-tab-people" hidden>
+            <p class="handbook-section-lead">只記錄主角已知且能確認的人物資料。</p>
+            <div id="handbook-people" class="handbook-entry-list"></div>
+          </section>
+          <section id="handbook-panel-clues" role="tabpanel" aria-labelledby="handbook-tab-clues" hidden>
+            <p class="handbook-section-lead">由已成功存檔回合累積的公開線索。</p>
+            <div id="handbook-clues" class="handbook-entry-list"></div>
+          </section>
+          <section id="handbook-panel-journey" role="tabpanel" aria-labelledby="handbook-tab-journey" hidden>
+            <p class="handbook-section-lead">這台裝置保存的近期已提交旅程。</p>
+            <div id="handbook-journey" class="handbook-entry-list journey-list"></div>
+          </section>
+        </div>
+        <p class="handbook-footnote">手冊不顯示導演資訊、未發生選項或尚未提交的推演。</p>
+      </div>
+    </dialog>
+
     <dialog id="world-operation-dialog" class="modal-dialog operation-dialog" aria-labelledby="operation-title">
       <form id="world-operation-form" method="dialog">
         <p class="eyebrow">權威世界存檔</p>
@@ -217,6 +269,27 @@
 
     <template id="player-template">
       <article class="player-action"><span>你的行動</span><p></p></article>
+    </template>
+
+    <template id="turn-change-template">
+      <section class="turn-change-card" aria-label="本回合已保存變化">
+        <header>
+          <div><p class="eyebrow">存檔確認</p><h3>本回合變化</h3></div>
+          <span class="turn-change-tick"></span>
+        </header>
+        <div class="turn-outcome-grid">
+          <article class="turn-outcome result"><span>可見結果</span><p></p></article>
+          <article class="turn-outcome cost"><span>可見代價</span><p></p></article>
+        </div>
+        <div class="turn-delta-section">
+          <h4>主角狀態</h4>
+          <ul class="turn-delta-list"></ul>
+        </div>
+        <div class="turn-facts-section">
+          <h4>新知與線索</h4>
+          <ul class="turn-facts-list"></ul>
+        </div>
+      </section>
     </template>
 
     <script type="module" src="/app.js"></script>

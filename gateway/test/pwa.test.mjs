@@ -60,6 +60,7 @@ function snapshot() {
 test("PWA shell exposes continue plus three guarded world-management actions", async () => {
   const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
   const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  const css = await readFile(new URL("../public/app.css", import.meta.url), "utf8");
   assert.match(html, /id="continue-game-button"/);
   assert.match(html, /id="new-game-button"[^>]*>新的遊戲/);
   assert.match(html, /id="restart-game-button"[^>]*>重新遊戲/);
@@ -67,8 +68,16 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
   assert.doesNotMatch(html, /id="(?:new-game|restart-game|reset-world)-button"[^>]*\sdisabled/);
   assert.match(html, /id="world-operation-dialog"/);
   assert.match(html, /id="character-dialog"/);
+  assert.match(html, /id="handbook-dialog"/);
+  assert.match(html, /id="mobile-nav"/);
+  assert.match(html, /id="turn-change-template"/);
   assert.match(app, /typedConfirmation/);
   assert.match(app, /xuanche:pwa:world-operation:v1/);
+  assert.match(app, /buildCommittedSummary/);
+  assert.match(app, /committedSummary/);
+  const decisionRule = css.match(/(?:^|\n)\.decision-area\s*\{([^}]*)\}/s)?.[1] || "";
+  assert.match(decisionRule, /position:\s*static/);
+  assert.doesNotMatch(decisionRule, /position:\s*sticky/);
 });
 
 test("signed owner sessions reject tampering and expiry", async () => {
@@ -453,6 +462,13 @@ test("PWA turn streams narrative and commits through the bound engine", async ()
     assert.match(streamText, /event: checkpoint/);
     assert.match(streamText, /event: committed/);
     assert.match(streamText, /event: done/);
+    const committedPacket = streamText.split("\n\n")
+      .find((packet) => packet.startsWith("event: committed"));
+    const committedData = JSON.parse(committedPacket.split("\n").find((line) => line.startsWith("data: ")).slice(6));
+    assert.equal(committedData.visibleResult, generated.visibleResult);
+    assert.equal(committedData.visibleCost, generated.visibleCost);
+    assert.deepEqual(committedData.facts, generated.facts);
+    assert.deepEqual(committedData.playerState, generated.playerState);
     assert.equal(committedInput.expectedSimTick, 16);
     assert.equal(committedInput.narrative, narrative);
     assert.deepEqual(committedInput.playerState, generated.playerState);

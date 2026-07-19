@@ -11,6 +11,8 @@ const elements = {
   connectionDot: document.querySelector("#connection-dot"),
   connectionLabel: document.querySelector("#connection-label"),
   tickBadge: document.querySelector("#tick-badge"),
+  handbookButton: document.querySelector("#handbook-button"),
+  playerPanel: document.querySelector("#player-panel"),
   mainline: document.querySelector("#mainline"),
   worldId: document.querySelector("#world-id"),
   revision: document.querySelector("#revision"),
@@ -59,12 +61,23 @@ const elements = {
   characterError: document.querySelector("#character-error"),
   characterCancelButton: document.querySelector("#character-cancel-button"),
   characterSubmitButton: document.querySelector("#character-submit-button"),
+  handbookDialog: document.querySelector("#handbook-dialog"),
+  handbookCloseButton: document.querySelector("#handbook-close-button"),
+  handbookTabs: document.querySelector(".handbook-tabs"),
+  handbookPanels: document.querySelectorAll("[id^='handbook-panel-']"),
+  handbookEquipment: document.querySelector("#handbook-equipment"),
+  handbookAbilities: document.querySelector("#handbook-abilities"),
+  handbookPeople: document.querySelector("#handbook-people"),
+  handbookClues: document.querySelector("#handbook-clues"),
+  handbookJourney: document.querySelector("#handbook-journey"),
+  mobileNav: document.querySelector("#mobile-nav"),
   loginDialog: document.querySelector("#login-dialog"),
   loginForm: document.querySelector("#login-form"),
   passphrase: document.querySelector("#passphrase"),
   loginError: document.querySelector("#login-error"),
   narrativeTemplate: document.querySelector("#narrative-template"),
   playerTemplate: document.querySelector("#player-template"),
+  turnChangeTemplate: document.querySelector("#turn-change-template"),
 };
 
 const game = {
@@ -76,7 +89,17 @@ const game = {
   checkpoint: readStorage(STORAGE.pending),
   worldOperation: readStorage(STORAGE.worldOperation),
   operationCandidate: null,
+  activeHandbookTab: "inventory",
 };
+
+const PLAYER_STATE_PRESENTATION = Object.freeze([
+  ["cultivation", "修為"],
+  ["body", "身體"],
+  ["equipment", "裝備"],
+  ["location", "位置"],
+  ["constraints", "限制"],
+  ["abilities", "能力"],
+]);
 
 applyStoredSettings();
 bindEvents();
@@ -132,6 +155,15 @@ function bindEvents() {
   elements.newGameButton.addEventListener("click", () => requestWorldOperation("new_game"));
   elements.restartGameButton.addEventListener("click", () => requestWorldOperation("restart_game"));
   elements.resetWorldButton.addEventListener("click", () => requestWorldOperation("reset_world"));
+  elements.handbookButton.addEventListener("click", () => openHandbook());
+  elements.handbookCloseButton.addEventListener("click", closeHandbook);
+  elements.handbookDialog.addEventListener("cancel", closeHandbook);
+  elements.handbookDialog.addEventListener("click", (event) => {
+    if (event.target === elements.handbookDialog) closeHandbook();
+  });
+  elements.handbookTabs.addEventListener("click", selectHandbookTabFromEvent);
+  elements.handbookTabs.addEventListener("keydown", navigateHandbookTabs);
+  elements.mobileNav.addEventListener("click", navigateMobileSurface);
   elements.installButton.addEventListener("click", installApp);
   elements.logoutButton.addEventListener("click", logout);
   elements.loginDialog.addEventListener("cancel", (event) => event.preventDefault());
@@ -186,6 +218,68 @@ async function continueGame() {
   if (game.busy || !game.state) return;
   document.querySelector("#decision-area")?.scrollIntoView({ behavior: "smooth", block: "end" });
   setTimeout(() => elements.actionInput.focus({ preventScroll: true }), 350);
+}
+
+function openHandbook(tab = game.activeHandbookTab) {
+  renderHandbook();
+  selectHandbookTab(tab, { focus: false });
+  if (!elements.handbookDialog.open) elements.handbookDialog.showModal();
+}
+
+function closeHandbook(event) {
+  event?.preventDefault();
+  if (elements.handbookDialog.open) elements.handbookDialog.close();
+}
+
+function selectHandbookTabFromEvent(event) {
+  const tab = event.target.closest("[data-handbook-tab]");
+  if (tab) selectHandbookTab(tab.dataset.handbookTab);
+}
+
+function navigateHandbookTabs(event) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+  const tabs = [...elements.handbookTabs.querySelectorAll("[data-handbook-tab]")];
+  const current = tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true");
+  let next = current;
+  if (event.key === "Home") next = 0;
+  else if (event.key === "End") next = tabs.length - 1;
+  else if (event.key === "ArrowRight") next = (current + 1) % tabs.length;
+  else next = (current - 1 + tabs.length) % tabs.length;
+  event.preventDefault();
+  selectHandbookTab(tabs[next].dataset.handbookTab);
+}
+
+function selectHandbookTab(name, { focus = true } = {}) {
+  const selected = elements.handbookTabs.querySelector(`[data-handbook-tab="${name}"]`)
+    || elements.handbookTabs.querySelector("[data-handbook-tab]");
+  if (!selected) return;
+  game.activeHandbookTab = selected.dataset.handbookTab;
+  for (const tab of elements.handbookTabs.querySelectorAll("[data-handbook-tab]")) {
+    const active = tab === selected;
+    tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
+  }
+  for (const panel of elements.handbookPanels) {
+    panel.hidden = panel.id !== `handbook-panel-${game.activeHandbookTab}`;
+  }
+  if (focus) selected.focus();
+}
+
+function navigateMobileSurface(event) {
+  const button = event.target.closest("[data-mobile-target]");
+  if (!button) return;
+  const target = button.dataset.mobileTarget;
+  if (target === "handbook") {
+    openHandbook();
+    return;
+  }
+  const destination = target === "story"
+    ? elements.story
+    : target === "player"
+      ? elements.playerPanel
+      : document.querySelector("#decision-area");
+  destination?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (target === "action") setTimeout(() => elements.actionInput.focus({ preventScroll: true }), 350);
 }
 
 function openLogin(configuration) {
@@ -764,6 +858,7 @@ function renderWorldState() {
   elements.revision.textContent = playable ? `R${game.state.revision}` : "R—";
   elements.mainline.textContent = game.state.mainline;
   renderCharacterState();
+  renderHandbook();
   updateWorldControlState();
 }
 
@@ -813,6 +908,123 @@ function renderCharacterState() {
   for (const [element, value] of fields) element.textContent = value || "待下一回合校準";
 }
 
+function renderHandbook() {
+  const playable = isPlayableWorld();
+  const playerState = playable ? game.state?.playerState || {} : {};
+  renderHandbookTokens(
+    elements.handbookEquipment,
+    splitDisplayItems(playerState.equipment),
+    playable ? "尚未記錄可確認的裝備。" : "建立新遊戲後才會出現行囊資料。",
+  );
+  renderHandbookTokens(
+    elements.handbookAbilities,
+    splitDisplayItems(playerState.abilities),
+    playable ? "尚未掌握或確認任何能力。" : "建立新遊戲後才會出現能力資料。",
+  );
+  renderHandbookPeople(playable);
+  renderHandbookClues(playable);
+  renderHandbookJourney(playable);
+}
+
+function splitDisplayItems(value) {
+  return [...new Set(String(value || "")
+    .split(/[、;；\n]+/u)
+    .map((item) => item.trim())
+    .filter((item) => item && !["無", "未知", "尚未記錄"].includes(item)))];
+}
+
+function renderHandbookTokens(container, items, emptyText) {
+  container.replaceChildren();
+  if (!items.length) {
+    container.append(handbookEmpty(emptyText));
+    return;
+  }
+  for (const item of items) {
+    const token = document.createElement("span");
+    token.className = "handbook-token";
+    token.textContent = item;
+    container.append(token);
+  }
+}
+
+function renderHandbookPeople(playable) {
+  elements.handbookPeople.replaceChildren();
+  if (!playable) {
+    elements.handbookPeople.append(handbookEmpty("尚未建立人物資料。"));
+    return;
+  }
+  const profile = game.state?.profile || {};
+  const playerState = game.state?.playerState || {};
+  const entry = handbookEntry(
+    profile.name || playerState.name || "此世主角",
+    profile.age || "年齡未知",
+    [profile.intro, profile.motto ? `「${profile.motto}」` : ""].filter(Boolean),
+  );
+  elements.handbookPeople.append(entry, handbookEmpty("尚未有可確認的人物關係紀錄。"));
+}
+
+function renderHandbookClues(playable) {
+  elements.handbookClues.replaceChildren();
+  const facts = playable
+    ? [...new Set(historyForCurrentWorld().flatMap((turn) => turn.committedSummary?.facts || []))].reverse()
+    : [];
+  if (!facts.length) {
+    elements.handbookClues.append(handbookEmpty(playable ? "近期存檔尚未累積公開線索。" : "建立新遊戲後才會累積線索。"));
+    return;
+  }
+  for (const [index, fact] of facts.entries()) {
+    elements.handbookClues.append(handbookEntry(`線索 ${facts.length - index}`, "已確認", [fact]));
+  }
+}
+
+function renderHandbookJourney(playable) {
+  elements.handbookJourney.replaceChildren();
+  const history = playable ? historyForCurrentWorld().slice().reverse() : [];
+  if (!history.length) {
+    elements.handbookJourney.append(handbookEmpty(playable ? "這台裝置尚未保存近期旅程。" : "建立新遊戲後才會記錄旅程。"));
+    return;
+  }
+  for (const turn of history) {
+    const summary = turn.committedSummary || {};
+    const excerpt = summary.result || clampDisplayText(turn.narrative, 140);
+    const entry = handbookEntry(`回合 ${turn.tick}`, "已保存", [turn.action, excerpt].filter(Boolean));
+    entry.classList.add("journey-entry");
+    entry.querySelector("p")?.classList.add("journey-action");
+    elements.handbookJourney.append(entry);
+  }
+}
+
+function handbookEntry(title, meta, paragraphs) {
+  const entry = document.createElement("article");
+  entry.className = "handbook-entry";
+  const header = document.createElement("header");
+  const heading = document.createElement("h3");
+  heading.textContent = title;
+  const metadata = document.createElement("span");
+  metadata.className = "entry-meta";
+  metadata.textContent = meta;
+  header.append(heading, metadata);
+  entry.append(header);
+  for (const text of paragraphs) {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = text;
+    entry.append(paragraph);
+  }
+  return entry;
+}
+
+function handbookEmpty(message) {
+  const empty = document.createElement("p");
+  empty.className = "handbook-empty";
+  empty.textContent = message;
+  return empty;
+}
+
+function clampDisplayText(value, maximum) {
+  const text = String(value || "").replace(/\s+/gu, " ").trim();
+  return text.length <= maximum ? text : `${text.slice(0, maximum - 1)}…`;
+}
+
 function renderStoryFromStorage() {
   elements.story.replaceChildren();
   if (!isPlayableWorld()) {
@@ -827,6 +1039,7 @@ function renderStoryFromStorage() {
     appendPlayerAction(turn.action, false);
     const card = appendNarrativeCard(turn.tick, turn.narrative, "已保存", false);
     card.classList.remove("generating");
+    appendTurnChangeCard(turn.committedSummary, false);
   }
   const lastTick = history.at(-1)?.tick;
   if (!history.length || lastTick !== game.state.simTick) {
@@ -910,6 +1123,11 @@ function finalizeCommittedTurn(card, action, data) {
   card.querySelector(".card-status").textContent = `已保存 · T${data.simTick}`;
   const narrative = card.querySelector(".narrative-text");
   if (!narrative.textContent) narrative.textContent = data.narrative || "本回合已保存。";
+  const previousPlayerState = game.state?.playerState || null;
+  const nextPlayerState = data.playerState
+    ? { ...data.playerState, calibrated: true }
+    : game.state.playerState;
+  const committedSummary = buildCommittedSummary(previousPlayerState, nextPlayerState, data);
   game.state = {
     ...game.state,
     worldId: data.worldId,
@@ -919,22 +1137,22 @@ function finalizeCommittedTurn(card, action, data) {
     lastActionKey: data.actionKey || game.state.lastActionKey,
     mainline: data.mainline || game.state.mainline,
     situation: data.situation || game.state.situation,
-    playerState: data.playerState
-      ? { ...data.playerState, calibrated: true }
-      : game.state.playerState,
+    playerState: nextPlayerState,
   };
   game.choices = Array.isArray(data.choices) ? data.choices : [];
-  renderWorldState();
-  renderChoices(game.choices);
-  elements.saveState.textContent = "已保存";
-  game.checkpoint = null;
-  localStorage.removeItem(STORAGE.pending);
+  appendTurnChangeCard(committedSummary);
   appendHistory({
     action,
     narrative: narrative.textContent,
     tick: data.simTick,
     actionKey: data.actionKey,
+    committedSummary,
   });
+  renderWorldState();
+  renderChoices(game.choices);
+  elements.saveState.textContent = "已保存";
+  game.checkpoint = null;
+  localStorage.removeItem(STORAGE.pending);
   cacheCurrentState();
 }
 
@@ -982,9 +1200,14 @@ async function retryCheckpoint(card = null) {
     finalizeCommittedTurn(card, checkpoint.playerAction, {
       ...payload.data,
       narrative: checkpoint.narrative,
+      summary: checkpoint.summary,
       mainline: checkpoint.mainline,
+      visibleResult: checkpoint.visibleResult,
+      visibleCost: checkpoint.visibleCost,
       situation: checkpoint.situation,
       choices: checkpoint.choices,
+      facts: checkpoint.facts,
+      playerState: payload.data.playerState || checkpoint.playerState,
     });
     hideAlert();
   } catch (error) {
@@ -1040,6 +1263,82 @@ function appendNarrativeCard(tick, narrative, status, generating) {
 function appendNarrativeDelta(card, text) {
   if (!text) return;
   card.querySelector(".narrative-text").append(document.createTextNode(text));
+}
+
+function buildCommittedSummary(previousPlayerState, nextPlayerState, data) {
+  const deltas = [];
+  for (const [field, label] of PLAYER_STATE_PRESENTATION) {
+    const before = String(previousPlayerState?.[field] || "").trim();
+    const after = String(nextPlayerState?.[field] || "").trim();
+    if (!after || before === after) continue;
+    deltas.push({ label, before: before || "未記錄", after });
+  }
+  return {
+    tick: data.simTick,
+    result: String(data.visibleResult || "").trim(),
+    cost: String(data.visibleCost || "").trim(),
+    facts: [...new Set((Array.isArray(data.facts) ? data.facts : [])
+      .map((fact) => String(fact || "").trim())
+      .filter(Boolean))].slice(0, 8),
+    deltas,
+  };
+}
+
+function appendTurnChangeCard(summary, animate = true) {
+  if (!summary || (!summary.result && !summary.cost && !summary.deltas?.length && !summary.facts?.length)) return null;
+  const node = elements.turnChangeTemplate.content.firstElementChild.cloneNode(true);
+  node.querySelector(".turn-change-tick").textContent = Number.isInteger(summary.tick) ? `T${summary.tick}` : "已保存";
+  const result = node.querySelector(".turn-outcome.result");
+  const cost = node.querySelector(".turn-outcome.cost");
+  result.hidden = !summary.result;
+  cost.hidden = !summary.cost;
+  node.querySelector(".turn-outcome-grid").classList.toggle("single", !summary.result || !summary.cost);
+  result.querySelector("p").textContent = summary.result || "";
+  cost.querySelector("p").textContent = summary.cost || "";
+
+  const deltaList = node.querySelector(".turn-delta-list");
+  const deltas = Array.isArray(summary.deltas) ? summary.deltas : [];
+  if (!deltas.length) {
+    const empty = document.createElement("li");
+    empty.className = "turn-delta-empty";
+    empty.textContent = "本回合沒有改變已確認的主角狀態。";
+    deltaList.append(empty);
+  } else {
+    for (const delta of deltas) {
+      const item = document.createElement("li");
+      const label = document.createElement("span");
+      label.className = "turn-delta-label";
+      label.textContent = delta.label;
+      const values = document.createElement("span");
+      values.className = "turn-delta-values";
+      const before = document.createElement("del");
+      before.textContent = delta.before;
+      const arrow = document.createElement("span");
+      arrow.className = "turn-delta-arrow";
+      arrow.textContent = "→";
+      values.append(before, arrow, document.createTextNode(delta.after));
+      item.append(label, values);
+      deltaList.append(item);
+    }
+  }
+
+  const factsList = node.querySelector(".turn-facts-list");
+  const facts = Array.isArray(summary.facts) ? summary.facts : [];
+  if (!facts.length) {
+    const empty = document.createElement("li");
+    empty.className = "turn-facts-empty";
+    empty.textContent = "本回合沒有新增可確認線索。";
+    factsList.append(empty);
+  } else {
+    for (const fact of facts) {
+      const item = document.createElement("li");
+      item.textContent = fact;
+      factsList.append(item);
+    }
+  }
+  if (!animate) node.style.animation = "none";
+  elements.story.append(node);
+  return node;
 }
 
 function renderChoices(choices) {

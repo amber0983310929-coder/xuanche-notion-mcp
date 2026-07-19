@@ -84,6 +84,18 @@ button:disabled { cursor: not-allowed; }
 .brand strong { font: 650 27px/1.05 "Iowan Old Style", "Noto Serif TC", serif; letter-spacing: 0.15em; }
 .brand small { margin-top: 5px; color: var(--paper-dim); font-size: 15px; letter-spacing: 0.26em; }
 
+.topbar-actions { display: flex; align-items: center; gap: 18px; }
+.handbook-trigger {
+  min-height: 38px;
+  padding: 7px 13px;
+  color: #d5cdb9;
+  border: 1px solid rgba(185, 154, 98, 0.3);
+  border-radius: 999px;
+  background: rgba(185, 154, 98, 0.06);
+  font-size: 16px;
+  letter-spacing: 0.08em;
+}
+.handbook-trigger:hover, .handbook-trigger:focus-visible { color: var(--paper); border-color: rgba(185, 154, 98, 0.62); outline: none; }
 .topbar-status { display: flex; align-items: center; gap: 8px; color: var(--paper-dim); font-size: 18px; }
 .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 4px rgba(185, 154, 98, 0.09); }
 .connection-dot.online { background: var(--jade); box-shadow: 0 0 0 4px rgba(159, 177, 154, 0.09); }
@@ -199,6 +211,7 @@ select:focus { border-color: var(--gold); }
 .control-note { margin: 11px 0 0; color: #72746c; font-size: 13.5px; line-height: 1.55; }
 
 .play-panel { min-width: 0; }
+.play-panel, .world-panel, .decision-area { scroll-margin-top: 96px; }
 .story { display: grid; gap: 26px; }
 .scene-card {
   position: relative;
@@ -227,7 +240,44 @@ select:focus { border-color: var(--gold); }
 .player-action span { color: var(--moss); font-size: 13.5px; letter-spacing: 0.18em; }
 .player-action p { margin: 6px 0 0; color: #c8c5b8; font: 400 21px/1.7 "Iowan Old Style", "Noto Serif TC", serif; }
 
-.decision-area { position: sticky; bottom: 0; z-index: 12; margin-top: 34px; padding: 20px 0 max(20px, env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(17, 19, 16, 0.96) 14%, rgba(17, 19, 16, 0.99)); }
+.turn-change-card {
+  padding: 24px 26px;
+  border: 1px solid rgba(159, 177, 154, 0.22);
+  border-left: 3px solid rgba(159, 177, 154, 0.58);
+  background: linear-gradient(135deg, rgba(116, 131, 107, 0.1), rgba(19, 22, 18, 0.8));
+}
+.turn-change-card > header { display: flex; align-items: start; justify-content: space-between; gap: 20px; }
+.turn-change-card h3 { margin: 4px 0 0; font: 600 25px/1.35 "Iowan Old Style", "Noto Serif TC", serif; letter-spacing: 0.08em; }
+.turn-change-tick { padding: 5px 9px; color: var(--jade); border: 1px solid rgba(159, 177, 154, 0.24); border-radius: 999px; font-size: 14px; }
+.turn-outcome-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.turn-outcome-grid.single { grid-template-columns: 1fr; }
+.turn-outcome { padding: 14px 15px; border: 1px solid var(--line); background: rgba(13, 15, 12, 0.48); }
+.turn-outcome span { color: var(--gold); font-size: 13.5px; font-weight: 700; letter-spacing: 0.14em; }
+.turn-outcome.cost span { color: #c78c7f; }
+.turn-outcome p { margin: 7px 0 0; color: #ccc7b9; font: 400 17px/1.65 "Iowan Old Style", "Noto Serif TC", serif; }
+.turn-delta-section, .turn-facts-section { margin-top: 18px; }
+.turn-change-card h4 { margin: 0 0 9px; color: #96988c; font-size: 14px; font-weight: 650; letter-spacing: 0.12em; }
+.turn-delta-list, .turn-facts-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.turn-delta-list li { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 10px; align-items: start; }
+.turn-delta-label { color: var(--jade); font-size: 15px; line-height: 1.6; }
+.turn-delta-values { color: #c9c5b8; font: 400 16px/1.6 "Iowan Old Style", "Noto Serif TC", serif; }
+.turn-delta-values del { color: #777a71; text-decoration-color: rgba(158, 75, 63, 0.6); }
+.turn-delta-arrow { padding-inline: 6px; color: #777a71; }
+.turn-delta-empty, .turn-facts-empty { color: #777a71; font-size: 15.5px; line-height: 1.6; }
+.turn-facts-list li { position: relative; padding-left: 16px; color: #c8c4b7; font: 400 16.5px/1.62 "Iowan Old Style", "Noto Serif TC", serif; }
+.turn-facts-list li::before { content: ""; position: absolute; left: 1px; top: 0.72em; width: 5px; height: 5px; border-radius: 50%; background: var(--gold); }
+.turn-facts-list .turn-facts-empty { padding-left: 0; }
+.turn-facts-list .turn-facts-empty::before { display: none; }
+
+.decision-area {
+  position: static;
+  margin-top: 64px;
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-top-color: rgba(185, 154, 98, 0.52);
+  background: linear-gradient(145deg, rgba(24, 27, 23, 0.96), rgba(15, 17, 14, 0.97));
+  box-shadow: var(--shadow);
+}
 .decision-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .decision-heading span { color: #74776d; font-size: 15px; }
 .choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-bottom: 10px; }
@@ -271,6 +321,49 @@ textarea::placeholder { color: #62645d; }
 .loading-lines i { display: block; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #242820, #353a31, #242820); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
 .loading-lines i:nth-child(2) { width: 88%; }
 .loading-lines i:nth-child(3) { width: 62%; }
+
+.mobile-nav { display: none; }
+
+.handbook-dialog {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: min(520px, 100%);
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0 0 0 auto;
+  padding: 0;
+  color: var(--paper);
+  border: 0;
+  border-left: 1px solid rgba(185, 154, 98, 0.34);
+  background: #141713;
+  box-shadow: -30px 0 90px rgba(0, 0, 0, 0.58);
+}
+.handbook-dialog[open] { animation: drawer-in 180ms ease-out; }
+.handbook-dialog::backdrop { background: rgba(7, 8, 7, 0.72); backdrop-filter: blur(5px); }
+.handbook-shell { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100%; }
+.handbook-header { display: flex; align-items: start; justify-content: space-between; gap: 20px; padding: 28px 28px 20px; border-bottom: 1px solid var(--line); }
+.handbook-header h2 { margin: 4px 0 0; font: 600 36px/1.25 "Iowan Old Style", "Noto Serif TC", serif; letter-spacing: 0.08em; }
+.handbook-close { display: grid; place-items: center; width: 44px; height: 44px; color: var(--paper-dim); border: 1px solid var(--line); border-radius: 50%; background: transparent; font-size: 29px; line-height: 1; }
+.handbook-close:hover, .handbook-close:focus-visible { color: var(--paper); border-color: rgba(185, 154, 98, 0.5); outline: none; }
+.handbook-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 0 18px; border-bottom: 1px solid var(--line); }
+.handbook-tabs button { min-height: 52px; padding: 8px 4px; color: #85887d; border: 0; border-bottom: 2px solid transparent; background: transparent; font-size: 15.5px; }
+.handbook-tabs button[aria-selected="true"] { color: var(--paper); border-bottom-color: var(--gold); }
+.handbook-tabs button:focus-visible { outline: 1px solid var(--gold); outline-offset: -4px; }
+.handbook-panels { min-height: 0; padding: 25px 28px 36px; overflow-y: auto; scrollbar-color: rgba(185, 154, 98, 0.42) transparent; scrollbar-width: thin; }
+.handbook-section-lead { margin: 0 0 18px; color: #8f9287; font-size: 16px; line-height: 1.65; }
+.handbook-token-list { display: flex; flex-wrap: wrap; gap: 9px; }
+.handbook-token-list .handbook-empty { flex: 1 0 100%; }
+.handbook-token { padding: 9px 12px; color: #d1ccbd; border: 1px solid rgba(185, 154, 98, 0.24); background: rgba(185, 154, 98, 0.06); font: 400 17px/1.45 "Iowan Old Style", "Noto Serif TC", serif; }
+.handbook-entry-list { display: grid; gap: 12px; }
+.handbook-entry { padding: 16px; border: 1px solid var(--line); background: rgba(25, 28, 24, 0.68); }
+.handbook-entry header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
+.handbook-entry h3 { margin: 0; color: #d6d0c1; font: 600 20px/1.45 "Iowan Old Style", "Noto Serif TC", serif; }
+.handbook-entry time, .handbook-entry .entry-meta { color: #777a70; font-size: 13.5px; }
+.handbook-entry p { margin: 5px 0 0; color: #aaa798; font: 400 16.5px/1.65 "Iowan Old Style", "Noto Serif TC", serif; }
+.handbook-entry .journey-action { color: #c7c2b4; }
+.handbook-empty { padding: 24px 18px; color: #777a71; border: 1px dashed rgba(231, 224, 206, 0.16); text-align: center; line-height: 1.7; }
+.handbook-footnote { margin: 0; padding: 16px 28px max(16px, env(safe-area-inset-bottom)); color: #686b63; border-top: 1px solid var(--line); font-size: 13.5px; line-height: 1.55; }
 
 .modal-dialog, .login-dialog {
   padding: 0;
@@ -334,6 +427,7 @@ textarea::placeholder { color: #62645d; }
 
 @keyframes blink { 50% { opacity: 0; } }
 @keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes drawer-in { from { transform: translateX(28px); opacity: 0.5; } }
 
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; gap: 24px; padding-top: 22px; }
@@ -346,7 +440,7 @@ textarea::placeholder { color: #62645d; }
   .topbar { height: 66px; padding-inline: 16px; }
   .brand small, #connection-label { display: none; }
   .brand-seal { width: 36px; height: 36px; font-size: 28.5px; }
-  .shell { padding: 14px 13px 100px; }
+  .shell { padding: 14px 13px calc(112px + env(safe-area-inset-bottom)); }
   .world-panel { grid-template-columns: 1fr; }
   .panel-actions { display: none; }
   .panel-section { padding: 17px; }
@@ -356,11 +450,36 @@ textarea::placeholder { color: #62645d; }
   .world-meta dd { max-width: 100%; margin-top: 4px; }
   .scene-card { padding: 23px 20px; }
   .narrative-text { font-size: 24px; line-height: 1.92; }
+  .turn-change-card { padding: 20px 17px; }
+  .turn-outcome-grid { grid-template-columns: 1fr; }
+  .turn-delta-list li { grid-template-columns: 1fr; gap: 2px; }
   .choices { grid-template-columns: 1fr; }
   .action-form { grid-template-columns: 1fr; }
   .send-button { min-height: 46px; }
   .composer-note { text-align: left; }
-  .decision-area { margin-inline: -2px; }
+  .decision-area { margin: 52px -2px 0; padding: 21px 17px; }
+  .handbook-trigger { display: none; }
+  .mobile-nav {
+    position: fixed;
+    inset: auto 0 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    padding: 7px 8px max(7px, env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(185, 154, 98, 0.3);
+    background: rgba(13, 15, 12, 0.96);
+    box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(18px);
+  }
+  .mobile-nav button { display: grid; place-items: center; gap: 2px; min-height: 54px; padding: 4px; color: #9b9c91; border: 0; background: transparent; font-size: 13px; }
+  .mobile-nav button span { color: var(--gold); font: 600 19px/1 "Iowan Old Style", "Noto Serif TC", serif; }
+  .mobile-nav button:focus-visible { color: var(--paper); outline: 1px solid rgba(185, 154, 98, 0.52); }
+  .handbook-dialog { width: 100%; }
+  .handbook-header { padding: 23px 19px 17px; }
+  .handbook-tabs { padding-inline: 8px; }
+  .handbook-tabs button { min-height: 49px; font-size: 14px; }
+  .handbook-panels { padding: 21px 18px 30px; }
+  .handbook-footnote { padding-inline: 18px; }
   .login-dialog form { padding: 30px 24px; }
   .modal-dialog form { padding: 27px 21px; }
   .modal-dialog h2 { font-size: 30px; }
