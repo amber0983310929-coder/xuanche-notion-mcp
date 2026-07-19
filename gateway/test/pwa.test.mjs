@@ -87,6 +87,9 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
   assert.match(app, /requestAnimationFrame\(commitPending\)/);
   assert.match(app, /function hydrateCachedState/);
   assert.match(app, /document\.createDocumentFragment\(\)/);
+  assert.match(app, /window\.history\.scrollRestoration = "manual"/);
+  assert.match(app, /function scheduleCurrentTurnNavigation/);
+  assert.match(app, /target\.scrollIntoView\(\{ behavior: "auto", block: "start" \}\)/);
   assert.match(app, /handbookDirty/);
   assert.match(app, /setAttribute\("aria-busy"/);
   assert.match(html, /行動草稿會自動保留/);

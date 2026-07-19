@@ -110,6 +110,7 @@ const game = {
   activeHandbookTab: "inventory",
   handbookDirty: true,
   draftTimer: null,
+  initialNavigationComplete: false,
 };
 
 const PLAYER_STATE_PRESENTATION = Object.freeze([
@@ -123,6 +124,7 @@ const PLAYER_STATE_PRESENTATION = Object.freeze([
 
 applyStoredSettings();
 restoreActionDraft();
+if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
 bindEvents();
 registerServiceWorker();
 updateConnection();
@@ -239,6 +241,7 @@ async function logout() {
     // Lock the local surface even when the network disappears.
   }
   game.state = null;
+  game.initialNavigationComplete = false;
   writeStorage(STORAGE.locked, true);
   setBusy(true, "已鎖定");
   openLogin();
@@ -685,7 +688,7 @@ async function initializeWorldFromOperation(operation) {
     localStorage.removeItem(STORAGE.state);
     if (elements.characterDialog.open) elements.characterDialog.close();
     if (elements.operationDialog.open) elements.operationDialog.close();
-    await loadWorld({ refresh: true });
+    await loadWorld({ refresh: true, navigateToCurrent: true });
     showAlert(operation.mode === "restart_game"
       ? "舊世界已封存；主角設定已保留，序章世界建立完成。"
       : "新角色與新世界已建立完成。", false);
@@ -859,7 +862,7 @@ function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function loadWorld({ refresh = false } = {}) {
+async function loadWorld({ refresh = false, navigateToCurrent = !game.initialNavigationComplete } = {}) {
   setBusy(true, refresh ? "核對世界中" : "載入世界中");
   hideAlert();
   try {
@@ -883,6 +886,10 @@ async function loadWorld({ refresh = false } = {}) {
     if (!payload.ready.model) showAlert("介面與世界引擎已就緒；設定 OPENAI_API_KEY 後即可生成新回合。", false);
     setBusy(false, isPlayableWorld() ? "等待你的行動" : "等待建立新遊戲");
     elements.saveState.textContent = isPlayableWorld() ? "已同步" : "空白";
+    if (navigateToCurrent) {
+      game.initialNavigationComplete = true;
+      if (isPlayableWorld()) scheduleCurrentTurnNavigation();
+    }
   } catch (error) {
     elements.saveState.textContent = "讀取失敗";
     showAlert(error.message, true);
@@ -1133,6 +1140,14 @@ function renderStoryFromStorage() {
   }
   elements.story.replaceChildren(fragment);
   renderChoices(game.choices);
+}
+
+function scheduleCurrentTurnNavigation() {
+  const currentTurns = elements.story.querySelectorAll(".narrative-card");
+  const target = currentTurns.item(currentTurns.length - 1) || elements.decisionArea;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    target.scrollIntoView({ behavior: "auto", block: "start" });
+  }));
 }
 
 async function submitAction(action) {
@@ -1658,6 +1673,8 @@ function showOfflineSnapshot() {
   game.choices = Array.isArray(cached.choices) ? cached.choices : [];
   renderWorldState();
   renderStoryFromStorage();
+  game.initialNavigationComplete = true;
+  if (isPlayableWorld()) scheduleCurrentTurnNavigation();
   setBusy(true, "離線閱讀");
   elements.saveState.textContent = "離線快照";
   showAlert("目前離線；你仍可閱讀最近內容，重新連線後才能推進世界。", false);

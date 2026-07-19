@@ -256,7 +256,7 @@ select:focus { border-color: var(--gold); }
 .control-note { margin: 11px 0 0; color: #72746c; font-size: 13.5px; line-height: 1.55; }
 
 .play-panel { min-width: 0; }
-.play-panel, .world-panel, .decision-area { scroll-margin-top: 96px; }
+.play-panel, .world-panel, .decision-area, .narrative-card { scroll-margin-top: 96px; }
 .story { display: grid; gap: 26px; }
 .scene-card {
   position: relative;
