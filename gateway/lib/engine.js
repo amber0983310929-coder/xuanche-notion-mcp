@@ -42,3 +42,16 @@ export function loadWorldSnapshot(env, { refresh = false } = {}) {
 export function commitWorldTurn(env, payload) {
   return engineRequest(env, "/world/turn/commit", { body: payload });
 }
+
+export function startWorldArchive(env, payload) {
+  return engineRequest(env, "/world/archive-reset", { body: payload });
+}
+
+export function getWorldArchiveStatus(env, { expectedWorldId, operationKey }) {
+  const query = new URLSearchParams({ expectedWorldId, operationKey });
+  return engineRequest(env, `/world/archive-reset/status?${query}`, { method: "GET" });
+}
+
+export function initializeGameWorld(env, payload) {
+  return engineRequest(env, "/world/initialize", { body: payload });
+}

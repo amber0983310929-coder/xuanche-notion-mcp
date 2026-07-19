@@ -122,6 +122,7 @@ button:disabled { cursor: not-allowed; }
 .character-card { padding: 0; overflow: hidden; border-top-color: rgba(185, 154, 98, 0.64); }
 .portrait-frame { position: relative; aspect-ratio: 8 / 5; overflow: hidden; background: #0d100d; }
 .portrait-frame img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 31%; filter: saturate(0.78) contrast(1.06); }
+.portrait-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(231, 224, 206, 0.38); font: 600 72px/1 "Iowan Old Style", "Noto Serif TC", serif; background: radial-gradient(circle, rgba(116, 131, 107, 0.14), transparent 58%); }
 .portrait-vignette { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgba(13, 15, 12, 0.92)); pointer-events: none; }
 .profile-age { position: absolute; right: 14px; bottom: 12px; padding: 4px 8px; color: #d8cfba; border: 1px solid rgba(231, 224, 206, 0.2); background: rgba(12, 14, 11, 0.72); font-size: 15px; letter-spacing: 0.12em; backdrop-filter: blur(7px); }
 .character-copy { padding: 19px 21px 21px; }
@@ -271,8 +272,53 @@ textarea::placeholder { color: #62645d; }
 .loading-lines i:nth-child(2) { width: 88%; }
 .loading-lines i:nth-child(3) { width: 62%; }
 
+.modal-dialog, .login-dialog {
+  padding: 0;
+  color: var(--paper);
+  border: 1px solid rgba(185, 154, 98, 0.36);
+  background: #171a16;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.7);
+}
+.modal-dialog::backdrop, .login-dialog::backdrop { background: rgba(7, 8, 7, 0.84); backdrop-filter: blur(8px); }
+.modal-dialog form { display: grid; gap: 17px; padding: clamp(26px, 4vw, 42px); }
+.modal-dialog h2 { margin: 0; font: 600 36px/1.25 "Iowan Old Style", "Noto Serif TC", serif; }
+.dialog-lead { margin: 0; color: var(--paper-dim); font-size: 18px; line-height: 1.68; }
+.modal-dialog label { display: grid; gap: 7px; color: #c9c4b6; font-size: 16.5px; }
+.modal-dialog input, .modal-dialog textarea {
+  width: 100%;
+  min-height: 48px;
+  padding: 11px 13px;
+  resize: vertical;
+  color: var(--paper);
+  border: 1px solid var(--line);
+  outline: 0;
+  background: #10120f;
+  font: 400 18px/1.55 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+.modal-dialog textarea { max-height: 190px; }
+.modal-dialog input:focus, .modal-dialog textarea:focus { border-color: var(--gold); }
+.dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 3px; }
+.dialog-actions .send-button { min-height: 52px; }
+.danger-button { min-height: 52px; padding: 11px 16px; color: #f0ddd8; border: 1px solid rgba(158, 75, 63, 0.66); background: rgba(158, 75, 63, 0.22); font-size: 17px; font-weight: 700; }
+.danger-button:hover:not(:disabled) { background: rgba(158, 75, 63, 0.34); }
+.danger-button:disabled { opacity: 0.38; }
+
+.operation-dialog { width: min(620px, calc(100% - 32px)); }
+.operation-safety { padding: 17px; border: 1px solid rgba(185, 154, 98, 0.26); background: rgba(185, 154, 98, 0.055); }
+.operation-safety p { margin: 0 0 13px; color: #d4cebd; font-size: 16.5px; line-height: 1.65; }
+.operation-safety dl { display: grid; gap: 8px; margin: 0; }
+.operation-safety dl div { display: grid; grid-template-columns: 105px minmax(0, 1fr); gap: 12px; }
+.operation-safety dt { color: #84877c; }
+.operation-safety dd { margin: 0; overflow-wrap: anywhere; color: #c8c3b5; }
+.operation-progress { margin: 0; padding: 12px 14px; color: #d4c9ae; border-left: 2px solid var(--gold); background: rgba(185, 154, 98, 0.07); font-size: 16.5px; line-height: 1.58; }
+.operation-progress.error { color: #e1aaa1; border-left-color: var(--red); background: rgba(158, 75, 63, 0.08); }
+
+.character-dialog { width: min(820px, calc(100% - 32px)); max-height: min(92dvh, 980px); }
+.character-dialog form { max-height: min(92dvh, 980px); overflow-y: auto; }
+.character-form-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+.character-form-grid .wide { grid-column: 1 / -1; }
+
 .login-dialog { width: min(430px, calc(100% - 32px)); padding: 0; color: var(--paper); border: 1px solid rgba(185, 154, 98, 0.36); background: #171a16; box-shadow: 0 30px 100px rgba(0, 0, 0, 0.7); }
-.login-dialog::backdrop { background: rgba(7, 8, 7, 0.82); backdrop-filter: blur(8px); }
 .login-dialog form { display: grid; gap: 13px; padding: 38px; }
 .login-seal { width: 52px; height: 52px; margin-bottom: 5px; }
 .login-dialog h1 { margin: 0; font: 600 42px/1.2 "Iowan Old Style", "Noto Serif TC", serif; }
@@ -316,6 +362,12 @@ textarea::placeholder { color: #62645d; }
   .composer-note { text-align: left; }
   .decision-area { margin-inline: -2px; }
   .login-dialog form { padding: 30px 24px; }
+  .modal-dialog form { padding: 27px 21px; }
+  .modal-dialog h2 { font-size: 30px; }
+  .character-form-grid { grid-template-columns: 1fr; }
+  .character-form-grid .wide { grid-column: auto; }
+  .dialog-actions { grid-template-columns: 1fr; }
+  .operation-safety dl div { grid-template-columns: 1fr; gap: 2px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

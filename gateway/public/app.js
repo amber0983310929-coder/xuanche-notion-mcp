@@ -3,6 +3,7 @@ const STORAGE = Object.freeze({
   pending: "xuanche:pwa:pending:v1",
   state: "xuanche:pwa:state:v1",
   locked: "xuanche:pwa:locked:v1",
+  worldOperation: "xuanche:pwa:world-operation:v1",
   historyPrefix: "xuanche:pwa:history:v1:",
 });
 
@@ -15,6 +16,7 @@ const elements = {
   revision: document.querySelector("#revision"),
   saveState: document.querySelector("#save-state"),
   protagonistPortrait: document.querySelector("#protagonist-portrait"),
+  portraitPlaceholder: document.querySelector("#portrait-placeholder"),
   profileName: document.querySelector("#profile-name"),
   profileAge: document.querySelector("#profile-age"),
   profileIntro: document.querySelector("#profile-intro"),
@@ -39,6 +41,24 @@ const elements = {
   logoutButton: document.querySelector("#logout-button"),
   installButton: document.querySelector("#install-button"),
   continueGameButton: document.querySelector("#continue-game-button"),
+  newGameButton: document.querySelector("#new-game-button"),
+  restartGameButton: document.querySelector("#restart-game-button"),
+  resetWorldButton: document.querySelector("#reset-world-button"),
+  operationDialog: document.querySelector("#world-operation-dialog"),
+  operationForm: document.querySelector("#world-operation-form"),
+  operationTitle: document.querySelector("#operation-title"),
+  operationDescription: document.querySelector("#operation-description"),
+  operationWorldId: document.querySelector("#operation-world-id"),
+  operationConfirmationLabel: document.querySelector("#operation-confirmation-label"),
+  operationConfirmation: document.querySelector("#operation-confirmation"),
+  operationProgress: document.querySelector("#operation-progress"),
+  operationCancelButton: document.querySelector("#operation-cancel-button"),
+  operationConfirmButton: document.querySelector("#operation-confirm-button"),
+  characterDialog: document.querySelector("#character-dialog"),
+  characterForm: document.querySelector("#character-form"),
+  characterError: document.querySelector("#character-error"),
+  characterCancelButton: document.querySelector("#character-cancel-button"),
+  characterSubmitButton: document.querySelector("#character-submit-button"),
   loginDialog: document.querySelector("#login-dialog"),
   loginForm: document.querySelector("#login-form"),
   passphrase: document.querySelector("#passphrase"),
@@ -54,6 +74,8 @@ const game = {
   installPrompt: null,
   currentCard: null,
   checkpoint: readStorage(STORAGE.pending),
+  worldOperation: readStorage(STORAGE.worldOperation),
+  operationCandidate: null,
 };
 
 applyStoredSettings();
@@ -71,6 +93,7 @@ async function bootstrap() {
     }
     writeStorage(STORAGE.locked, false);
     await loadWorld();
+    await resumeWorldOperation();
   } catch (error) {
     if (showOfflineSnapshot()) return;
     showAlert(error.message, true);
@@ -106,10 +129,20 @@ function bindEvents() {
   elements.length.addEventListener("change", saveSettings);
   elements.refreshButton.addEventListener("click", () => loadWorld({ refresh: true }));
   elements.continueGameButton.addEventListener("click", continueGame);
+  elements.newGameButton.addEventListener("click", () => requestWorldOperation("new_game"));
+  elements.restartGameButton.addEventListener("click", () => requestWorldOperation("restart_game"));
+  elements.resetWorldButton.addEventListener("click", () => requestWorldOperation("reset_world"));
   elements.installButton.addEventListener("click", installApp);
   elements.logoutButton.addEventListener("click", logout);
   elements.loginDialog.addEventListener("cancel", (event) => event.preventDefault());
   elements.loginForm.addEventListener("submit", login);
+  elements.operationDialog.addEventListener("cancel", cancelWorldOperationDialog);
+  elements.operationForm.addEventListener("submit", confirmWorldOperation);
+  elements.operationConfirmation.addEventListener("input", updateOperationConfirmation);
+  elements.operationCancelButton.addEventListener("click", cancelWorldOperationDialog);
+  elements.characterDialog.addEventListener("cancel", cancelCharacterCreation);
+  elements.characterForm.addEventListener("submit", submitCharacterCreation);
+  elements.characterCancelButton.addEventListener("click", cancelCharacterCreation);
 }
 
 async function login(event) {
@@ -127,6 +160,7 @@ async function login(event) {
     writeStorage(STORAGE.locked, false);
     elements.loginDialog.close();
     await loadWorld();
+    await resumeWorldOperation();
   } catch (error) {
     elements.loginError.textContent = error.message;
   } finally {
@@ -147,7 +181,7 @@ async function logout() {
 }
 
 async function continueGame() {
-  if (game.busy) return;
+  if (game.busy || !isPlayableWorld()) return;
   await loadWorld({ refresh: true });
   if (game.busy || !game.state) return;
   document.querySelector("#decision-area")?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -162,12 +196,544 @@ function openLogin(configuration) {
   setTimeout(() => elements.passphrase.focus(), 50);
 }
 
+const WORLD_OPERATION_COPY = Object.freeze({
+  new_game: {
+    title: "封存目前世界並建立新遊戲",
+    description: "目前世界會先完整封存並驗證，之後才清空固定頁面並開啟角色建立。舊進度不會成為新世界事實。",
+    phrase: "建立新遊戲",
+    confirm: "封存後建立角色",
+  },
+  restart_game: {
+    title: "保留主角設定並重新遊戲",
+    description: "目前世界會先完整封存；接著保留主角姓名、形象與核心性格，清除事件進度，從序章重新開始。",
+    phrase: "重新開始",
+    confirm: "封存後重開序章",
+  },
+  reset_world: {
+    title: "封存並重置世界",
+    description: "目前世界會先完整封存並驗證，之後清空為 EMPTY／PENDING。系統不會自動建立新角色或新劇情。",
+    phrase: "重置世界",
+    confirm: "封存並清空",
+  },
+});
+
+function requestWorldOperation(mode) {
+  if (game.busy) return;
+  if (game.checkpoint) {
+    showAlert("仍有一筆待補存回合；請先完成或核對該回合，再管理世界。", false);
+    return;
+  }
+  if (game.worldOperation) {
+    resumeWorldOperation();
+    return;
+  }
+  if (mode === "new_game" && !isPlayableWorld()) {
+    const operation = createWorldOperation(mode, { phase: "character_creation" });
+    if (!persistWorldOperation(operation)) {
+      showAlert("瀏覽器無法保存世界操作檢查點；為避免無法續跑，這次沒有建立世界。", true);
+      return;
+    }
+    openCharacterCreation(operation);
+    return;
+  }
+  if (!isPlayableWorld()) {
+    showAlert("目前是空白世界；請使用「新的遊戲」建立角色。", false);
+    return;
+  }
+  const operation = createWorldOperation(mode, {
+    phase: "confirm",
+    expectedWorldId: game.state.worldId,
+    restartDraft: mode === "restart_game" ? buildRestartDraft() : undefined,
+  });
+  game.operationCandidate = operation;
+  openWorldOperationDialog(operation);
+}
+
+function createWorldOperation(mode, overrides = {}) {
+  return {
+    version: 1,
+    mode,
+    operationKey: `pwa-world-${crypto.randomUUID()}`,
+    saveKey: `pwa-${mode}-${Date.now()}-${crypto.randomUUID()}`,
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+function openWorldOperationDialog(operation, { retry = false } = {}) {
+  const copy = WORLD_OPERATION_COPY[operation.mode];
+  if (!copy) return;
+  game.operationCandidate = operation;
+  const confirmationLabel = elements.operationConfirmation.closest("label");
+  confirmationLabel.hidden = false;
+  elements.operationConfirmation.hidden = false;
+  elements.operationTitle.textContent = copy.title;
+  elements.operationDescription.textContent = copy.description;
+  elements.operationWorldId.textContent = operation.expectedWorldId || "EMPTY／PENDING";
+  elements.operationConfirmationLabel.textContent = copy.phrase;
+  elements.operationConfirmation.value = "";
+  elements.operationConfirmation.disabled = false;
+  elements.operationConfirmButton.hidden = false;
+  elements.operationConfirmButton.textContent = retry ? "以同一識別碼重試" : copy.confirm;
+  elements.operationConfirmButton.disabled = true;
+  elements.operationCancelButton.hidden = false;
+  elements.operationCancelButton.disabled = Boolean(game.worldOperation);
+  elements.operationProgress.hidden = !retry;
+  elements.operationProgress.classList.toggle("error", retry);
+  elements.operationProgress.textContent = retry
+    ? "上次請求尚未完成。重新確認後會使用同一操作識別碼續跑，不會建立第二份封存。"
+    : "";
+  if (!elements.operationDialog.open) elements.operationDialog.showModal();
+  setTimeout(() => elements.operationConfirmation.focus(), 50);
+}
+
+function updateOperationConfirmation() {
+  const operation = game.operationCandidate || game.worldOperation;
+  const phrase = WORLD_OPERATION_COPY[operation?.mode]?.phrase;
+  elements.operationConfirmButton.disabled = !phrase || elements.operationConfirmation.value.trim() !== phrase;
+}
+
+async function confirmWorldOperation(event) {
+  event.preventDefault();
+  const operation = game.operationCandidate || game.worldOperation;
+  if (!operation || game.busy) return;
+  if (operation.phase === "initialize") {
+    await initializeWorldFromOperation(operation);
+    return;
+  }
+  const phrase = WORLD_OPERATION_COPY[operation.mode]?.phrase;
+  if (!phrase || elements.operationConfirmation.value.trim() !== phrase) return;
+  const previousPhase = operation.phase;
+  operation.phase = "archive";
+  operation.started = true;
+  if (!persistWorldOperation(operation)) {
+    operation.phase = previousPhase;
+    operation.started = false;
+    setOperationProgress("瀏覽器無法保存可恢復檢查點；為保護目前世界，封存請求沒有送出。", true);
+    return;
+  }
+  await startAndMonitorArchive(operation);
+}
+
+function cancelWorldOperationDialog(event) {
+  event?.preventDefault?.();
+  if (game.busy || game.worldOperation) return;
+  game.operationCandidate = null;
+  if (elements.operationDialog.open) elements.operationDialog.close();
+}
+
+async function startAndMonitorArchive(operation) {
+  setBusy(true, "封存世界中");
+  setOperationProgress("正在建立可恢復的封存工作流程……");
+  elements.operationCancelButton.disabled = true;
+  elements.operationConfirmation.disabled = true;
+  elements.operationConfirmButton.disabled = true;
+  let status;
+  try {
+    const payload = await apiJson("/api/game/archive", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        mode: operation.mode,
+        expectedWorldId: operation.expectedWorldId,
+        operationKey: operation.operationKey,
+        typedConfirmation: WORLD_OPERATION_COPY[operation.mode].phrase,
+      }),
+    });
+    status = payload.status;
+  } catch (startError) {
+    try {
+      const payload = await readArchiveStatus(operation);
+      status = payload.status;
+    } catch (statusError) {
+      showArchiveRetry(operation, statusError.status === 404 ? startError : statusError);
+      return;
+    }
+  }
+  try {
+    await monitorArchive(operation, status);
+  } catch (error) {
+    showArchiveRetry(operation, error);
+  }
+}
+
+async function monitorArchive(operation, initialStatus) {
+  let status = initialStatus;
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (status?.reset === true && status?.worldState === "EMPTY") {
+      await finishArchivedOperation(operation);
+      return;
+    }
+    if (["errored", "terminated", "canceled", "cancelled"].includes(status?.workflowStatus)) {
+      throw new Error(status.error || "封存工作流程中斷；可使用同一識別碼安全續跑。");
+    }
+    setOperationProgress(archiveStatusText(status));
+    await delay(attempt < 5 ? 1_000 : 2_000);
+    const payload = await readArchiveStatus(operation);
+    status = payload.status;
+  }
+  throw new Error("封存仍在背景執行。保留本頁或重新載入後，系統會以同一識別碼繼續核對。");
+}
+
+function archiveStatusText(status = {}) {
+  if (status.reset) return "封存已驗證，固定世界頁面已安全清空。";
+  if (status.archiveVerified) return "封存逐頁驗證完成，正在清空固定世界頁面……";
+  if (status.workflowStatus === "queued") return "封存工作已排入佇列，尚未改動目前世界……";
+  if (status.workflowStatus === "waiting") return "封存正在等待上游服務，檢查點已保留……";
+  return "正在逐頁封存並驗證目前世界；尚未驗證完成前不會清空……";
+}
+
+function readArchiveStatus(operation) {
+  const query = new URLSearchParams({
+    mode: operation.mode,
+    expectedWorldId: operation.expectedWorldId,
+    operationKey: operation.operationKey,
+  });
+  return apiJson(`/api/game/archive/status?${query}`);
+}
+
+function setOperationProgress(message, error = false) {
+  elements.operationProgress.hidden = false;
+  elements.operationProgress.textContent = message;
+  elements.operationProgress.classList.toggle("error", error);
+}
+
+function showArchiveRetry(operation, error) {
+  setBusy(false, "封存待續");
+  setOperationProgress(error.message, true);
+  game.operationCandidate = operation;
+  elements.operationConfirmation.closest("label").hidden = false;
+  elements.operationConfirmation.hidden = false;
+  elements.operationConfirmation.disabled = false;
+  elements.operationConfirmation.value = "";
+  elements.operationConfirmButton.hidden = false;
+  elements.operationConfirmButton.textContent = "以同一識別碼重試";
+  elements.operationConfirmButton.disabled = true;
+  elements.operationCancelButton.disabled = true;
+  if (!elements.operationDialog.open) elements.operationDialog.showModal();
+  setTimeout(() => elements.operationConfirmation.focus(), 50);
+}
+
+async function finishArchivedOperation(operation) {
+  const nextPhase = operation.mode === "new_game" ? "character_creation" :
+    operation.mode === "restart_game" ? "initialize" : "complete";
+  operation.phase = nextPhase;
+  if (!persistWorldOperation(operation)) {
+    operation.phase = "archive";
+    throw new Error("封存已完成，但瀏覽器無法更新本機檢查點；請釋放網站儲存空間後以同一操作續查。");
+  }
+  game.choices = [];
+  game.state = emptyWorldState();
+  game.checkpoint = null;
+  localStorage.removeItem(STORAGE.pending);
+  localStorage.removeItem(STORAGE.state);
+  renderWorldState();
+  renderStoryFromStorage();
+  setOperationProgress("封存與驗證完成；正在核對 EMPTY／PENDING 狀態……");
+  await loadWorld({ refresh: true });
+
+  if (operation.mode === "reset_world") {
+    clearWorldOperation();
+    if (elements.operationDialog.open) elements.operationDialog.close();
+    setBusy(false, "等待建立新遊戲");
+    showAlert("目前世界已完整封存，固定世界頁面已重置為 EMPTY／PENDING；未自動建立新世界。", false);
+    return;
+  }
+  if (operation.mode === "new_game") {
+    if (elements.operationDialog.open) elements.operationDialog.close();
+    setBusy(false, "等待角色建立");
+    openCharacterCreation(operation);
+    return;
+  }
+  await initializeWorldFromOperation(operation);
+}
+
+function openCharacterCreation(operation) {
+  if (isPlayableWorld()) {
+    showAlert("目前仍有 ACTIVE 世界，不能略過封存直接建立新角色。", true);
+    return;
+  }
+  game.worldOperation = operation;
+  elements.characterError.textContent = "";
+  elements.characterSubmitButton.disabled = false;
+  elements.characterCancelButton.disabled = false;
+  if (!elements.characterDialog.open) elements.characterDialog.showModal();
+  setTimeout(() => elements.characterForm.elements.namedItem("name")?.focus(), 50);
+  updateWorldControlState();
+}
+
+function cancelCharacterCreation(event) {
+  event?.preventDefault?.();
+  if (game.busy || game.worldOperation?.phase !== "character_creation") return;
+  if (elements.characterDialog.open) elements.characterDialog.close();
+  clearWorldOperation();
+  showAlert("未建立新角色；世界維持 EMPTY／PENDING。已封存的舊世界不受影響。", false);
+  setBusy(false, "等待建立新遊戲");
+}
+
+async function submitCharacterCreation(event) {
+  event.preventDefault();
+  if (game.busy || !elements.characterForm.reportValidity()) return;
+  const form = new FormData(elements.characterForm);
+  const operation = game.worldOperation || createWorldOperation("new_game", { phase: "character_creation" });
+  operation.phase = "initialize";
+  operation.character = {
+    name: formText(form, "name"),
+    gender: formText(form, "gender"),
+    age: formText(form, "age"),
+    appearance: formText(form, "appearance"),
+    personality: splitList(formText(form, "personality")),
+    background: formText(form, "background"),
+    motivation: formText(form, "motivation") || "守護珍視之人並踏上修行之路",
+    bottomLine: formText(form, "bottomLine") || "不主動傷害無辜，不背棄珍視之人",
+    equipment: formText(form, "equipment") || "隨身衣物",
+    cultivation: "凡人，尚未引氣入體",
+    body: "健康",
+    constraints: "無",
+  };
+  operation.opening = {
+    location: formText(form, "location") || "山村外圍",
+    time: formText(form, "time") || "清晨",
+    premise: formText(form, "premise") || "一場尚未發生的異變，即將把主角推向修行之路。",
+    knownAbilities: splitList(formText(form, "knownAbilities")),
+    knownWorldFacts: ["修行者與凡人的世界彼此交疊，但規則尚待親自理解"],
+    promises: [],
+    visibleClue: "遠處出現一絲不尋常的動靜",
+    choices: ["先觀察四周", "確認隨身物品", "向最近的人打聽消息"],
+  };
+  if (!persistWorldOperation(operation)) {
+    operation.phase = "character_creation";
+    elements.characterError.textContent = "瀏覽器無法保存角色建立檢查點；為避免半成品，新世界尚未建立。";
+    return;
+  }
+  await initializeWorldFromOperation(operation);
+}
+
+async function initializeWorldFromOperation(operation) {
+  if (!operation.character || !operation.opening) {
+    if (operation.mode === "restart_game" && operation.restartDraft) {
+      operation.character = operation.restartDraft.character;
+      operation.opening = operation.restartDraft.opening;
+      if (!persistWorldOperation(operation)) {
+        showInitializationRetry(operation, new Error("瀏覽器無法保存序章初始化檢查點。"));
+        return;
+      }
+    } else {
+      operation.phase = "character_creation";
+      if (!persistWorldOperation(operation)) {
+        showAlert("瀏覽器無法保存角色建立檢查點。", true);
+        return;
+      }
+      openCharacterCreation(operation);
+      return;
+    }
+  }
+  setBusy(true, "建立新世界中");
+  if (operation.mode === "restart_game" || !elements.characterDialog.open) showInitializationProgress(operation);
+  elements.characterSubmitButton.disabled = true;
+  elements.characterCancelButton.disabled = true;
+  elements.characterError.textContent = "";
+  try {
+    await apiJson("/api/game/initialize", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        mode: operation.mode,
+        saveKey: operation.saveKey,
+        character: operation.character,
+        opening: operation.opening,
+      }),
+    });
+    clearWorldOperation();
+    game.choices = [];
+    localStorage.removeItem(STORAGE.state);
+    if (elements.characterDialog.open) elements.characterDialog.close();
+    if (elements.operationDialog.open) elements.operationDialog.close();
+    await loadWorld({ refresh: true });
+    showAlert(operation.mode === "restart_game"
+      ? "舊世界已封存；主角設定已保留，序章世界建立完成。"
+      : "新角色與新世界已建立完成。", false);
+  } catch (error) {
+    setBusy(false, "建立世界待續");
+    if (operation.mode === "new_game" && elements.characterDialog.open) {
+      elements.characterError.textContent = `${error.message}（將使用同一存檔鍵重試）`;
+      elements.characterSubmitButton.disabled = false;
+      elements.characterCancelButton.disabled = true;
+    } else {
+      showInitializationRetry(operation, error);
+    }
+  }
+}
+
+function showInitializationProgress(operation) {
+  const copy = WORLD_OPERATION_COPY[operation.mode];
+  game.operationCandidate = operation;
+  elements.operationTitle.textContent = operation.mode === "restart_game" ? "封存完成，正在重建序章" : "正在建立新世界";
+  elements.operationDescription.textContent = operation.mode === "restart_game"
+    ? "固定頁面已驗證為 EMPTY／PENDING；現在以保留的主角設定建立全新序章。"
+    : "固定頁面已確認為 EMPTY／PENDING；現在以剛確認的角色設定建立新世界。";
+  elements.operationWorldId.textContent = operation.expectedWorldId || "EMPTY／PENDING";
+  elements.operationConfirmation.closest("label").hidden = true;
+  elements.operationConfirmation.hidden = true;
+  elements.operationConfirmButton.hidden = true;
+  elements.operationCancelButton.hidden = true;
+  setOperationProgress("正在寫入新世界；權威存檔會在所有固定頁面準備完成後才啟用……");
+  if (!elements.operationDialog.open) elements.operationDialog.showModal();
+  elements.operationConfirmButton.textContent = copy.confirm;
+}
+
+function showInitializationRetry(operation, error) {
+  game.operationCandidate = operation;
+  setOperationProgress(`${error.message}（將使用同一存檔鍵重試）`, true);
+  elements.operationConfirmation.closest("label").hidden = true;
+  elements.operationConfirmation.hidden = true;
+  elements.operationConfirmButton.hidden = false;
+  elements.operationConfirmButton.disabled = false;
+  elements.operationConfirmButton.textContent = operation.mode === "restart_game" ? "重試建立序章" : "重試建立世界";
+  elements.operationCancelButton.hidden = true;
+  if (!elements.operationDialog.open) elements.operationDialog.showModal();
+}
+
+async function resumeWorldOperation() {
+  const operation = game.worldOperation;
+  if (!operation) return;
+  if (!WORLD_OPERATION_COPY[operation.mode] || operation.version !== 1) {
+    clearWorldOperation();
+    return;
+  }
+  if (operation.phase === "character_creation") {
+    if (isPlayableWorld()) {
+      game.state = emptyWorldState();
+      renderWorldState();
+      renderStoryFromStorage();
+    }
+    openCharacterCreation(operation);
+    return;
+  }
+  if (operation.phase === "initialize") {
+    await initializeWorldFromOperation(operation);
+    return;
+  }
+  if (operation.phase !== "archive") {
+    clearWorldOperation();
+    return;
+  }
+  setBusy(true, "核對封存進度");
+  game.operationCandidate = operation;
+  openWorldOperationDialog(operation, { retry: true });
+  elements.operationConfirmation.closest("label").hidden = true;
+  elements.operationConfirmation.hidden = true;
+  elements.operationConfirmButton.hidden = true;
+  elements.operationCancelButton.disabled = true;
+  setOperationProgress("正在讀取既有封存工作流程，不會自動建立第二個操作……");
+  try {
+    const payload = await readArchiveStatus(operation);
+    await monitorArchive(operation, payload.status);
+  } catch (error) {
+    showArchiveRetry(operation, error);
+  }
+}
+
+function buildRestartDraft() {
+  const profile = game.state?.profile || {};
+  const name = profile.name || game.state?.playerState?.name || "楚凌霄";
+  const isChu = name.includes("楚凌霄");
+  return {
+    character: {
+      name,
+      gender: "男",
+      age: profile.age || "16歲",
+      appearance: profile.intro || "衣著樸素，目光敏銳。",
+      personality: isChu ? ["沉著", "敏銳", "重視家人", "善於觀察山勢"] : ["沉著", "敏銳"],
+      background: profile.intro || "山村出身，尚未踏入修行。",
+      motivation: profile.motto || "守護珍視之人並踏上修行之路",
+      bottomLine: "不主動傷害無辜，不背棄珍視之人",
+      equipment: isChu ? "採藥短刀、藥簍、火摺子" : "隨身衣物與簡單行囊",
+      cultivation: "凡人，尚未引氣入體",
+      body: "健康",
+      constraints: "無",
+      relationships: isChu ? ["母親與妹妹是最珍視的家人"] : [],
+    },
+    opening: {
+      location: isChu ? "青石村外・禁山山腳" : "故鄉外圍",
+      time: "清晨",
+      premise: `${name}仍未踏入修行；一場尚未發生的異變，即將把其推向修真世界。`,
+      knownAbilities: isChu ? ["辨識草藥", "熟悉山路", "攀爬與追蹤", "簡單傷口處理"] : ["觀察環境", "基本野外求生"],
+      knownWorldFacts: ["禁地危險，凡人通常不會深入"],
+      promises: isChu ? ["保護母親與妹妹"] : [],
+      visibleClue: "遠處傳來一陣不尋常的動靜",
+      choices: ["先查看家中狀況", "整理行囊", "觀察遠處異象"],
+    },
+  };
+}
+
+function persistWorldOperation(operation) {
+  try {
+    const serialized = JSON.stringify(operation);
+    localStorage.setItem(STORAGE.worldOperation, serialized);
+    const stored = JSON.parse(localStorage.getItem(STORAGE.worldOperation) || "null");
+    if (stored?.operationKey !== operation.operationKey || stored?.phase !== operation.phase) return false;
+    game.worldOperation = operation;
+    game.operationCandidate = operation;
+    updateWorldControlState();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearWorldOperation() {
+  game.worldOperation = null;
+  game.operationCandidate = null;
+  try {
+    localStorage.removeItem(STORAGE.worldOperation);
+  } catch {
+    // The server state remains authoritative even if optional local cleanup fails.
+  }
+  updateWorldControlState();
+}
+
+function emptyWorldState() {
+  return {
+    worldState: "EMPTY",
+    empty: true,
+    worldId: "PENDING",
+    simTick: 0,
+    revision: 0,
+    saveKey: null,
+    lastActionKey: null,
+    mainline: "尚未建立世界",
+    situation: "等待建立新遊戲",
+    profile: null,
+    playerState: null,
+    loadedAt: new Date().toISOString(),
+    cache: "local-transition",
+  };
+}
+
+function formText(form, name) {
+  return String(form.get(name) || "").trim();
+}
+
+function splitList(value) {
+  return String(value || "").split(/[、,，;；\n]+/u).map((item) => item.trim()).filter(Boolean);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 async function loadWorld({ refresh = false } = {}) {
   setBusy(true, refresh ? "核對世界中" : "載入世界中");
   hideAlert();
   try {
     const payload = await apiJson(`/api/game/state${refresh ? "?refresh=1" : ""}`);
     game.state = payload.state;
+    game.choices = [];
+    if (!isPlayableWorld() && game.checkpoint) {
+      game.checkpoint = null;
+      localStorage.removeItem(STORAGE.pending);
+    }
     const cached = readStorage(STORAGE.state);
     if (
       cached?.state?.worldId === game.state.worldId &&
@@ -177,10 +743,10 @@ async function loadWorld({ refresh = false } = {}) {
     cacheCurrentState();
     renderWorldState();
     renderStoryFromStorage();
-    reconcilePendingCheckpoint();
+    if (isPlayableWorld()) reconcilePendingCheckpoint();
     if (!payload.ready.model) showAlert("介面與世界引擎已就緒；設定 OPENAI_API_KEY 後即可生成新回合。", false);
-    setBusy(false, "等待你的行動");
-    elements.saveState.textContent = "已同步";
+    setBusy(false, isPlayableWorld() ? "等待你的行動" : "等待建立新遊戲");
+    elements.saveState.textContent = isPlayableWorld() ? "已同步" : "空白";
   } catch (error) {
     elements.saveState.textContent = "讀取失敗";
     showAlert(error.message, true);
@@ -191,15 +757,36 @@ async function loadWorld({ refresh = false } = {}) {
 
 function renderWorldState() {
   if (!game.state) return;
-  elements.tickBadge.textContent = `T${game.state.simTick}`;
+  const playable = isPlayableWorld();
+  elements.tickBadge.textContent = playable ? `T${game.state.simTick}` : "T—";
   elements.worldId.textContent = game.state.worldId;
   elements.worldId.title = game.state.worldId;
-  elements.revision.textContent = `R${game.state.revision}`;
+  elements.revision.textContent = playable ? `R${game.state.revision}` : "R—";
   elements.mainline.textContent = game.state.mainline;
   renderCharacterState();
+  updateWorldControlState();
 }
 
 function renderCharacterState() {
+  if (!isPlayableWorld()) {
+    elements.profileName.textContent = "等待主角";
+    elements.profileAge.textContent = "未建立";
+    elements.profileIntro.textContent = "使用「新的遊戲」建立角色與開局。";
+    elements.profileMotto.textContent = "";
+    elements.protagonistPortrait.hidden = true;
+    elements.portraitPlaceholder.hidden = false;
+    elements.playerStateSync.textContent = "空白世界";
+    elements.playerStateSync.classList.remove("synced");
+    for (const element of [
+      elements.stateCultivation,
+      elements.stateBody,
+      elements.stateEquipment,
+      elements.stateLocation,
+      elements.stateConstraints,
+      elements.stateAbilities,
+    ]) element.textContent = "尚未建立";
+    return;
+  }
   const profile = game.state?.profile || {};
   const playerState = game.state?.playerState || {};
   const name = profile.name || playerState.name || "楚凌霄";
@@ -207,8 +794,11 @@ function renderCharacterState() {
   elements.profileAge.textContent = profile.age || "年齡未知";
   elements.profileIntro.textContent = profile.intro || "角色資料尚未載入。";
   elements.profileMotto.textContent = profile.motto ? `「${profile.motto}」` : "";
-  elements.protagonistPortrait.src = profile.portrait || "/images/chulingxiao-v1.webp";
-  elements.protagonistPortrait.alt = `${name}立繪`;
+  elements.protagonistPortrait.hidden = !profile.portrait;
+  elements.portraitPlaceholder.hidden = Boolean(profile.portrait);
+  if (profile.portrait) elements.protagonistPortrait.src = profile.portrait;
+  elements.protagonistPortrait.alt = profile.portrait ? `${name}立繪` : "";
+  elements.actionInput.placeholder = `輸入${name}要做或要說的事……`;
 
   elements.playerStateSync.textContent = playerState.calibrated ? "即時同步" : "待校準";
   elements.playerStateSync.classList.toggle("synced", Boolean(playerState.calibrated));
@@ -225,6 +815,13 @@ function renderCharacterState() {
 
 function renderStoryFromStorage() {
   elements.story.replaceChildren();
+  if (!isPlayableWorld()) {
+    const card = appendNarrativeCard(0, "固定世界頁面目前為 EMPTY／PENDING。舊世界若已執行封存，仍保存在世界封存庫；此處不會自動建立或覆寫新世界。", "等待建立", false);
+    card.querySelector(".turn-label").textContent = "空白世界";
+    card.classList.remove("generating");
+    renderChoices([]);
+    return;
+  }
   const history = historyForCurrentWorld();
   for (const turn of history) {
     appendPlayerAction(turn.action, false);
@@ -245,7 +842,7 @@ function renderStoryFromStorage() {
 }
 
 async function submitAction(action) {
-  if (game.busy || !game.state) return;
+  if (game.busy || !isPlayableWorld()) return;
   if (game.checkpoint) {
     showAlert("上一回合仍有待確認的存檔，請先補存後再行動。", false);
     return;
@@ -464,14 +1061,28 @@ function renderChoices(choices) {
 
 function setBusy(value, status) {
   game.busy = value;
-  elements.sendButton.disabled = value || !game.state;
-  elements.actionInput.disabled = value || !game.state;
+  const playable = isPlayableWorld();
+  elements.sendButton.disabled = value || !playable;
+  elements.actionInput.disabled = value || !playable;
   elements.refreshButton.disabled = value;
-  elements.continueGameButton.disabled = value;
   elements.style.disabled = value;
   elements.length.disabled = value;
   elements.turnStatus.textContent = status;
   for (const button of elements.choices.querySelectorAll("button")) button.disabled = value;
+  updateWorldControlState();
+}
+
+function updateWorldControlState() {
+  const playable = isPlayableWorld();
+  const operationLocked = Boolean(game.worldOperation && game.worldOperation.phase !== "character_creation");
+  elements.continueGameButton.disabled = game.busy || !playable || operationLocked;
+  elements.newGameButton.disabled = game.busy || operationLocked;
+  elements.restartGameButton.disabled = game.busy || !playable || operationLocked;
+  elements.resetWorldButton.disabled = game.busy || !playable || operationLocked;
+}
+
+function isPlayableWorld() {
+  return game.state?.worldState === "ACTIVE" && game.state?.empty !== true;
 }
 
 async function readEventStream(stream, handler) {

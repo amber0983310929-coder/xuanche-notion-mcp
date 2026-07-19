@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { createSessionToken, verifySessionToken } from "../lib/auth.js";
 import { buildTurnRequest, extractPartialJsonString } from "../lib/openai.js";
 import { summarizeWorldSnapshot } from "../lib/world.js";
+import { onRequest as archiveHandler } from "../functions/api/game/archive.js";
+import { onRequest as archiveStatusHandler } from "../functions/api/game/archive/status.js";
+import { onRequest as initializeHandler } from "../functions/api/game/initialize.js";
 import { onRequest as sessionHandler } from "../functions/api/session.js";
 import { onRequest as turnHandler } from "../functions/api/game/turn.js";
 
@@ -52,6 +56,20 @@ function snapshot() {
     ],
   };
 }
+
+test("PWA shell exposes continue plus three guarded world-management actions", async () => {
+  const html = await readFile(new URL("../public/index.html", import.meta.url), "utf8");
+  const app = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(html, /id="continue-game-button"/);
+  assert.match(html, /id="new-game-button"[^>]*>新的遊戲/);
+  assert.match(html, /id="restart-game-button"[^>]*>重新遊戲/);
+  assert.match(html, /id="reset-world-button"[^>]*>重置世界/);
+  assert.doesNotMatch(html, /id="(?:new-game|restart-game|reset-world)-button"[^>]*\sdisabled/);
+  assert.match(html, /id="world-operation-dialog"/);
+  assert.match(html, /id="character-dialog"/);
+  assert.match(app, /typedConfirmation/);
+  assert.match(app, /xuanche:pwa:world-operation:v1/);
+});
 
 test("signed owner sessions reject tampering and expiry", async () => {
   const token = await createSessionToken({ version: 1, subject: "owner", expiresAt: 2_000 }, "secret");
@@ -132,6 +150,206 @@ test("world summary returns a committed canonical player state as calibrated", (
   const state = summarizeWorldSnapshot(source);
   assert.equal(state.playerState.calibrated, true);
   assert.equal(state.playerState.equipment, "採藥短刀");
+});
+
+test("world summary exposes a safe EMPTY/PENDING state without inventing a protagonist", () => {
+  const source = snapshot();
+  source.meta.world = {
+    worldState: "EMPTY",
+    worldId: "PENDING",
+    simTick: 0,
+    revision: 0,
+  };
+  const state = summarizeWorldSnapshot(source);
+  assert.equal(state.empty, true);
+  assert.equal(state.worldState, "EMPTY");
+  assert.equal(state.worldId, "PENDING");
+  assert.equal(state.profile, null);
+  assert.equal(state.playerState, null);
+});
+
+test("world summary reads initializer English character keys for custom protagonists", () => {
+  const source = snapshot();
+  source.pages.find((page) => page.key === "character").children = [
+    paragraph("name：沈青禾"),
+    paragraph("age：19歲"),
+    paragraph("appearance：青衣負笛，神色沉靜。"),
+    paragraph("background：自河港小城而來。"),
+    paragraph("motivation：找回失散的師父。"),
+    paragraph("equipment：短笛、舊斗篷"),
+    paragraph("玩家已知能力：辨音、泅水"),
+  ];
+  const state = summarizeWorldSnapshot(source);
+  assert.equal(state.profile.name, "沈青禾");
+  assert.equal(state.profile.age, "19歲");
+  assert.equal(state.profile.portrait, null);
+  assert.equal(state.playerState.equipment, "短笛、舊斗篷");
+});
+
+test("PWA archive endpoint injects the only accepted destructive confirmation", async () => {
+  const sessionToken = await createSessionToken({
+    version: 1,
+    subject: "owner",
+    expiresAt: Math.floor(Date.now() / 1_000) + 3_600,
+  }, "session-secret");
+  let forwarded;
+  const env = {
+    XUANCHE_API_KEY: "engine-key",
+    PWA_SESSION_SECRET: "session-secret",
+    XUANCHE_ENGINE: {
+      async fetch(request) {
+        forwarded = {
+          path: new URL(request.url).pathname,
+          apiKey: request.headers.get("x-api-key"),
+          body: await request.json(),
+        };
+        return Response.json({
+          ok: true,
+          data: { accepted: true, workflowStatus: "queued", worldState: "ARCHIVING" },
+        }, { status: 202 });
+      },
+    },
+  };
+  const response = await archiveHandler({
+    request: new Request("https://game.example/api/game/archive", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://game.example",
+        cookie: `__Host-xuanche_session=${sessionToken}`,
+      },
+      body: JSON.stringify({
+        mode: "restart_game",
+        expectedWorldId: "W20260719-AABB0001",
+        operationKey: "pwa-world-operation-001",
+        typedConfirmation: "重新開始",
+        confirmation: "UNTRUSTED_CLIENT_VALUE",
+      }),
+    }),
+    env,
+  });
+  assert.equal(response.status, 202);
+  assert.equal(forwarded.path, "/world/archive-reset");
+  assert.equal(forwarded.apiKey, "engine-key");
+  assert.deepEqual(forwarded.body, {
+    confirmation: "ARCHIVE_AND_RESET",
+    expectedWorldId: "W20260719-AABB0001",
+    operationKey: "pwa-world-operation-001",
+  });
+});
+
+test("PWA archive endpoint rejects an omitted typed confirmation before reaching the engine", async () => {
+  const sessionToken = await createSessionToken({
+    version: 1,
+    subject: "owner",
+    expiresAt: Math.floor(Date.now() / 1_000) + 3_600,
+  }, "session-secret");
+  let called = false;
+  const response = await archiveHandler({
+    request: new Request("https://game.example/api/game/archive", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://game.example",
+        cookie: `__Host-xuanche_session=${sessionToken}`,
+      },
+      body: JSON.stringify({
+        mode: "reset_world",
+        expectedWorldId: "W20260719-AABB0001",
+        operationKey: "pwa-world-operation-003",
+      }),
+    }),
+    env: {
+      XUANCHE_API_KEY: "engine-key",
+      PWA_SESSION_SECRET: "session-secret",
+      XUANCHE_ENGINE: { async fetch() { called = true; } },
+    },
+  });
+  assert.equal(response.status, 400);
+  assert.equal(called, false);
+});
+
+test("PWA archive status reads only the matching durable operation", async () => {
+  const sessionToken = await createSessionToken({
+    version: 1,
+    subject: "owner",
+    expiresAt: Math.floor(Date.now() / 1_000) + 3_600,
+  }, "session-secret");
+  let receivedUrl;
+  const env = {
+    XUANCHE_API_KEY: "engine-key",
+    PWA_SESSION_SECRET: "session-secret",
+    XUANCHE_ENGINE: {
+      async fetch(request) {
+        receivedUrl = new URL(request.url);
+        return Response.json({ ok: true, data: { accepted: true, workflowStatus: "running" } });
+      },
+    },
+  };
+  const query = new URLSearchParams({
+    mode: "reset_world",
+    expectedWorldId: "W20260719-AABB0001",
+    operationKey: "pwa-world-operation-002",
+  });
+  const response = await archiveStatusHandler({
+    request: new Request(`https://game.example/api/game/archive/status?${query}`, {
+      headers: { cookie: `__Host-xuanche_session=${sessionToken}` },
+    }),
+    env,
+  });
+  assert.equal(response.status, 200);
+  assert.equal(receivedUrl.pathname, "/world/archive-reset/status");
+  assert.equal(receivedUrl.searchParams.get("expectedWorldId"), "W20260719-AABB0001");
+  assert.equal(receivedUrl.searchParams.get("operationKey"), "pwa-world-operation-002");
+});
+
+test("PWA initialization validates and forwards a bounded character without UI-only mode", async () => {
+  const sessionToken = await createSessionToken({
+    version: 1,
+    subject: "owner",
+    expiresAt: Math.floor(Date.now() / 1_000) + 3_600,
+  }, "session-secret");
+  let forwarded;
+  const env = {
+    XUANCHE_API_KEY: "engine-key",
+    PWA_SESSION_SECRET: "session-secret",
+    XUANCHE_ENGINE: {
+      async fetch(request) {
+        forwarded = await request.json();
+        return Response.json({ ok: true, data: { initialized: true, worldId: "W20260719-NEW00001" } });
+      },
+    },
+  };
+  const response = await initializeHandler({
+    request: new Request("https://game.example/api/game/initialize", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://game.example",
+        cookie: `__Host-xuanche_session=${sessionToken}`,
+      },
+      body: JSON.stringify({
+        mode: "new_game",
+        saveKey: "pwa-new-game-0001",
+        character: {
+          name: "沈青禾",
+          age: "19歲",
+          personality: ["沉靜", "敏銳"],
+          equipment: "短笛",
+        },
+        opening: {
+          location: "河港",
+          knownAbilities: ["辨音"],
+          choices: ["觀察河面"],
+        },
+      }),
+    }),
+    env,
+  });
+  assert.equal(response.status, 200);
+  assert.equal(forwarded.mode, undefined);
+  assert.equal(forwarded.character.name, "沈青禾");
+  assert.deepEqual(forwarded.opening.knownAbilities, ["辨音"]);
 });
 
 test("PWA turn streams narrative and commits through the bound engine", async () => {

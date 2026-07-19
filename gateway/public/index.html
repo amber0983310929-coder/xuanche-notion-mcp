@@ -31,6 +31,7 @@
         <section class="panel-section character-card" aria-labelledby="profile-name">
           <div class="portrait-frame">
             <img id="protagonist-portrait" src="/images/chulingxiao-v1.webp" alt="楚凌霄立繪" width="720" height="900">
+            <span id="portrait-placeholder" class="portrait-placeholder" aria-hidden="true" hidden>待</span>
             <span class="portrait-vignette" aria-hidden="true"></span>
             <span id="profile-age" class="profile-age">16歲</span>
           </div>
@@ -92,11 +93,11 @@
           <p class="eyebrow">世界管理</p>
           <div class="world-control-grid">
             <button id="continue-game-button" class="continue-game-button" type="button">繼續遊戲 <span aria-hidden="true">→</span></button>
-            <button id="new-game-button" class="quiet-button" type="button" disabled>新的遊戲</button>
-            <button id="restart-game-button" class="quiet-button" type="button" disabled>重新遊戲</button>
-            <button id="reset-world-button" class="quiet-button danger" type="button" disabled>重置世界</button>
+            <button id="new-game-button" class="quiet-button" type="button">新的遊戲</button>
+            <button id="restart-game-button" class="quiet-button" type="button">重新遊戲</button>
+            <button id="reset-world-button" class="quiet-button danger" type="button">重置世界</button>
           </div>
-          <p class="control-note">三項操作會影響權威存檔，確認各自規則後才會開放。</p>
+          <p class="control-note">新的遊戲會封存後進入角色建立；重新遊戲保留主角設定並回到序章；重置世界只封存並清空。</p>
         </section>
 
         <div class="panel-actions">
@@ -124,7 +125,7 @@
           <div id="choices" class="choices"></div>
 
           <form id="action-form" class="action-form">
-            <label class="sr-only" for="action-input">輸入楚凌霄的行動</label>
+            <label class="sr-only" for="action-input">輸入主角的行動</label>
             <textarea
               id="action-input"
               name="action"
@@ -142,6 +143,56 @@
         </section>
       </section>
     </main>
+
+    <dialog id="world-operation-dialog" class="modal-dialog operation-dialog" aria-labelledby="operation-title">
+      <form id="world-operation-form" method="dialog">
+        <p class="eyebrow">權威世界存檔</p>
+        <h2 id="operation-title">確認世界操作</h2>
+        <p id="operation-description" class="dialog-lead"></p>
+        <div class="operation-safety">
+          <p><strong>安全順序</strong>：完整封存 → 逐頁驗證 → 清空固定頁面 → 視操作建立新世界。</p>
+          <dl>
+            <div><dt>目前世界</dt><dd id="operation-world-id">—</dd></div>
+            <div><dt>失敗處理</dt><dd>保留檢查點，以同一識別碼續跑</dd></div>
+          </dl>
+        </div>
+        <label for="operation-confirmation">請輸入 <strong id="operation-confirmation-label">—</strong> 才能繼續</label>
+        <input id="operation-confirmation" name="confirmation" type="text" maxlength="12" autocomplete="off" spellcheck="false">
+        <p id="operation-progress" class="operation-progress" role="status" hidden></p>
+        <div class="dialog-actions">
+          <button id="operation-cancel-button" class="quiet-button" type="button">取消</button>
+          <button id="operation-confirm-button" class="danger-button" type="submit" disabled>確認</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="character-dialog" class="modal-dialog character-dialog" aria-labelledby="character-dialog-title">
+      <form id="character-form" method="dialog">
+        <p class="eyebrow">新世界 · 角色建立</p>
+        <h2 id="character-dialog-title">建立此世主角</h2>
+        <p class="dialog-lead">舊世界已安全封存。完成下列設定後才會建立新的 ACTIVE 世界；取消則維持空白世界。</p>
+        <div class="character-form-grid">
+          <label>姓名<input name="name" maxlength="40" autocomplete="off" required></label>
+          <label>性別<input name="gender" maxlength="20" value="男" autocomplete="off"></label>
+          <label>年齡<input name="age" maxlength="20" value="16歲" autocomplete="off"></label>
+          <label class="wide">外貌<textarea name="appearance" rows="2" maxlength="240" placeholder="外觀、衣著與氣質"></textarea></label>
+          <label class="wide">性格關鍵詞<input name="personality" maxlength="260" placeholder="沉著、敏銳、重視家人" autocomplete="off"></label>
+          <label class="wide">身世背景<textarea name="background" rows="3" maxlength="500" placeholder="主角從何而來，珍視什麼"></textarea></label>
+          <label class="wide">人生目標<input name="motivation" maxlength="240" placeholder="守護珍視之人並踏上修行之路" autocomplete="off"></label>
+          <label class="wide">不可跨越的底線<input name="bottomLine" maxlength="240" placeholder="不主動傷害無辜，不背棄珍視之人" autocomplete="off"></label>
+          <label class="wide">初始武器裝備<input name="equipment" maxlength="240" placeholder="藥簍、短刀、火摺子" autocomplete="off"></label>
+          <label class="wide">已知能力<input name="knownAbilities" maxlength="600" placeholder="辨識草藥、熟悉山路、攀爬與追蹤" autocomplete="off"></label>
+          <label>初始位置<input name="location" maxlength="160" value="山村外圍" autocomplete="off"></label>
+          <label>初始時間<input name="time" maxlength="80" value="清晨" autocomplete="off"></label>
+          <label class="wide">開局前提<textarea name="premise" rows="3" maxlength="600" placeholder="一場尚未發生的異變，即將把主角推向修行之路。"></textarea></label>
+        </div>
+        <p id="character-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="character-cancel-button" class="quiet-button" type="button">取消，維持空白</button>
+          <button id="character-submit-button" class="send-button" type="submit">建立世界</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="login-dialog" class="login-dialog">
       <form id="login-form" method="dialog">
