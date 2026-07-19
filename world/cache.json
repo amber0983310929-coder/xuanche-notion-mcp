@@ -1,10 +1,23 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-18T23:17:36.920Z",
+  "updatedAt": "2026-07-19T00:21:58.750Z",
   "worldState": "ACTIVE",
-  "worldId": "W20260718-89858DE4",
-  "simTick": 0,
-  "lastSaveKey": "沐卿塵-20260719-01",
-  "snapshot": null
+  "worldId": "W20260719-3DD3CA62",
+  "simTick": 1,
+  "lastSaveKey": "muqingchen-world-reset-20260719-3DD3CA",
+  "snapshot": null,
+  "revision": 2,
+  "protagonist": {
+    "status": [
+      "左肩疑似中毒",
+      "凡劍暫時離手"
+    ]
+  },
+  "activeThreats": [
+    "斗笠男子"
+  ],
+  "deadNpcs": [
+    "灰袍傷者"
+  ]
 }
