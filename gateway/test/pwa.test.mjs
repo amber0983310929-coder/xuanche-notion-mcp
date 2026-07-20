@@ -63,6 +63,7 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
   const css = await readFile(new URL("../public/app.css", import.meta.url), "utf8");
   assert.match(html, /id="continue-game-button"/);
   assert.match(html, /id="world-control-status"[^>]*role="status"[^>]*aria-live="polite"/);
+  assert.match(html, /id="operation-confirmation-field"[^>]*for="operation-confirmation"/);
   assert.match(html, /id="new-game-button"[^>]*>新的遊戲/);
   assert.match(html, /id="restart-game-button"[^>]*>重新遊戲/);
   assert.match(html, /id="reset-world-button"[^>]*>重置世界/);
@@ -100,6 +101,8 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
   assert.match(app, /function fitStateCards/);
   assert.match(app, /function openAppDialog/);
   assert.match(app, /function closeAppDialog/);
+  assert.match(app, /function setOperationConfirmationVisible/);
+  assert.doesNotMatch(app, /operationConfirmation\.closest\("label"\)/);
   assert.match(app, /function createUuid/);
   assert.match(app, /目前正在「\$\{activity\}」；完成後即可管理世界/);
   assert.match(app, /classList\.toggle\("state-card-wide", needsMoreRoom\)/);
@@ -119,7 +122,7 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
 
 test("PWA service worker keeps navigation fresh and returns cached shell assets immediately", async () => {
   const worker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
-  assert.match(worker, /xuanche-pwa-v0\.6\.0-mobile-controls-v1/);
+  assert.match(worker, /xuanche-pwa-v0\.6\.0-mobile-controls-v2/);
   assert.match(worker, /request\.mode === "navigate"/);
   assert.match(worker, /networkFirst\(request, "\/index\.html"\)/);
   assert.match(worker, /staleWhileRevalidate\(event, request\)/);

@@ -69,6 +69,7 @@ const elements = {
   operationTitle: document.querySelector("#operation-title"),
   operationDescription: document.querySelector("#operation-description"),
   operationWorldId: document.querySelector("#operation-world-id"),
+  operationConfirmationField: document.querySelector("#operation-confirmation-field"),
   operationConfirmationLabel: document.querySelector("#operation-confirmation-label"),
   operationConfirmation: document.querySelector("#operation-confirmation"),
   operationProgress: document.querySelector("#operation-progress"),
@@ -436,9 +437,7 @@ function openWorldOperationDialog(operation, { retry = false } = {}) {
   const copy = WORLD_OPERATION_COPY[operation.mode];
   if (!copy) return;
   game.operationCandidate = operation;
-  const confirmationLabel = elements.operationConfirmation.closest("label");
-  confirmationLabel.hidden = false;
-  elements.operationConfirmation.hidden = false;
+  setOperationConfirmationVisible(true);
   elements.operationTitle.textContent = copy.title;
   elements.operationDescription.textContent = copy.description;
   elements.operationWorldId.textContent = operation.expectedWorldId || "EMPTY／PENDING";
@@ -458,6 +457,11 @@ function openWorldOperationDialog(operation, { retry = false } = {}) {
   openAppDialog(elements.operationDialog);
   clearWorldControlMessage();
   setTimeout(() => elements.operationConfirmation.focus(), 50);
+}
+
+function setOperationConfirmationVisible(visible) {
+  if (elements.operationConfirmationField) elements.operationConfirmationField.hidden = !visible;
+  elements.operationConfirmation.hidden = !visible;
 }
 
 function updateOperationConfirmation() {
@@ -575,8 +579,7 @@ function showArchiveRetry(operation, error) {
   setBusy(false, "封存待續");
   setOperationProgress(error.message, true);
   game.operationCandidate = operation;
-  elements.operationConfirmation.closest("label").hidden = false;
-  elements.operationConfirmation.hidden = false;
+  setOperationConfirmationVisible(true);
   elements.operationConfirmation.disabled = false;
   elements.operationConfirmation.value = "";
   elements.operationConfirmButton.hidden = false;
@@ -755,8 +758,7 @@ function showInitializationProgress(operation) {
     ? "固定頁面已驗證為 EMPTY／PENDING；現在以保留的主角設定建立全新序章。"
     : "固定頁面已確認為 EMPTY／PENDING；現在以剛確認的角色設定建立新世界。";
   elements.operationWorldId.textContent = operation.expectedWorldId || "EMPTY／PENDING";
-  elements.operationConfirmation.closest("label").hidden = true;
-  elements.operationConfirmation.hidden = true;
+  setOperationConfirmationVisible(false);
   elements.operationConfirmButton.hidden = true;
   elements.operationCancelButton.hidden = true;
   setOperationProgress("正在寫入新世界；權威存檔會在所有固定頁面準備完成後才啟用……");
@@ -767,8 +769,7 @@ function showInitializationProgress(operation) {
 function showInitializationRetry(operation, error) {
   game.operationCandidate = operation;
   setOperationProgress(`${error.message}（將使用同一存檔鍵重試）`, true);
-  elements.operationConfirmation.closest("label").hidden = true;
-  elements.operationConfirmation.hidden = true;
+  setOperationConfirmationVisible(false);
   elements.operationConfirmButton.hidden = false;
   elements.operationConfirmButton.disabled = false;
   elements.operationConfirmButton.textContent = operation.mode === "restart_game" ? "重試建立序章" : "重試建立世界";
@@ -803,8 +804,7 @@ async function resumeWorldOperation() {
   setBusy(true, "核對封存進度");
   game.operationCandidate = operation;
   openWorldOperationDialog(operation, { retry: true });
-  elements.operationConfirmation.closest("label").hidden = true;
-  elements.operationConfirmation.hidden = true;
+  setOperationConfirmationVisible(false);
   elements.operationConfirmButton.hidden = true;
   elements.operationCancelButton.disabled = true;
   setOperationProgress("正在讀取既有封存工作流程，不會自動建立第二個操作……");
