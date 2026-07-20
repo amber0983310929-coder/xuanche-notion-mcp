@@ -42,8 +42,8 @@ const DEFAULT_HANDLERS = Object.freeze({
 
 /**
  * Dispatches one bounded archive/reset operation. In production this function
- * runs inside a Durable Object invocation, giving every Notion batch its own
- * external-subrequest budget instead of charging all batches to one Workflow.
+ * runs inside a Durable Object alarm event, giving every Notion batch its own
+ * external-subrequest budget.
  */
 export async function executeArchiveResetStep(
   env,

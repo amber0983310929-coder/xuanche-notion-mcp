@@ -1,7 +1,6 @@
 import { buildOpenApi } from "./openapi.js";
 import { GitHubClient } from "./github.js";
 import {
-  archiveAndResetWorld,
   archiveResetWorkflowId,
   validateArchiveResetInput,
 } from "./archive-reset.js";
@@ -82,7 +81,8 @@ export function createRouter(dependencies = {}) {
             verifiedWorldArchiveAndReset: true,
             batchedArchiveReset: true,
             isolatedArchiveBatchInvocations: Boolean(env.WORLD_ARCHIVE_STEP_EXECUTOR),
-            durableArchiveReset: Boolean(env.WORLD_RESET_WORKFLOW?.createBatch),
+            alarmDrivenArchiveReset: Boolean(env.WORLD_ARCHIVE_STEP_EXECUTOR),
+            durableArchiveReset: Boolean(env.WORLD_ARCHIVE_STEP_EXECUTOR),
           },
           protectedReads: readsRequireApiKey(env),
           requestId: id,
@@ -219,10 +219,10 @@ export function createRouter(dependencies = {}) {
       if (request.method === "POST" && url.pathname === "/world/archive-reset") {
         requireApiKey(request, env);
         const body = await readJson(request);
-        // Never fall back to the old synchronous implementation here. A reset
-        // can legitimately outlive a GPT Action response and must therefore
-        // be backed by the durable Workflow binding.
-        const data = await startArchiveResetWorkflow(env, body, dependencies.cache, notion);
+        // Every Notion batch runs from an independent Durable Object alarm
+        // event. This avoids carrying the Free-plan external-subrequest count
+        // through one long-lived Workflow request chain.
+        const data = await startArchiveResetController(env, body, dependencies.cache, notion);
         return json({ ok: true, data, requestId: id }, 202);
       }
 
@@ -233,7 +233,7 @@ export function createRouter(dependencies = {}) {
           expectedWorldId: url.searchParams.get("expectedWorldId"),
           operationKey: url.searchParams.get("operationKey"),
         };
-        const data = await getArchiveResetWorkflowStatus(env, input);
+        const data = await getArchiveResetControllerStatus(env, input);
         return json({ ok: true, data, requestId: id });
       }
 
@@ -321,10 +321,10 @@ async function commitTurnThroughCoordinator(namespace, input, requestId) {
   return payload.data;
 }
 
-async function startArchiveResetWorkflow(env, input, injectedCache, injectedNotion) {
+async function startArchiveResetController(env, input, injectedCache, injectedNotion) {
   validateArchiveResetInput(input);
-  if (!env.WORLD_RESET_WORKFLOW?.createBatch || !env.WORLD_RESET_WORKFLOW?.get) {
-    throw new ApiError(503, "Durable archive workflow binding is not configured");
+  if (!env.WORLD_ARCHIVE_STEP_EXECUTOR) {
+    throw new ApiError(503, "Alarm-driven archive controller binding is not configured");
   }
   const cache = injectedCache || new CacheStore(env);
   const active = await getActiveReset(cache);
@@ -353,47 +353,27 @@ async function startArchiveResetWorkflow(env, input, injectedCache, injectedNoti
     });
   }
 
-  let workflowId = active?.workflowId || archiveResetWorkflowId(input);
+  const workflowId = archiveResetControllerId(input);
   const queuedHere = !active;
-  const persistWorkflowId = async () => {
-    await cache.put(ACTIVE_RESET_LOCK, {
-      ...(active || {}),
-      phase: active?.phase || "queued",
-      expectedWorldId: input.expectedWorldId,
-      operationKey: input.operationKey,
-      workflowId,
-      createdAt: active?.createdAt || new Date().toISOString(),
-    }, 86_400);
-  };
-  if (queuedHere || !active?.workflowId) await persistWorkflowId();
+  await cache.put(ACTIVE_RESET_LOCK, {
+    ...(active || {}),
+    phase: active?.phase || "queued",
+    expectedWorldId: input.expectedWorldId,
+    operationKey: input.operationKey,
+    workflowId,
+    archiveController: "alarm-v1",
+    createdAt: active?.createdAt || new Date().toISOString(),
+  }, 86_400);
 
-  const submit = () => env.WORLD_RESET_WORKFLOW.createBatch([{
-    id: workflowId,
-    params: input,
-    retention: { successRetention: "7 days", errorRetention: "14 days" },
-  }]);
   try {
-    await submit();
+    const stub = archiveControllerStub(env.WORLD_ARCHIVE_STEP_EXECUTOR, input);
+    const status = await stub.startController({ input, workflowId, restart: true });
+    const { found: _found, ...data } = status || {};
+    return data;
   } catch (error) {
-    let existingStatus;
-    try {
-      existingStatus = await (await env.WORLD_RESET_WORKFLOW.get(workflowId)).status();
-    } catch {
-      if (queuedHere) await cache.delete(ACTIVE_RESET_LOCK);
-      throw error;
-    }
-    // A completed or running deterministic instance is idempotent.  An errored
-    // instance cannot be re-used by Cloudflare Workflows, so start a fresh
-    // attempt while retaining the same archive checkpoint and operationKey.
-    if (["errored", "terminated", "canceled", "cancelled"].includes(existingStatus.status)) {
-      workflowId = archiveResetWorkflowId(input) + "-retry-" + crypto.randomUUID().slice(0, 8);
-      await persistWorkflowId();
-      await submit();
-    }
+    if (queuedHere) await cache.delete(ACTIVE_RESET_LOCK);
+    throw error;
   }
-  const instance = await env.WORLD_RESET_WORKFLOW.get(workflowId);
-  const status = await instance.status();
-  return archiveWorkflowStatusPayload(input, workflowId, status);
 }
 
 async function readCanonicalWorldState(env, injectedNotion) {
@@ -401,7 +381,7 @@ async function readCanonicalWorldState(env, injectedNotion) {
   const tree = await notion.getPageTree(WORLD_PAGE_IDS.save, {
     maxDepth: 0,
     // The marker is kept near the top of the fixed save page. Bound this
-    // preflight to one Notion request; the Workflow captures and verifies the
+    // preflight to one Notion request; the alarm controller captures and verifies the
     // complete page later in independently resumable batches.
     maxNodes: CANONICAL_STATE_MAX_NODES,
     concurrency: 1,
@@ -411,13 +391,29 @@ async function readCanonicalWorldState(env, injectedNotion) {
   return parseWorldMarkers(tree.children);
 }
 
-async function getArchiveResetWorkflowStatus(env, input) {
+async function getArchiveResetControllerStatus(env, input) {
   validateArchiveResetInput(input);
-  if (!env.WORLD_RESET_WORKFLOW?.get) {
-    throw new ApiError(503, "Durable archive workflow binding is not configured");
-  }
   const cache = new CacheStore(env);
   const active = await getActiveReset(cache);
+  if (env.WORLD_ARCHIVE_STEP_EXECUTOR) {
+    const workflowId = active?.archiveController === "alarm-v1" &&
+      active.expectedWorldId === input.expectedWorldId &&
+      active.operationKey === input.operationKey
+      ? active.workflowId
+      : archiveResetControllerId(input);
+    const status = await archiveControllerStub(env.WORLD_ARCHIVE_STEP_EXECUTOR, input)
+      .getControllerStatus({ workflowId });
+    if (status?.found) {
+      const { found: _found, ...data } = status;
+      return data;
+    }
+  }
+
+  // Read-only fallback for a pre-alarm Workflow attempt. New work is never
+  // submitted here; the next explicit retry starts the alarm controller.
+  if (!env.WORLD_RESET_WORKFLOW?.get) {
+    throw new ApiError(404, "No archive-and-reset controller exists for this operationKey");
+  }
   const workflowId = active?.expectedWorldId === input.expectedWorldId && active?.operationKey === input.operationKey
     ? active.workflowId || archiveResetWorkflowId(input)
     : archiveResetWorkflowId(input);
@@ -428,6 +424,17 @@ async function getArchiveResetWorkflowStatus(env, input) {
     throw new ApiError(404, "No archive-and-reset workflow exists for this operationKey", { workflowId });
   }
   return archiveWorkflowStatusPayload(input, workflowId, await instance.status());
+}
+
+function archiveControllerStub(namespace, input) {
+  const name = input.expectedWorldId + ":" + input.operationKey;
+  return typeof namespace.getByName === "function"
+    ? namespace.getByName(name)
+    : namespace.get(namespace.idFromName(name));
+}
+
+function archiveResetControllerId(input) {
+  return archiveResetWorkflowId(input).replace(/^archive_reset_/, "archive_alarm_");
 }
 
 function archiveWorkflowStatusPayload(input, workflowId, status = {}) {

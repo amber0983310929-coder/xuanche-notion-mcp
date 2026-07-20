@@ -41,9 +41,9 @@ export async function archiveAndResetWorld(env, input, dependencies = {}) {
   }
 
   let activeLock = await getActiveReset(cache);
-  // A durable Workflow writes this short-lived queue lock before it starts.
+  // A durable background controller writes this short-lived queue lock before it starts.
   // It prevents a normal game save from racing the archive, but must not be
-  // mistaken for an already-verified archive when the workflow begins.
+  // mistaken for an already-verified archive when the controller begins.
   if (activeLock?.phase === "queued" && sameOperation(activeLock, input)) {
     activeLock = null;
   }

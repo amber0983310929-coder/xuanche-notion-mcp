@@ -21,6 +21,7 @@ test("health reports integrations without exposing secrets", async () => {
   assert.equal(body.capabilities.idempotentRevisionReplay, true);
   assert.equal(body.capabilities.batchedArchiveReset, true);
   assert.equal(body.capabilities.isolatedArchiveBatchInvocations, false);
+  assert.equal(body.capabilities.alarmDrivenArchiveReset, false);
   assert.equal(JSON.stringify(body).includes("secret"), false);
 });
 
@@ -41,15 +42,31 @@ test("mutation endpoints reject missing API keys", async () => {
   assert.equal(initializeResponse.status, 401);
 });
 
-test("archive reset is queued into a durable workflow and exposes an inspectable status", async () => {
+test("archive reset is queued into an alarm controller and exposes an inspectable status", async () => {
   const records = new Map();
   let submitted;
-  const workflow = {
-    async createBatch(batch) { submitted = batch; return [{ id: batch[0].id }]; },
-    async get(id) {
+  let controllerStatus;
+  const controller = {
+    getByName(name) {
       return {
-        id,
-        async status() { return { status: "queued" }; },
+        async startController(request) {
+          submitted = { name, ...request };
+          controllerStatus = {
+            found: true,
+            accepted: true,
+            reset: false,
+            archiveVerified: false,
+            worldState: "ARCHIVING",
+            workflowStatus: "queued",
+            workflowId: request.workflowId,
+            operationKey: request.input.operationKey,
+            error: null,
+          };
+          return controllerStatus;
+        },
+        async getControllerStatus() {
+          return controllerStatus || { found: false };
+        },
       };
     },
   };
@@ -81,19 +98,21 @@ test("archive reset is queued into a durable workflow and exposes an inspectable
     method: "POST",
     headers: { "content-type": "application/json", "X-API-Key": "required" },
     body: JSON.stringify(body),
-  }), { XUANCHE_API_KEY: "required", WORLD_RESET_WORKFLOW: workflow });
+  }), { XUANCHE_API_KEY: "required", WORLD_ARCHIVE_STEP_EXECUTOR: controller });
   const payload = await response.json();
 
   assert.equal(response.status, 202);
   assert.equal(payload.data.workflowStatus, "queued");
   assert.equal(payload.data.worldState, "ARCHIVING");
   assert.equal(payload.data.reset, false);
-  assert.deepEqual(submitted[0].params, body);
+  assert.deepEqual(submitted.input, body);
+  assert.equal(submitted.restart, true);
+  assert.match(submitted.workflowId, /^archive_alarm_/);
 
   const status = await route(new Request(
     "https://example.test/world/archive-reset/status?expectedWorldId=W20260717-432D5443&operationKey=archive-reset-20260718-001",
     { headers: { "X-API-Key": "required" } },
-  ), { XUANCHE_API_KEY: "required", WORLD_RESET_WORKFLOW: workflow });
+  ), { XUANCHE_API_KEY: "required", WORLD_ARCHIVE_STEP_EXECUTOR: controller });
   const statusPayload = await status.json();
   assert.equal(status.status, 200);
   assert.equal(statusPayload.data.workflowStatus, "queued");
@@ -102,10 +121,22 @@ test("archive reset is queued into a durable workflow and exposes an inspectable
 test("archive reset preflight finds the canonical marker in one bounded Notion page", async () => {
   const records = new Map();
   let receivedOptions;
-  const workflow = {
-    async createBatch() { return [{ id: "workflow-large-save" }]; },
-    async get(id) {
-      return { id, async status() { return { status: "queued" }; } };
+  const controller = {
+    getByName() {
+      return {
+        async startController({ input, workflowId }) {
+          return {
+            found: true,
+            accepted: true,
+            reset: false,
+            archiveVerified: false,
+            worldState: "ARCHIVING",
+            workflowStatus: "queued",
+            workflowId,
+            operationKey: input.operationKey,
+          };
+        },
+      };
     },
   };
   const cache = {
@@ -139,7 +170,7 @@ test("archive reset preflight finds the canonical marker in one bounded Notion p
       expectedWorldId: "W20260719-9E6FAA5A",
       operationKey: "archive-reset-large-save-001",
     }),
-  }), { XUANCHE_API_KEY: "required", WORLD_RESET_WORKFLOW: workflow });
+  }), { XUANCHE_API_KEY: "required", WORLD_ARCHIVE_STEP_EXECUTOR: controller });
 
   assert.equal(response.status, 202);
   assert.equal(receivedOptions.maxDepth, 0);
@@ -148,7 +179,7 @@ test("archive reset preflight finds the canonical marker in one bounded Notion p
   assert.equal(receivedOptions.truncateAtMaxNodes, true);
 });
 
-test("archive reset refuses to run synchronously without its durable workflow", async () => {
+test("archive reset refuses to run synchronously without its alarm controller", async () => {
   const route = createRouter();
   const response = await route(new Request("https://example.test/world/archive-reset", {
     method: "POST",
@@ -161,7 +192,7 @@ test("archive reset refuses to run synchronously without its durable workflow", 
   }), { XUANCHE_API_KEY: "required" });
   const body = await response.json();
   assert.equal(response.status, 503);
-  assert.match(body.error, /Durable archive workflow binding/);
+  assert.match(body.error, /Alarm-driven archive controller binding/);
 });
 
 test("raw Notion mutation routes are disabled by default", async () => {

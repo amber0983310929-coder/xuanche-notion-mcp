@@ -3,14 +3,15 @@ import {
   ARCHIVE_RESET_STEPS,
   executeArchiveResetStepThroughBinding,
 } from "./archive-reset-step.js";
+import { MAX_ARCHIVE_BATCHES, MAX_CLEAR_BATCHES } from "./archive-reset-staged.js";
 import { CacheStore } from "./cache.js";
 import { ACTIVE_RESET_LOCK, getActiveReset } from "./reset-lock.js";
 import { STATE_PAGE_KEYS } from "./world-state.js";
 
 /**
- * The Free plan counts external subrequests across an entire Workflow
- * instance. Every step therefore delegates one bounded batch to a Durable
- * Object invocation, while the Workflow only spends internal-service calls.
+ * Compatibility path for Workflow instances submitted before the alarm
+ * controller was introduced. New archive jobs are driven directly by Durable
+ * Object alarm events; an older instance can still finish its staged work.
  */
 export class WorldArchiveResetWorkflow extends WorkflowEntrypoint {
   async run(event, step) {
@@ -37,7 +38,7 @@ export class WorldArchiveResetWorkflow extends WorkflowEntrypoint {
           archiveState = await step.do("capture archive " + key + " batch " + currentBatch, options, () =>
             runStep(ARCHIVE_RESET_STEPS.CAPTURE_PAGE_BATCH, key));
           batchIndex = archiveState.batchIndex;
-          if (batchIndex > 50) throw new Error("Archive batch safety limit exceeded for " + key);
+          if (batchIndex > MAX_ARCHIVE_BATCHES) throw new Error("Archive batch safety limit exceeded for " + key);
         }
         await step.do("finalize archive " + key, options, () =>
           runStep(ARCHIVE_RESET_STEPS.FINALIZE_PAGE, key));
@@ -56,7 +57,7 @@ export class WorldArchiveResetWorkflow extends WorkflowEntrypoint {
           clearState = await step.do("clear world blocks " + key + " batch " + currentBatch, options, () =>
             runStep(ARCHIVE_RESET_STEPS.CLEAR_PAGE_BATCH, key));
           clearBatch += 1;
-          if (clearBatch > 200) throw new Error("Reset batch safety limit exceeded for " + key);
+          if (clearBatch > MAX_CLEAR_BATCHES) throw new Error("Reset batch safety limit exceeded for " + key);
         }
         await step.do("mark empty " + key, options, () =>
           runStep(ARCHIVE_RESET_STEPS.MARK_PAGE_EMPTY, key));

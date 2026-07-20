@@ -69,7 +69,7 @@ The service verifies the canonical save once, appends the SAVE_KEY marker to eve
 
 ## Archive and reset
 
-`POST /world/archive-reset` is deliberately separate from initialization. It requires `confirmation: "ARCHIVE_AND_RESET"`, the exact current `expectedWorldId`, and an idempotent `operationKey`. It returns quickly with `ARCHIVING`; the durable Workflow then copies pages 02–09 and 11 into a `世界封存庫` child page in Notion, checks the SHA-256 digest of every source snapshot, and only then clears the fixed pages to `EMPTY/PENDING`. Read `GET /world/archive-reset/status` with the same world ID and operation key until it reports both `archiveVerified: true` and `reset: true`. The endpoint deliberately refuses to fall back to an unsafe synchronous reset when the Workflow binding is absent.
+`POST /world/archive-reset` is deliberately separate from initialization. It requires `confirmation: "ARCHIVE_AND_RESET"`, the exact current `expectedWorldId`, and an idempotent `operationKey`. It returns quickly with `ARCHIVING`; an alarm-driven Durable Object then copies pages 02–09 and 11 into a `世界封存庫` child page in Notion, checks the SHA-256 digest of every source snapshot, and only then clears the fixed pages to `EMPTY/PENDING`. Every bounded batch runs in its own alarm invocation and persists its checkpoint before scheduling the next one. Read `GET /world/archive-reset/status` with the same world ID and operation key until it reports both `archiveVerified: true` and `reset: true`. The endpoint deliberately refuses to fall back to an unsafe synchronous reset when the alarm-controller binding is absent.
 
 ## Confirmed-character initialization
 

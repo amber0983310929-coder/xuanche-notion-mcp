@@ -142,7 +142,7 @@ test("Notion client spaces concurrent requests to stay below the configured rate
   assert.ok(starts[1] - starts[0] >= 15);
 });
 
-test("Notion client can leave transient retries to an outer Workflow invocation", async () => {
+test("Notion client can leave transient retries to the next alarm invocation", async () => {
   let calls = 0;
   const notion = new NotionClient({
     NOTION_TOKEN: "test",

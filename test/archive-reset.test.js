@@ -225,7 +225,7 @@ test("archive-and-reset refuses a malformed confirmation before it writes", asyn
   assert.match(pages.get(WORLD_PAGE_IDS.save).children[0].text, /WORLD_STATE：ACTIVE/);
 });
 
-test("a queued durable-workflow lock starts the archive instead of being treated as a completed archive", async () => {
+test("a queued durable-controller lock starts the archive instead of being treated as a completed archive", async () => {
   const { notion } = createNotionMock();
   const cache = createCache();
   await cache.put("world-reset:active", {
@@ -272,13 +272,16 @@ test("staged archive uses independently resumable page checkpoints before reset"
   assert.equal(result.reset, true);
   assert.equal(result.worldState, "EMPTY");
   assert.equal(await cache.get("world-reset:active"), undefined);
+  const replay = await finalizeStagedArchiveReset(env, request, deps);
+  assert.equal(replay.idempotent, true);
+  assert.equal(replay.reset, true);
   for (const key of STATE_PAGE_KEYS) {
     const live = pages.get(WORLD_PAGE_IDS[key]).children.filter((item) => !item.archived);
     assert.equal(live.length, 1);
   }
 });
 
-test("a large fixed page is archived in cursor-checkpointed 100-block batches", async () => {
+test("a large fixed page is archived in cursor-checkpointed 25-block batches", async () => {
   const { notion, pages, stats } = createNotionMock();
   const key = "knowledge";
   pages.get(WORLD_PAGE_IDS[key]).children.push(
@@ -304,18 +307,18 @@ test("a large fixed page is archived in cursor-checkpointed 100-block batches", 
   const lock = await cache.get("world-reset:active");
   const stored = lock.archive.sourcePages.find((source) => source.key === key);
 
-  assert.equal(captureCount, 3);
-  assert.equal(state.batchIndex, 3);
+  assert.equal(captureCount, 9);
+  assert.equal(state.batchIndex, 9);
   assert.equal(finalized.source.format, "XC_WORLD_ARCHIVE_V2");
-  assert.equal(stored.batchCount, 3);
+  assert.equal(stored.batchCount, 9);
   assert.equal(lock.archivedKeys.includes(key), true);
   assert.deepEqual(
     stats.listBlockChildren.filter((call) => call.pageId === WORLD_PAGE_IDS[key]).map((call) => call.pageSize),
-    [100, 100, 100],
+    [25, 25, 25, 25, 25, 25, 25, 25, 25],
   );
 });
 
-test("clearing a large fixed page archives at most 40 blocks per resumable step", async () => {
+test("clearing a large fixed page archives at most 20 blocks per resumable step", async () => {
   const { notion, pages, stats } = createNotionMock();
   const key = "save";
   pages.get(WORLD_PAGE_IDS[key]).children.push(
@@ -346,15 +349,15 @@ test("clearing a large fixed page archives at most 40 blocks per resumable step"
   }
   await markStagedPageEmpty({}, request, key, deps);
 
-  assert.equal(batchSizes.length, 2);
-  assert.equal(Math.max(...batchSizes) <= 40, true);
+  assert.equal(batchSizes.length, 4);
+  assert.equal(Math.max(...batchSizes) <= 20, true);
   assert.equal(batchSizes.reduce((sum, value) => sum + value, 0), 74);
   const live = pages.get(WORLD_PAGE_IDS[key]).children.filter((item) => !item.archived);
   assert.equal(live.length, 1);
   assert.equal(parseWorldMarkers([block(live[0].id, live[0].type, live[0].text)]).worldState, "EMPTY");
 });
 
-test("a new workflow attempt trusts already verified V1 page checkpoints", async () => {
+test("a new controller attempt trusts already verified V1 page checkpoints", async () => {
   const { notion, pages } = createNotionMock();
   const cache = createCache();
   const request = input("archive-reset-existing-checkpoints-001");

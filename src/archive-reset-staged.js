@@ -24,9 +24,10 @@ const MAX_SNAPSHOT_NODES = 5_000;
 const MAX_SNAPSHOT_CHARS = 1_500_000;
 const SNAPSHOT_CHUNK_SIZE = 1_500;
 const MARKER_SCAN_MAX_NODES = 100;
-const ARCHIVE_PAGE_BATCH_SIZE = 100;
-const MAX_ARCHIVE_BATCHES = Math.ceil(MAX_SNAPSHOT_NODES / ARCHIVE_PAGE_BATCH_SIZE);
-const CLEAR_BATCH_SIZE = 40;
+const ARCHIVE_PAGE_BATCH_SIZE = 25;
+export const MAX_ARCHIVE_BATCHES = Math.ceil(MAX_SNAPSHOT_NODES / ARCHIVE_PAGE_BATCH_SIZE);
+const CLEAR_BATCH_SIZE = 20;
+export const MAX_CLEAR_BATCHES = Math.ceil((MAX_SNAPSHOT_NODES - 1) / (CLEAR_BATCH_SIZE - 1));
 const LOCK_TTL_SECONDS = 86_400;
 const ARCHIVE_PARENT_SCAN_MAX_NODES = 500;
 const MAX_STATUS_MIRROR_UPDATES = 12;
@@ -35,7 +36,7 @@ const MAX_STATUS_MIRROR_UPDATES = 12;
  * The legacy archive implementation performed every page copy, verification,
  * and reset in one Worker invocation.  This module is deliberately page-
  * scoped: every exported operation stays below the Worker subrequest ceiling
- * and records its checkpoint before the next Workflow step runs.
+ * and records its checkpoint before the next alarm event runs.
  */
 export async function prepareStagedArchiveReset(env, input, dependencies = {}) {
   const { notion, cache } = runtime(env, dependencies);
@@ -111,8 +112,8 @@ export async function archiveAndVerifyStagedPage(env, input, key, dependencies =
 
 /**
  * Creates (or resumes) a V2 archive source for one fixed page. The returned
- * cursor is persisted in KV, so each Workflow step needs to read at most one
- * 100-block Notion page.
+ * cursor is persisted in KV, so each alarm event reads at most one 25-block
+ * Notion page.
  */
 export async function beginStagedPageArchive(env, input, key, dependencies = {}) {
   assertStatePageKey(key);
@@ -316,7 +317,7 @@ export async function clearStagedPage(env, input, key, dependencies = {}) {
   while (!state.done) {
     state = await clearStagedPageBatch(env, input, key, dependencies);
     guard += 1;
-    if (guard > Math.ceil(MAX_SNAPSHOT_NODES / CLEAR_BATCH_SIZE) + 2) {
+    if (guard > MAX_CLEAR_BATCHES) {
       throw new ApiError(422, "A fixed world page exceeds the reset node safety limit", { key });
     }
   }
@@ -411,6 +412,10 @@ export async function clearStagedWorldCacheBatch(env, input, dependencies = {}) 
 
 export async function finalizeStagedArchiveReset(env, input, dependencies = {}) {
   const { notion, github, cache } = runtime(env, dependencies);
+  const previous = await cache.get("world-reset:last");
+  if (previous && sameOperation(previous, input) && previous.result?.reset === true) {
+    return { ...previous.result, idempotent: true };
+  }
   const lock = await requireLock(cache, input, ["resetting"]);
   const pages = await readFinalPages(notion);
   const world = validateLoadedWorld(pages.map(({ key, children }) => ({ key, children })), { required: true });
