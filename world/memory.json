@@ -1,10 +1,10 @@
 {
   "version": 3,
   "schema": "SAVE_V3.3",
-  "updatedAt": "2026-07-19T22:39:47.239Z",
+  "updatedAt": "2026-07-20T00:17:55.996Z",
   "worldState": "ACTIVE",
   "worldId": "W20260719-9E6FAA5A",
-  "simTick": 23,
+  "simTick": 24,
   "purgeId": "A-W20260719-D88393B4-C53DA2D2",
   "events": [
     {
@@ -135,8 +135,24 @@
         "至少一頭受傷的重獸由碎石坡轉入北面林子，留下拖痕與黑毛。",
         "灰衣修士沒有隨楚凌霄進入北岔；南側追兵目前沒有發出哨聲。"
       ]
+    },
+    {
+      "timestamp": "2026-07-20T00:17:55.996Z",
+      "type": "gameplay_turn",
+      "actionKey": "71c64e43-f2d2-4efb-a158-cefe08f1947d",
+      "saveKey": "turn-W20260719-9E6FAA5A-t24-pwa-71c64e43-f2d2-4efb-a158-cefe08f1947d",
+      "worldId": "W20260719-9E6FAA5A",
+      "simTick": 24,
+      "playerAction": "不交代",
+      "summary": "獸群正被逼近石溝，亂石堆承重石持續下沉；北林藏有受傷重獸，南側疑有未露面的追兵。",
+      "facts": [
+        "右側亂石堆的承重石已再次下沉，隨時可能崩落。",
+        "大半獸群正從北林方向逼近石溝狹口。",
+        "一頭後腿帶傷的黑背麂逃入石堆左側窄縫，縫內傳出沉重喘鳴。",
+        "南側山脊有異動聲，但楚凌霄尚未看見追兵。"
+      ]
     }
   ],
-  "revision": 24,
-  "lastSaveKey": "turn-W20260719-9E6FAA5A-t23-pwa-23d77772-bb19-48d5-bbb5-650958fa81ab"
+  "revision": 25,
+  "lastSaveKey": "turn-W20260719-9E6FAA5A-t24-pwa-71c64e43-f2d2-4efb-a158-cefe08f1947d"
 }
