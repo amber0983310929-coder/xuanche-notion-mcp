@@ -268,6 +268,8 @@ select:focus { border-color: var(--gold); }
 .continue-game-button:disabled { color: #676961; background: #292c27; }
 .world-control-grid .danger { grid-column: 1 / -1; }
 .control-note { margin: 11px 0 0; color: #72746c; font-size: 13.5px; line-height: 1.55; }
+.world-control-status { margin: 11px 0 0; padding: 10px 12px; color: #cfc5aa; border-left: 2px solid var(--gold); background: rgba(185, 154, 98, 0.075); font-size: 14px; line-height: 1.55; }
+.world-control-status.error { color: #e1aaa1; border-left-color: var(--red); background: rgba(158, 75, 63, 0.09); }
 
 .play-panel { min-width: 0; }
 .play-panel, .world-panel, .decision-area, .narrative-card { scroll-margin-top: 96px; }
@@ -426,12 +428,16 @@ textarea::placeholder { color: #62645d; }
 .handbook-footnote { margin: 0; padding: 16px 28px max(16px, env(safe-area-inset-bottom)); color: #686b63; border-top: 1px solid var(--line); font-size: 13.5px; line-height: 1.55; }
 
 .modal-dialog, .login-dialog {
+  max-height: calc(100dvh - 24px);
   padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   color: var(--paper);
   border: 1px solid rgba(185, 154, 98, 0.36);
   background: #171a16;
   box-shadow: 0 30px 100px rgba(0, 0, 0, 0.7);
 }
+.modal-dialog.dialog-fallback, .login-dialog.dialog-fallback { position: fixed; inset: 0; z-index: 60; margin: auto; box-shadow: 0 0 0 100vmax rgba(7, 8, 7, 0.84), 0 30px 100px rgba(0, 0, 0, 0.7); }
 .modal-dialog::backdrop, .login-dialog::backdrop { background: rgba(7, 8, 7, 0.84); backdrop-filter: blur(8px); }
 .modal-dialog form { display: grid; gap: 17px; padding: clamp(26px, 4vw, 42px); }
 .modal-dialog h2 { margin: 0; font: 600 36px/1.25 "Iowan Old Style", "Noto Serif TC", serif; }
