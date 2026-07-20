@@ -4,7 +4,12 @@ import assert from "node:assert/strict";
 import { archiveAndResetWorld } from "../src/archive-reset.js";
 import {
   archiveAndVerifyStagedPage,
+  beginStagedPageArchive,
+  captureStagedPageBatch,
   clearStagedPage,
+  clearStagedPageBatch,
+  clearStagedWorldCache,
+  finalizeStagedPageArchive,
   finalizeStagedArchiveReset,
   markStagedPageEmpty,
   markStagedPageResetting,
@@ -26,6 +31,7 @@ function block(id, type, text) {
 function createNotionMock({ failArchiveOnce = false } = {}) {
   const pages = new Map();
   const pageKeyById = new Map(STATE_PAGE_KEYS.map((key) => [WORLD_PAGE_IDS[key], key]));
+  const stats = { listBlockChildren: [], archivedBlockIds: [] };
   let sequence = 0;
   let shouldFailArchive = failArchiveOnce;
   for (const key of STATE_PAGE_KEYS) {
@@ -40,18 +46,51 @@ function createNotionMock({ failArchiveOnce = false } = {}) {
   pages.set("home", { id: "home", children: [] });
   pages.set("route", { id: "route", children: [] });
 
+  function toBlock(item) {
+    if (item.type === "child_page") return { id: item.id, type: "child_page", child_page: { title: item.title } };
+    return block(item.id, item.type, item.text);
+  }
+
   function toBlocks(items) {
-    return items.filter((item) => !item.archived).map((item) => {
-      if (item.type === "child_page") return { id: item.id, type: "child_page", child_page: { title: item.title } };
-      return block(item.id, item.type, item.text);
-    });
+    return items.filter((item) => !item.archived).map(toBlock);
   }
 
   const notion = {
-    async getPageTree(pageId) {
+    async getPage(pageId) {
+      if (!pages.has(pageId)) throw new Error(`unknown page ${pageId}`);
+      return { id: pageId, object: "page" };
+    },
+    async getBlock(blockId) {
+      for (const page of pages.values()) {
+        const item = page.children.find((candidate) => candidate.id === blockId && !candidate.archived);
+        if (item) return toBlock(item);
+      }
+      throw new Error(`unknown block ${blockId}`);
+    },
+    async listBlockChildren(pageId, { startCursor, pageSize = 100 } = {}) {
       const page = pages.get(pageId);
       if (!page) throw new Error(`unknown page ${pageId}`);
-      return { page: { id: pageId }, children: toBlocks(page.children) };
+      const live = toBlocks(page.children);
+      const offset = startCursor ? Number(String(startCursor).replace("cursor-", "")) : 0;
+      const results = live.slice(offset, offset + pageSize);
+      const nextOffset = offset + results.length;
+      stats.listBlockChildren.push({ pageId, pageSize, startCursor: startCursor || null, resultCount: results.length });
+      return {
+        results,
+        has_more: nextOffset < live.length,
+        next_cursor: nextOffset < live.length ? `cursor-${nextOffset}` : null,
+      };
+    },
+    async getPageTree(pageId, options = {}) {
+      const page = pages.get(pageId);
+      if (!page) throw new Error(`unknown page ${pageId}`);
+      const maximum = Number(options.maxNodes || 5_000);
+      const children = toBlocks(page.children).slice(0, maximum);
+      return {
+        page: options.includePage === false ? undefined : { id: pageId, object: "page" },
+        children,
+        meta: { truncated: children.length < toBlocks(page.children).length },
+      };
     },
     async listAllBlockChildren(pageId) {
       const page = pages.get(pageId);
@@ -93,12 +132,13 @@ function createNotionMock({ failArchiveOnce = false } = {}) {
         const item = page.children.find((candidate) => candidate.id === blockId);
         if (!item) continue;
         item.archived = true;
+        stats.archivedBlockIds.push(blockId);
         return { id: blockId, archived: true };
       }
       throw new Error(`unknown block ${blockId}`);
     },
   };
-  return { notion, pages, pageKeyById };
+  return { notion, pages, pageKeyById, stats };
 }
 
 function createCache() {
@@ -226,6 +266,7 @@ test("staged archive uses independently resumable page checkpoints before reset"
     await clearStagedPage(env, request, key, deps);
     await markStagedPageEmpty(env, request, key, deps);
   }
+  await clearStagedWorldCache(env, request, deps);
   const result = await finalizeStagedArchiveReset(env, request, deps);
   assert.equal(result.archived, true);
   assert.equal(result.reset, true);
@@ -235,4 +276,114 @@ test("staged archive uses independently resumable page checkpoints before reset"
     const live = pages.get(WORLD_PAGE_IDS[key]).children.filter((item) => !item.archived);
     assert.equal(live.length, 1);
   }
+});
+
+test("a large fixed page is archived in cursor-checkpointed 100-block batches", async () => {
+  const { notion, pages, stats } = createNotionMock();
+  const key = "knowledge";
+  pages.get(WORLD_PAGE_IDS[key]).children.push(
+    ...Array.from({ length: 203 }, (_, index) => ({
+      id: `${key}-extra-${index + 1}`,
+      type: "paragraph",
+      text: `large archive block ${index + 1}`,
+    })),
+  );
+  const cache = createCache();
+  const deps = { notion, github: { configured: false }, cache };
+  const env = { HOME_PAGE_ID: "home" };
+  const request = input("archive-reset-batched-page-001");
+
+  await prepareStagedArchiveReset(env, request, deps);
+  let state = await beginStagedPageArchive(env, request, key, deps);
+  let captureCount = 0;
+  while (!state.done) {
+    state = await captureStagedPageBatch(env, request, key, deps);
+    captureCount += 1;
+  }
+  const finalized = await finalizeStagedPageArchive(env, request, key, deps);
+  const lock = await cache.get("world-reset:active");
+  const stored = lock.archive.sourcePages.find((source) => source.key === key);
+
+  assert.equal(captureCount, 3);
+  assert.equal(state.batchIndex, 3);
+  assert.equal(finalized.source.format, "XC_WORLD_ARCHIVE_V2");
+  assert.equal(stored.batchCount, 3);
+  assert.equal(lock.archivedKeys.includes(key), true);
+  assert.deepEqual(
+    stats.listBlockChildren.filter((call) => call.pageId === WORLD_PAGE_IDS[key]).map((call) => call.pageSize),
+    [100, 100, 100],
+  );
+});
+
+test("clearing a large fixed page archives at most 30 blocks per resumable step", async () => {
+  const { notion, pages, stats } = createNotionMock();
+  const key = "save";
+  pages.get(WORLD_PAGE_IDS[key]).children.push(
+    ...Array.from({ length: 73 }, (_, index) => ({
+      id: `${key}-clear-${index + 1}`,
+      type: "paragraph",
+      text: `clear batch block ${index + 1}`,
+    })),
+  );
+  const cache = createCache();
+  const request = input("archive-reset-batched-clear-001");
+  const deps = { notion, github: { configured: false }, cache };
+  await cache.put("world-reset:active", {
+    phase: "archive_verified",
+    expectedWorldId: WORLD_ID,
+    operationKey: request.operationKey,
+    archive: { sourcePages: [] },
+    archivedKeys: STATE_PAGE_KEYS,
+  });
+
+  await markStagedPageResetting({}, request, key, deps);
+  const batchSizes = [];
+  let state = { done: false };
+  while (!state.done) {
+    const before = stats.archivedBlockIds.length;
+    state = await clearStagedPageBatch({}, request, key, deps);
+    batchSizes.push(stats.archivedBlockIds.length - before);
+  }
+  await markStagedPageEmpty({}, request, key, deps);
+
+  assert.equal(batchSizes.length, 3);
+  assert.equal(Math.max(...batchSizes) <= 30, true);
+  assert.equal(batchSizes.reduce((sum, value) => sum + value, 0), 74);
+  const live = pages.get(WORLD_PAGE_IDS[key]).children.filter((item) => !item.archived);
+  assert.equal(live.length, 1);
+  assert.equal(parseWorldMarkers([block(live[0].id, live[0].type, live[0].text)]).worldState, "EMPTY");
+});
+
+test("a new workflow attempt trusts already verified V1 page checkpoints", async () => {
+  const { notion, pages } = createNotionMock();
+  const cache = createCache();
+  const request = input("archive-reset-existing-checkpoints-001");
+  const sourcePages = ["save", "character", "timeline"].map((key, index) => ({
+    key,
+    pageId: `existing-source-${index + 1}`,
+    sha256: "a".repeat(64),
+    bytes: 123,
+  }));
+  await cache.put("world-reset:active", {
+    phase: "archiving",
+    archiveId: "existing-archive",
+    archivePageId: "existing-world-page",
+    expectedWorldId: WORLD_ID,
+    operationKey: request.operationKey,
+    archive: { archiveId: "existing-archive", archivePageId: "existing-world-page", sourcePages },
+    archivedKeys: sourcePages.map((source) => source.key),
+  });
+  const archiveChildrenBefore = [...pages.values()]
+    .flatMap((page) => page.children)
+    .filter((item) => item.type === "child_page").length;
+
+  const state = await beginStagedPageArchive({}, request, "save", {
+    notion, github: { configured: false }, cache,
+  });
+
+  assert.equal(state.done, true);
+  const archiveChildrenAfter = [...pages.values()]
+    .flatMap((page) => page.children)
+    .filter((item) => item.type === "child_page").length;
+  assert.equal(archiveChildrenAfter, archiveChildrenBefore);
 });

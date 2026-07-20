@@ -19,6 +19,7 @@ test("health reports integrations without exposing secrets", async () => {
   assert.equal(body.capabilities.stableWorldPageKeys, true);
   assert.equal(body.capabilities.semanticBlockTargets, true);
   assert.equal(body.capabilities.idempotentRevisionReplay, true);
+  assert.equal(body.capabilities.batchedArchiveReset, true);
   assert.equal(JSON.stringify(body).includes("secret"), false);
 });
 
@@ -97,7 +98,7 @@ test("archive reset is queued into a durable workflow and exposes an inspectable
   assert.equal(statusPayload.data.workflowStatus, "queued");
 });
 
-test("archive reset preflight paginates a canonical save page larger than ten blocks", async () => {
+test("archive reset preflight finds the canonical marker in one bounded Notion page", async () => {
   const records = new Map();
   let receivedOptions;
   const workflow = {
@@ -125,9 +126,6 @@ test("archive reset preflight paginates a canonical save page larger than ten bl
     configured: true,
     async getPageTree(_pageId, options) {
       receivedOptions = options;
-      if (options.maxNodes < children.length) {
-        throw new Error(`Notion tree exceeds the ${options.maxNodes} node safety limit`);
-      }
       return { children };
     },
   };
@@ -144,8 +142,9 @@ test("archive reset preflight paginates a canonical save page larger than ten bl
 
   assert.equal(response.status, 202);
   assert.equal(receivedOptions.maxDepth, 0);
-  assert.equal(receivedOptions.maxNodes, 5_000);
+  assert.equal(receivedOptions.maxNodes, 100);
   assert.equal(receivedOptions.includePage, false);
+  assert.equal(receivedOptions.truncateAtMaxNodes, true);
 });
 
 test("archive reset refuses to run synchronously without its durable workflow", async () => {

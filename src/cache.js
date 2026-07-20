@@ -67,4 +67,27 @@ export class CacheStore {
     }
     return deleted;
   }
+
+  async deletePrefixBatch(prefix, { limit = 20 } = {}) {
+    const fullPrefix = this.key(prefix);
+    const batchLimit = Math.min(40, Math.max(1, Number(limit) || 20));
+    if (this.kv) {
+      const page = await this.kv.list({ prefix: fullPrefix, limit: batchLimit });
+      const keys = (page.keys || []).slice(0, batchLimit);
+      await Promise.all(keys.map(({ name }) => this.kv.delete(name)));
+      return {
+        deleted: keys.length,
+        done: page.list_complete === true || keys.length === 0,
+      };
+    }
+
+    const keys = [...memoryCache.keys()]
+      .filter((key) => key.startsWith(fullPrefix))
+      .slice(0, batchLimit);
+    for (const key of keys) memoryCache.delete(key);
+    return {
+      deleted: keys.length,
+      done: ![...memoryCache.keys()].some((key) => key.startsWith(fullPrefix)),
+    };
+  }
 }

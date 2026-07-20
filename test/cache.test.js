@@ -39,3 +39,29 @@ test("KV cache deletes matching keys across list pages", async () => {
   assert.equal(await cache.deletePrefix("world:"), 2);
   assert.deepEqual(deleted, ["xuanche:world:a", "xuanche:world:b"]);
 });
+
+test("KV cache prefix deletion can be resumed in bounded batches", async () => {
+  const keys = Array.from({ length: 45 }, (_, index) => `xuanche:world:${index + 1}`);
+  const deletedBatchSizes = [];
+  const kv = {
+    async list({ prefix, limit }) {
+      const matching = keys.filter((key) => key.startsWith(prefix)).slice(0, limit);
+      return {
+        keys: matching.map((name) => ({ name })),
+        list_complete: matching.length === keys.filter((key) => key.startsWith(prefix)).length,
+      };
+    },
+    async delete(key) {
+      keys.splice(keys.indexOf(key), 1);
+    },
+  };
+  const cache = new CacheStore({ XUANCHE_CACHE: kv });
+  let state = { done: false };
+  while (!state.done) {
+    state = await cache.deletePrefixBatch("world:", { limit: 20 });
+    deletedBatchSizes.push(state.deleted);
+  }
+
+  assert.deepEqual(deletedBatchSizes, [20, 20, 5]);
+  assert.equal(keys.length, 0);
+});

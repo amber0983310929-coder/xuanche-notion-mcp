@@ -1,7 +1,10 @@
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import {
-  archiveAndVerifyStagedPage,
-  clearStagedPage,
+  beginStagedPageArchive,
+  captureStagedPageBatch,
+  clearStagedPageBatch,
+  clearStagedWorldCacheBatch,
+  finalizeStagedPageArchive,
   finalizeStagedArchiveReset,
   markStagedPageEmpty,
   markStagedPageResetting,
@@ -28,8 +31,18 @@ export class WorldArchiveResetWorkflow extends WorkflowEntrypoint {
         prepareStagedArchiveReset(this.env, event.payload));
 
       for (const key of STATE_PAGE_KEYS) {
-        await step.do("archive and verify " + key, options, () =>
-          archiveAndVerifyStagedPage(this.env, event.payload, key));
+        let archiveState = await step.do("begin archive " + key, options, () =>
+          beginStagedPageArchive(this.env, event.payload, key));
+        let batchIndex = archiveState.batchIndex || 0;
+        while (!archiveState.done) {
+          const currentBatch = batchIndex;
+          archiveState = await step.do("capture archive " + key + " batch " + currentBatch, options, () =>
+            captureStagedPageBatch(this.env, event.payload, key));
+          batchIndex = archiveState.batchIndex;
+          if (batchIndex > 50) throw new Error("Archive batch safety limit exceeded for " + key);
+        }
+        await step.do("finalize archive " + key, options, () =>
+          finalizeStagedPageArchive(this.env, event.payload, key));
       }
 
       await step.do("verify complete archive", options, () =>
@@ -38,10 +51,27 @@ export class WorldArchiveResetWorkflow extends WorkflowEntrypoint {
       for (const key of STATE_PAGE_KEYS) {
         await step.do("mark resetting " + key, options, () =>
           markStagedPageResetting(this.env, event.payload, key));
-        await step.do("clear world blocks " + key, options, () =>
-          clearStagedPage(this.env, event.payload, key));
+        let clearState = { done: false };
+        let clearBatch = 0;
+        while (!clearState.done) {
+          const currentBatch = clearBatch;
+          clearState = await step.do("clear world blocks " + key + " batch " + currentBatch, options, () =>
+            clearStagedPageBatch(this.env, event.payload, key));
+          clearBatch += 1;
+          if (clearBatch > 200) throw new Error("Reset batch safety limit exceeded for " + key);
+        }
         await step.do("mark empty " + key, options, () =>
           markStagedPageEmpty(this.env, event.payload, key));
+      }
+
+      let cacheState = { done: false };
+      let cacheBatch = 0;
+      while (!cacheState.done) {
+        const currentBatch = cacheBatch;
+        cacheState = await step.do("clear world cache batch " + currentBatch, options, () =>
+          clearStagedWorldCacheBatch(this.env, event.payload));
+        cacheBatch += 1;
+        if (cacheBatch > 100) throw new Error("Cache reset batch safety limit exceeded");
       }
 
       const result = await step.do("finalize reset", options, () =>

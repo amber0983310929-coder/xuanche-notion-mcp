@@ -27,7 +27,7 @@ import {
   requireReadApiKey,
 } from "./utils.js";
 
-const CANONICAL_STATE_MAX_NODES = 5_000;
+const CANONICAL_STATE_MAX_NODES = 100;
 
 export function createRouter(dependencies = {}) {
   return async function route(request, env = {}, ctx = {}) {
@@ -80,6 +80,7 @@ export function createRouter(dependencies = {}) {
             fixedWorldWriteAllowlist: true,
             atomicWorldInitialization: true,
             verifiedWorldArchiveAndReset: true,
+            batchedArchiveReset: true,
             durableArchiveReset: Boolean(env.WORLD_RESET_WORKFLOW?.createBatch),
           },
           protectedReads: readsRequireApiKey(env),
@@ -398,12 +399,13 @@ async function readCanonicalWorldState(env, injectedNotion) {
   const notion = injectedNotion || new NotionClient(env);
   const tree = await notion.getPageTree(WORLD_PAGE_IDS.save, {
     maxDepth: 0,
-    // The save page grows with the story.  This preflight must follow Notion's
-    // pagination instead of assuming the canonical marker is within the first
-    // ten blocks, otherwise a healthy long-running world cannot be archived.
+    // The marker is kept near the top of the fixed save page. Bound this
+    // preflight to one Notion request; the Workflow captures and verifies the
+    // complete page later in independently resumable batches.
     maxNodes: CANONICAL_STATE_MAX_NODES,
     concurrency: 1,
     includePage: false,
+    truncateAtMaxNodes: true,
   });
   return parseWorldMarkers(tree.children);
 }
