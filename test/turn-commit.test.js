@@ -11,17 +11,22 @@ function textOf(block) {
   return block?.[block.type]?.rich_text?.map((item) => item.plain_text ?? item.text?.content ?? "").join("") || "";
 }
 
-function activeBlocks() {
+function activeBlocks(protagonist = "楚凌霄") {
   return [
     paragraph("header", [
       "SAVE_SCHEMA_VERSION：SAVE_V3.2｜WORLD_STATE：ACTIVE｜WORLD_ID：W20260719-TEST0001",
       "SIM_TICK：16｜狀態修訂：17｜SAVE_KEY：turn-old",
     ].join("\n")),
     paragraph("world", "WORLD_ID：W20260719-TEST0001"),
+    paragraph("protagonist", `主角：${protagonist}`),
     paragraph("tick", "SIM_TICK：16"),
     paragraph("revision", "狀態修訂：17"),
     paragraph("mainline", "當前主線：舊局勢。"),
   ];
+}
+
+function inputForProtagonist(name) {
+  return JSON.parse(JSON.stringify(validInput()).replaceAll("楚凌霄", name));
 }
 
 function validInput(overrides = {}) {
@@ -166,4 +171,35 @@ test("turn commit rejects a missing or malformed structured player state", async
   await assert.rejects(commitTurn({}, validInput({
     playerState: { ...validInput().playerState, body: "line one\nline two" },
   }), { notion: {}, github, cache }), /playerState\.body must be a single line/);
+});
+
+test("turn commit rejects any identity that differs from the authoritative protagonist", async () => {
+  const mismatched = notionHarness(activeBlocks("沐聽雨"));
+  await assert.rejects(commitTurn({}, validInput(), {
+    notion: mismatched.notion,
+    github,
+    cache,
+  }), /does not match the authoritative save identity/);
+  assert.equal(mismatched.operations.length, 0);
+
+  const obsolete = notionHarness(activeBlocks("沐聽雨"));
+  const obsoleteInput = inputForProtagonist("沐聽雨");
+  obsoleteInput.summary = "楚凌霄追問敵人的符籙來歷。";
+  await assert.rejects(commitTurn({}, obsoleteInput, {
+    notion: obsolete.notion,
+    github,
+    cache,
+  }), /obsolete protagonist identity/);
+  assert.equal(obsolete.operations.length, 0);
+});
+
+test("turn commit accepts the custom protagonist when every identity field agrees", async () => {
+  const harness = notionHarness(activeBlocks("沐聽雨"));
+  const result = await commitTurn({}, inputForProtagonist("沐聽雨"), {
+    notion: harness.notion,
+    github,
+    cache,
+  });
+  assert.equal(result.playerState.name, "沐聽雨");
+  assert.match(harness.operations[0].text, /\"name\":\"沐聽雨\"/);
 });

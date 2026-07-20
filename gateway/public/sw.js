@@ -1,4 +1,4 @@
-const CACHE = "xuanche-pwa-v0.6.0-mobile-controls-v2";
+const CACHE = "xuanche-pwa-v0.6.0-combat-v5-identity-v1";
 const SHELL = [
   "/",
   "/index.html",

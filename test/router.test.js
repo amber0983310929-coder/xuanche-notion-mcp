@@ -19,6 +19,9 @@ test("health reports integrations without exposing secrets", async () => {
   assert.equal(body.capabilities.stableWorldPageKeys, true);
   assert.equal(body.capabilities.semanticBlockTargets, true);
   assert.equal(body.capabilities.idempotentRevisionReplay, true);
+  assert.equal(body.capabilities.combatRulesInTurnContext, true);
+  assert.equal(body.capabilities.dynamicProtagonistIdentity, true);
+  assert.equal(body.capabilities.authoritativeProtagonistValidation, true);
   assert.equal(body.capabilities.batchedArchiveReset, true);
   assert.equal(body.capabilities.isolatedArchiveBatchInvocations, false);
   assert.equal(body.capabilities.alarmDrivenArchiveReset, false);

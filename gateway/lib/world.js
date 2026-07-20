@@ -6,6 +6,7 @@ const CONTEXT_LIMITS = Object.freeze({
   timeline: 3_000,
   events: 3_000,
   director: 3_000,
+  combat: 4_500,
   hud: 2_500,
 });
 
@@ -127,13 +128,13 @@ function findLastPrefix(lines, prefixes) {
 }
 
 function summarizeCharacter(lines, playerState) {
-  const name = stripLabel(findPrefix(lines, ["姓名：", "姓名:", "主角：", "主角:", "name：", "name:"]) || playerState?.name || "楚凌霄");
+  const name = stripLabel(findPrefix(lines, ["姓名：", "姓名:", "主角：", "主角:", "name：", "name:"]) || playerState?.name || "主角");
   const age = stripLabel(findPrefix(lines, ["年齡：", "年齡:", "age：", "age:"]) || "16歲");
   const appearance = stripLabel(findPrefix(lines, ["外貌：", "外貌:", "形貌：", "形貌:", "appearance：", "appearance:"]) || "");
   const background = stripLabel(findPrefix(lines, ["人物簡介：", "人物簡介:", "身世背景：", "身世背景:", "背景：", "背景:", "background：", "background:"]) || "");
   const motto = stripLabel(findPrefix(lines, ["座右銘：", "座右銘:", "信念：", "信念:", "motivation：", "motivation:"]) || "山路再險，也要看清下一步。 ");
   return {
-    name: clampText(name || "楚凌霄", 40),
+    name: clampText(name || "主角", 40),
     age: clampText(age || "年齡未知", 24),
     intro: clampText([appearance, background].filter(Boolean).join("；") || "山村採藥少年，善辨草木與山勢，尚未踏入修行。", 180),
     motto: clampText(motto, 100),

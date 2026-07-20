@@ -20,7 +20,7 @@ test("continue profile follows the active-world core route", () => {
 test("turn_core contains only the bounded authoritative per-turn state", () => {
   const pages = selectWorldPages(DEFAULT_WORLD_CONFIG, "turn_core");
   assert.deepEqual(pages.map((page) => page.key), [
-    "save", "character", "timeline", "events", "director", "hud"
+    "save", "character", "combat", "timeline", "events", "director", "hud"
   ]);
 });
 
@@ -48,7 +48,7 @@ test("turn_core enforces its page-node cap even when a caller requests more", as
     refresh: true,
     maxNodes: 1_500,
   });
-  assert.deepEqual(received.map((options) => options.maxNodes), Array(6).fill(60));
+  assert.deepEqual(received.map((options) => options.maxNodes), Array(7).fill(60));
   assert.equal(received.every((options) => options.maxDepth === 0), true);
   assert.equal(received.every((options) => options.truncateAtMaxNodes === true), true);
 });
@@ -278,7 +278,7 @@ test("page-granular cache reloads only a missing page", async () => {
   };
 
   await loadWorld({}, { notion, github: { configured: false }, cache, profile: "turn_core", refresh: false });
-  assert.equal(reads.length, 6);
+  assert.equal(reads.length, 7);
   reads.length = 0;
 
   const saveId = DEFAULT_WORLD_CONFIG.catalog.find((page) => page.key === "save").id.replaceAll("-", "");
@@ -288,6 +288,6 @@ test("page-granular cache reloads only a missing page", async () => {
   const result = await loadWorld({}, { notion, github: { configured: false }, cache, profile: "turn_core", refresh: false });
   assert.equal(reads.length, 1);
   assert.equal(result.meta.cache, "partial");
-  assert.equal(result.meta.cacheHits, 5);
+  assert.equal(result.meta.cacheHits, 6);
   assert.equal(result.meta.cacheMisses, 1);
 });

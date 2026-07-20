@@ -19,6 +19,7 @@ const EDITABLE_TEXT_TYPES = new Set([
   "paragraph", "callout", "heading_1", "heading_2", "heading_3",
   "bulleted_list_item", "numbered_list_item", "quote", "toggle",
 ]);
+const LEGACY_DEFAULT_PROTAGONIST = "楚凌霄";
 
 /**
  * Commits one player turn without accepting Notion IDs or arbitrary mutations
@@ -37,6 +38,13 @@ export async function commitTurn(env, rawInput, dependencies = {}) {
   const blocks = await notion.listAllBlockChildren(savePageId, { maxNodes: 5_000 });
   const markers = parseWorldMarkers(blocks);
   const pageText = blocksPlainText(blocks);
+  const protagonistMirror = findUniqueMirror(
+    blocks,
+    ["主角：", "主角:"],
+    "authoritative protagonist",
+  );
+  const authoritativeProtagonist = protagonistNameFromMirror(protagonistMirror);
+  assertTurnProtagonistIdentity(input, authoritativeProtagonist);
   const historicalReplay = hasTurnActionKey(pageText, input.actionKey) &&
     markers.lastActionKey !== input.actionKey;
 
@@ -267,6 +275,44 @@ function findUniqueMirror(blocks, prefixes, label) {
     });
   }
   return ensureEditable(matches[0], label);
+}
+
+function protagonistNameFromMirror(block) {
+  const value = blockPlainText(block)
+    .trim()
+    .replace(/^主角\s*[：:]\s*/u, "")
+    .trim();
+  if (!value || value.length > 40 || /[\r\n]/u.test(value)) {
+    throw new ApiError(409, "Authoritative protagonist marker is invalid");
+  }
+  return value;
+}
+
+function assertTurnProtagonistIdentity(input, authoritativeName) {
+  if (input.playerState.name !== authoritativeName) {
+    throw new ApiError(409, "Turn protagonist does not match the authoritative save identity", {
+      expectedProtagonist: authoritativeName,
+      receivedProtagonist: input.playerState.name,
+    });
+  }
+  if (authoritativeName === LEGACY_DEFAULT_PROTAGONIST) return;
+  const generatedIdentityText = [
+    input.narrative,
+    input.summary,
+    input.mainline,
+    input.visibleResult,
+    input.visibleCost,
+    input.situation,
+    JSON.stringify(input.choices),
+    JSON.stringify(input.facts),
+    JSON.stringify(input.playerState),
+  ].join("\n");
+  if (generatedIdentityText.includes(LEGACY_DEFAULT_PROTAGONIST)) {
+    throw new ApiError(409, "Turn payload contains an obsolete protagonist identity", {
+      expectedProtagonist: authoritativeName,
+      obsoleteProtagonist: LEGACY_DEFAULT_PROTAGONIST,
+    });
+  }
 }
 
 function ensureEditable(block, label) {

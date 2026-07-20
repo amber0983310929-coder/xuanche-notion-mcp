@@ -6,7 +6,7 @@ import { validateLoadedWorld } from "./world-state.js";
 import { getActiveReset } from "./reset-lock.js";
 
 export const DEFAULT_WORLD_CONFIG = {
-  version: 11,
+  version: 12,
   homePageId: "5f4c8de4a4c246478a4658d1ebc2a1a2",
   catalog: [
     { key: "home", title: "修真世界（首頁）", id: "5f4c8de4a4c246478a4658d1ebc2a1a2" },
@@ -63,9 +63,11 @@ export const DEFAULT_WORLD_CONFIG = {
     exploration: ["home", "route", "rules", "save", "timeline", "character", "knowledge", "clues", "events", "world", "regions", "ecology", "intelligence", "hud", "persistence", "narrative", "narrative_daily"],
     save: ["home", "route", "rules", "save", "character", "timeline", "knowledge", "relationships", "causality", "clues", "events", "director", "persistence"],
     // Per-turn state must fit safely inside a single GPT Action response.
-    // Static rules and action-specific material are loaded separately; this
-    // profile is deliberately limited to the authoritative live state.
-    turn_core: ["save", "character", "timeline", "events", "director", "hud"],
+    // Combat rules are authoritative for every turn because an apparently
+    // social or exploratory action can become a fight inside the same model
+    // response. Keeping the bounded rule page here guarantees that revisions
+    // such as COMBAT_V5 apply on the very next PWA turn.
+    turn_core: ["save", "character", "combat", "timeline", "events", "director", "hud"],
     // Action-specific profiles are differentials.  The caller loads
     // turn_core first, so repeating the live state plus broad rule pages here
     // wastes the GPT Action response budget and can make a valid turn fail at

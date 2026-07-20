@@ -95,5 +95,8 @@ if (health?.capabilities?.durableArchiveReset !== true) throw new Error("Durable
 if (health?.capabilities?.stableWorldPageKeys !== true) throw new Error("Stable world pageKey writes are not enabled");
 if (health?.capabilities?.semanticBlockTargets !== true) throw new Error("Semantic block targets are not enabled");
 if (health?.capabilities?.idempotentRevisionReplay !== true) throw new Error("Revision-safe idempotent replay is not enabled");
+if (health?.capabilities?.combatRulesInTurnContext !== true) throw new Error("COMBAT rules are not in the mandatory turn context");
+if (health?.capabilities?.dynamicProtagonistIdentity !== true) throw new Error("Dynamic protagonist identity is not enabled");
+if (health?.capabilities?.authoritativeProtagonistValidation !== true) throw new Error("Authoritative protagonist validation is not enabled");
 
 console.log("Deployed GPT Action verification passed");

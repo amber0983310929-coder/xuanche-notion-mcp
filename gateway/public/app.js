@@ -7,6 +7,7 @@ const STORAGE = Object.freeze({
   worldOperation: "xuanche:pwa:world-operation:v1",
   historyPrefix: "xuanche:pwa:history:v1:",
 });
+const LEGACY_DEFAULT_PROTAGONIST = "楚凌霄";
 
 const elements = {
   connectionDot: document.querySelector("#connection-dot"),
@@ -818,7 +819,7 @@ async function resumeWorldOperation() {
 
 function buildRestartDraft() {
   const profile = game.state?.profile || {};
-  const name = profile.name || game.state?.playerState?.name || "楚凌霄";
+  const name = profile.name || game.state?.playerState?.name || "主角";
   const isChu = name.includes("楚凌霄");
   return {
     character: {
@@ -920,6 +921,7 @@ async function loadWorld({ refresh = false, navigateToCurrent = !game.initialNav
   try {
     const payload = await apiJson(`/api/game/state${refresh ? "?refresh=1" : ""}`);
     game.state = payload.state;
+    repairLocalProtagonistIdentity();
     game.choices = [];
     if (!isPlayableWorld() && game.checkpoint) {
       game.checkpoint = null;
@@ -1002,7 +1004,7 @@ function renderCharacterState() {
   }
   const profile = game.state?.profile || {};
   const playerState = game.state?.playerState || {};
-  const name = profile.name || playerState.name || "楚凌霄";
+  const name = profile.name || playerState.name || "主角";
   elements.profileName.textContent = name;
   elements.profileAge.textContent = profile.age || "年齡未知";
   elements.profileIntro.textContent = profile.intro || "角色資料尚未載入。";
@@ -1670,6 +1672,48 @@ function historyForCurrentWorld() {
   return readStorage(`${STORAGE.historyPrefix}${game.state.worldId}`) || [];
 }
 
+function repairLocalProtagonistIdentity() {
+  const authoritativeName = String(game.state?.profile?.name || "").trim();
+  if (!authoritativeName || authoritativeName === LEGACY_DEFAULT_PROTAGONIST) return false;
+
+  let stateChanged = false;
+  for (const field of ["mainline", "situation"]) {
+    const current = game.state?.[field];
+    if (typeof current !== "string" || !current.includes(LEGACY_DEFAULT_PROTAGONIST)) continue;
+    game.state[field] = current.replaceAll(LEGACY_DEFAULT_PROTAGONIST, authoritativeName);
+    stateChanged = true;
+  }
+  if (game.state?.playerState?.name === LEGACY_DEFAULT_PROTAGONIST) {
+    game.state.playerState = { ...game.state.playerState, name: authoritativeName };
+    stateChanged = true;
+  }
+
+  const key = `${STORAGE.historyPrefix}${game.state.worldId}`;
+  const history = readStorage(key);
+  if (!Array.isArray(history) || !game.state.lastActionKey) return stateChanged;
+  let historyChanged = false;
+  const repaired = history.map((turn) => {
+    if (turn?.actionKey !== game.state.lastActionKey) return turn;
+    const next = replaceLegacyIdentity(turn, authoritativeName);
+    if (JSON.stringify(next) !== JSON.stringify(turn)) historyChanged = true;
+    return next;
+  });
+  if (historyChanged) writeStorage(key, repaired);
+  return stateChanged || historyChanged;
+}
+
+function replaceLegacyIdentity(value, authoritativeName) {
+  if (typeof value === "string") {
+    return value.replaceAll(LEGACY_DEFAULT_PROTAGONIST, authoritativeName);
+  }
+  if (Array.isArray(value)) return value.map((item) => replaceLegacyIdentity(item, authoritativeName));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    key === "action" ? item : replaceLegacyIdentity(item, authoritativeName),
+  ]));
+}
+
 function appendHistory(turn) {
   if (!game.state) return;
   const key = `${STORAGE.historyPrefix}${game.state.worldId}`;
@@ -1762,6 +1806,7 @@ function showOfflineSnapshot() {
   const cached = readStorage(STORAGE.state);
   if (!cached?.state?.worldId) return false;
   game.state = cached.state;
+  repairLocalProtagonistIdentity();
   game.choices = Array.isArray(cached.choices) ? cached.choices : [];
   renderWorldState();
   renderStoryFromStorage();
@@ -1777,6 +1822,7 @@ function hydrateCachedState() {
   const cached = readStorage(STORAGE.state);
   if (!cached?.state?.worldId) return false;
   game.state = cached.state;
+  repairLocalProtagonistIdentity();
   game.choices = Array.isArray(cached.choices) ? cached.choices : [];
   renderWorldState();
   renderStoryFromStorage();

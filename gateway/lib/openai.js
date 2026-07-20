@@ -15,6 +15,7 @@ const LENGTH_GUIDES = Object.freeze({
 const PLAYER_STATE_FIELDS = Object.freeze([
   "name", "cultivation", "body", "equipment", "location", "constraints", "abilities",
 ]);
+const LEGACY_DEFAULT_PROTAGONIST = "楚凌霄";
 
 export function normalizeStyle(value) {
   return Object.hasOwn(STYLE_GUIDES, value) ? value : "immersive";
@@ -27,6 +28,11 @@ export function normalizeLength(value) {
 export function buildTurnRequest({ env, worldContext, playerAction, style, length }) {
   const selectedStyle = normalizeStyle(style);
   const selectedLength = normalizeLength(length);
+  const protagonistName = authoritativeProtagonistName(worldContext);
+  const quotedProtagonistName = JSON.stringify(protagonistName);
+  const legacyIdentityGuard = protagonistName === LEGACY_DEFAULT_PROTAGONIST
+    ? ""
+    : `「${LEGACY_DEFAULT_PROTAGONIST}」是舊預設角色名，不屬於本世界；不得出現在正文、摘要、局勢、選項、facts 或 playerState。`;
   return {
     model: env.OPENAI_MODEL || "gpt-5.6-terra",
     reasoning: { effort: env.OPENAI_REASONING_EFFORT || "low" },
@@ -37,7 +43,9 @@ export function buildTurnRequest({ env, worldContext, playerAction, style, lengt
     tool_choice: { type: "function", name: "commit_turn" },
     instructions: [
       "你是『玄澈修真世界』的敘事引擎。只延續給定的唯一世界狀態，不可重置、跳回舊回合或採用 VOID 紀錄。",
-      "玩家只控制楚凌霄；NPC 依自身目標、資訊與恐懼行動。不得替玩家決定未說出口的重大選擇。",
+      `本世界的權威主角姓名是 ${quotedProtagonistName}；正文與所有存檔欄位都必須使用這個姓名，playerState.name 必須逐字完全相同。`,
+      legacyIdentityGuard,
+      `玩家只控制${protagonistName}；NPC 依自身目標、資訊與恐懼行動。不得替玩家決定未說出口的重大選擇。`,
       "事件必須有因果、阻力與可見後果；不能為討好玩家而自動成功，也不能憑空懲罰。",
       "敘事正文直接從當下動作或感官開始。不要先摘要，不要使用『可見結果』『可見代價』『當前局勢』等報告標題。",
       "避免重複角色全名、背景複述、空泛氣勢、網文套語、旁白說教與全知劇透。對話要有目的和潛台詞。",
@@ -46,7 +54,7 @@ export function buildTurnRequest({ env, worldContext, playerAction, style, lengt
       "不要輸出一般文字；只呼叫 commit_turn 一次。JSON 的 narrative 欄位先寫，方便即時串流。",
       STYLE_GUIDES[selectedStyle],
       LENGTH_GUIDES[selectedLength],
-    ].join("\n"),
+    ].filter(Boolean).join("\n"),
     input: [{
       role: "user",
       content: [{
@@ -57,6 +65,7 @@ export function buildTurnRequest({ env, worldContext, playerAction, style, lengt
           worldContext.text,
           "</WORLD_CONTEXT>",
           `權威錨點：WORLD_ID=${worldContext.state.worldId}；SIM_TICK=${worldContext.state.simTick}；REVISION=${worldContext.state.revision}`,
+          `權威主角姓名：${quotedProtagonistName}`,
           `玩家本回合行動：${playerAction}`,
           "生成緊接此行動的一個回合，然後呼叫 commit_turn。",
         ].join("\n"),
@@ -116,7 +125,7 @@ export async function generateTurnStream({ env, worldContext, playerAction, styl
   } catch {
     throw new GatewayError(502, "敘事模型沒有回傳可提交的結構化回合。");
   }
-  const output = normalizeGeneratedTurn(parsed);
+  const output = normalizeGeneratedTurn(parsed, authoritativeProtagonistName(worldContext));
   if (output.narrative.startsWith(sentNarrative) && output.narrative.length > sentNarrative.length) {
     await onNarrative(output.narrative.slice(sentNarrative.length));
   } else if (!sentNarrative) {
@@ -187,7 +196,7 @@ export async function* parseSseJson(stream) {
   }
 }
 
-function normalizeGeneratedTurn(value) {
+export function normalizeGeneratedTurn(value, expectedProtagonistName = null) {
   if (!value || typeof value !== "object") throw new GatewayError(502, "敘事模型回傳格式不完整。");
   const requiredText = ["narrative", "summary", "mainline", "visibleResult", "visibleCost", "situation"];
   for (const field of requiredText) {
@@ -199,6 +208,17 @@ function normalizeGeneratedTurn(value) {
     throw new GatewayError(502, "敘事模型沒有產生有效選項。");
   }
   const playerState = normalizePlayerState(value.playerState);
+  const authoritativeName = String(expectedProtagonistName || "").replace(/\s+/gu, " ").trim();
+  if (authoritativeName && playerState.name !== authoritativeName) {
+    throw new GatewayError(502, `敘事模型回傳的主角姓名不符；權威姓名是「${authoritativeName}」。`);
+  }
+  if (
+    authoritativeName &&
+    authoritativeName !== LEGACY_DEFAULT_PROTAGONIST &&
+    JSON.stringify(value).includes(LEGACY_DEFAULT_PROTAGONIST)
+  ) {
+    throw new GatewayError(502, `敘事模型混入舊角色姓名「${LEGACY_DEFAULT_PROTAGONIST}」，本回合未提交。`);
+  }
   return {
     narrative: value.narrative.trim(),
     summary: value.summary.trim(),
@@ -214,6 +234,11 @@ function normalizeGeneratedTurn(value) {
     facts: Array.isArray(value.facts) ? value.facts.map((fact) => String(fact).trim()).filter(Boolean) : [],
     playerState,
   };
+}
+
+function authoritativeProtagonistName(worldContext) {
+  const value = worldContext?.state?.profile?.name || worldContext?.state?.playerState?.name || "主角";
+  return String(value).replace(/\s+/gu, " ").trim().slice(0, 40) || "主角";
 }
 
 function normalizePlayerState(value) {
@@ -274,7 +299,12 @@ function commitTurnTool() {
         playerState: {
           type: "object",
           properties: {
-            name: { type: "string", minLength: 1, maxLength: 40 },
+            name: {
+              type: "string",
+              minLength: 1,
+              maxLength: 40,
+              description: "Must exactly match the authoritative protagonist name in WORLD_CONTEXT.",
+            },
             cultivation: { type: "string", minLength: 1, maxLength: 180 },
             body: { type: "string", minLength: 1, maxLength: 180 },
             equipment: { type: "string", minLength: 1, maxLength: 180 },

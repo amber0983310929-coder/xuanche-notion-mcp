@@ -22,5 +22,12 @@ if (health?.version !== expectedVersion) {
 if (health?.capabilities?.durableArchiveReset !== true) {
   throw new Error("Worker durable archive-and-reset capability is not enabled");
 }
+if (health?.capabilities?.combatRulesInTurnContext !== true) {
+  throw new Error("Worker mandatory COMBAT rule loading is not enabled");
+}
+if (health?.capabilities?.dynamicProtagonistIdentity !== true ||
+    health?.capabilities?.authoritativeProtagonistValidation !== true) {
+  throw new Error("Worker authoritative protagonist identity protection is not enabled");
+}
 
 console.log(`Worker backend preflight passed (${health.version})`);

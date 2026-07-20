@@ -3,8 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { createSessionToken, verifySessionToken } from "../lib/auth.js";
-import { buildTurnRequest, extractPartialJsonString } from "../lib/openai.js";
-import { summarizeWorldSnapshot } from "../lib/world.js";
+import { buildTurnRequest, extractPartialJsonString, normalizeGeneratedTurn } from "../lib/openai.js";
+import { buildModelWorldContext, summarizeWorldSnapshot } from "../lib/world.js";
 import { onRequest as archiveHandler } from "../functions/api/game/archive.js";
 import { onRequest as archiveStatusHandler } from "../functions/api/game/archive/status.js";
 import { onRequest as initializeHandler } from "../functions/api/game/initialize.js";
@@ -93,6 +93,9 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
   assert.match(app, /function createNarrativeWriter/);
   assert.match(app, /requestAnimationFrame\(commitPending\)/);
   assert.match(app, /function hydrateCachedState/);
+  assert.match(app, /function repairLocalProtagonistIdentity/);
+  assert.match(app, /turn\?\.actionKey !== game\.state\.lastActionKey/);
+  assert.match(app, /key === "action" \? item : replaceLegacyIdentity/);
   assert.match(app, /document\.createDocumentFragment\(\)/);
   assert.match(app, /window\.history\.scrollRestoration = "manual"/);
   assert.match(app, /function scheduleCurrentTurnNavigation/);
@@ -122,7 +125,7 @@ test("PWA shell exposes continue plus three guarded world-management actions", a
 
 test("PWA service worker keeps navigation fresh and returns cached shell assets immediately", async () => {
   const worker = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
-  assert.match(worker, /xuanche-pwa-v0\.6\.0-mobile-controls-v2/);
+  assert.match(worker, /xuanche-pwa-v0\.6\.0-combat-v5-identity-v1/);
   assert.match(worker, /request\.mode === "navigate"/);
   assert.match(worker, /networkFirst\(request, "\/index\.html"\)/);
   assert.match(worker, /staleWhileRevalidate\(event, request\)/);
@@ -183,6 +186,77 @@ test("OpenAI request forces one strict server commit tool", () => {
   assert.deepEqual(request.tools[0].parameters.properties.playerState.required, [
     "name", "cultivation", "body", "equipment", "location", "constraints", "abilities",
   ]);
+});
+
+test("custom protagonist identity is injected into every turn and obsolete names fail closed", () => {
+  const source = snapshot();
+  source.pages.find((page) => page.key === "character").children = [
+    paragraph("name：沐聽雨"),
+    paragraph("age：16歲"),
+  ];
+  source.meta.world.playerState = {
+    name: "楚凌霄",
+    cultivation: "凡人",
+    body: "健康",
+    equipment: "短弓",
+    location: "山村",
+    constraints: "家人受威脅",
+    abilities: "狩獵射術",
+  };
+  const world = { state: summarizeWorldSnapshot(source), text: "世界資料" };
+  const request = buildTurnRequest({
+    env: {},
+    worldContext: world,
+    playerAction: "繼續觀察。",
+    style: "immersive",
+    length: "brief",
+  });
+  assert.match(request.instructions, /權威主角姓名是 "沐聽雨"/);
+  assert.match(request.instructions, /玩家只控制沐聽雨/);
+  assert.match(request.instructions, /楚凌霄.*不屬於本世界/);
+
+  const generated = {
+    narrative: "沐聽雨穩住呼吸，沿著門框的陰影觀察青袍修士握符的手勢，沒有讓弓弦發出第二聲震鳴。院內家人的腳步仍在，對方右腕的箭傷也未止血，僵局尚未解除。",
+    summary: "沐聽雨保持距離，確認敵我狀態。",
+    mainline: "沐聽雨仍在院外牽制受傷的青袍修士，家人尚未脫離威脅。",
+    visibleResult: "確認敵人右腕仍受箭傷影響。",
+    visibleCost: "雙方僵持持續，家人仍受威脅。",
+    situation: "山村自家庭院外，雙方隔著門前空地互相牽制。",
+    choices: [
+      { id: "hold", label: "繼續牽制", intent: "等待敵人露出破綻" },
+      { id: "call", label: "出聲警告", intent: "迫使敵人分心" },
+    ],
+    facts: ["敵人右腕箭傷仍在流血"],
+    playerState: {
+      name: "沐聽雨",
+      cultivation: "凡人",
+      body: "健康",
+      equipment: "短弓、獵箭19支",
+      location: "山村自家庭院外",
+      constraints: "家人受門前修真者威脅",
+      abilities: "狩獵射術",
+    },
+  };
+  assert.equal(normalizeGeneratedTurn(generated, "沐聽雨").playerState.name, "沐聽雨");
+  assert.throws(() => normalizeGeneratedTurn({
+    ...generated,
+    summary: "楚凌霄保持距離。",
+  }, "沐聽雨"), /混入舊角色姓名/);
+  assert.throws(() => normalizeGeneratedTurn({
+    ...generated,
+    playerState: { ...generated.playerState, name: "楚凌霄" },
+  }, "沐聽雨"), /主角姓名不符/);
+});
+
+test("COMBAT_V5 content is included in the mandatory model context", () => {
+  const source = snapshot();
+  source.pages.push({
+    key: "combat",
+    title: "16｜戰鬥、難度與公平性",
+    children: [paragraph("COMBAT_RULE_VERSION：COMBAT_V5｜Exceptional, Traceable, Consequential")],
+  });
+  const context = buildModelWorldContext(source);
+  assert.match(context.text, /COMBAT_RULE_VERSION：COMBAT_V5/);
 });
 
 test("world summary exposes profile and marks a legacy player state for calibration", () => {
