@@ -1,5 +1,15 @@
 {
   "version": 1,
   "include": ["/*"],
-  "exclude": ["/", "/index.html", "/gateway.txt"]
+  "exclude": [
+    "/",
+    "/index.html",
+    "/app.css",
+    "/app.js",
+    "/manifest.webmanifest",
+    "/sw.js",
+    "/icons/*",
+    "/images/*",
+    "/gateway.txt"
+  ]
 }

@@ -11,6 +11,7 @@ import { initializeWorld } from "./initializer.js";
 import { loadWorld } from "./loader.js";
 import { NotionClient } from "./notion.js";
 import { updateWorld } from "./updater.js";
+import { commitTurn } from "./turn-commit.js";
 import { WORLD_PAGE_IDS, parseWorldMarkers } from "./world-state.js";
 import {
   ApiError,
@@ -26,6 +27,8 @@ import {
   requireReadApiKey,
 } from "./utils.js";
 
+const CANONICAL_STATE_MAX_NODES = 5_000;
+
 export function createRouter(dependencies = {}) {
   return async function route(request, env = {}, ctx = {}) {
     const id = requestId(request);
@@ -39,9 +42,9 @@ export function createRouter(dependencies = {}) {
         return json({
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.19",
+          version: "0.6.0",
           protectedReads: readsRequireApiKey(env),
-          endpoints: ["/health", "/home", "/tree", "/world/initialize", "/world/load", "/world/update", "/world/archive-reset", "/world/archive-reset/status", "/openapi.json"],
+          endpoints: ["/health", "/home", "/tree", "/world/initialize", "/world/load", "/world/update", "/world/turn/commit", "/world/archive-reset", "/world/archive-reset/status", "/openapi.json"],
         });
       }
 
@@ -53,7 +56,7 @@ export function createRouter(dependencies = {}) {
         const result = {
           ok: true,
           service: "xuanche-engine",
-          version: "0.5.19",
+          version: "0.6.0",
           integrations: {
             notion: notion.configured ? "configured" : "missing",
             github: github.configured ? "configured" : "missing",
@@ -68,6 +71,9 @@ export function createRouter(dependencies = {}) {
             batchedWorldUpdates: true,
             stableWorldPageKeys: true,
             semanticBlockTargets: true,
+            uniqueCanonicalSaveMarker: true,
+            serverManagedTurnCommit: true,
+            serializedTurnCommits: Boolean(env.WORLD_TURN_COORDINATOR),
             idempotentRevisionReplay: true,
             activeCastDialoguePreload: "NPC_LIVE_PRELOAD_V1",
             idempotentWorldUpdates: true,
@@ -182,6 +188,25 @@ export function createRouter(dependencies = {}) {
         return json({ ok: true, data, requestId: id });
       }
 
+      if (request.method === "POST" && url.pathname === "/world/turn/commit") {
+        requireApiKey(request, env);
+        const body = await readJson(request);
+        const startedAt = Date.now();
+        const data = env.WORLD_TURN_COORDINATOR
+          ? await commitTurnThroughCoordinator(env.WORLD_TURN_COORDINATOR, body, id)
+          : await commitTurn(env, body, { notion, github, cache: dependencies.cache });
+        console.log("xuanche_turn_committed", {
+          requestId: id,
+          worldId: data.worldId,
+          simTick: data.simTick,
+          revision: data.revision,
+          idempotent: data.idempotent,
+          historicalReplay: data.historicalReplay,
+          durationMs: Date.now() - startedAt,
+        });
+        return json({ ok: true, data, requestId: id });
+      }
+
       if (request.method === "POST" && url.pathname === "/world/initialize") {
         requireApiKey(request, env);
         const body = await readJson(request);
@@ -274,6 +299,26 @@ export function createRouter(dependencies = {}) {
   };
 }
 
+async function commitTurnThroughCoordinator(namespace, input, requestId) {
+  const worldId = typeof input?.expectedWorldId === "string" ? input.expectedWorldId.trim() : "";
+  if (!worldId) throw new ApiError(400, "expectedWorldId is required");
+  const objectId = namespace.idFromName(worldId);
+  const stub = namespace.get(objectId);
+  const response = await stub.fetch("https://world-turn-coordinator/commit", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-request-id": requestId,
+    },
+    body: JSON.stringify(input),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok !== true) {
+    throw new ApiError(response.status || 500, payload.error || "Turn coordinator failed", payload.details);
+  }
+  return payload.data;
+}
+
 async function startArchiveResetWorkflow(env, input, injectedCache, injectedNotion) {
   validateArchiveResetInput(input);
   if (!env.WORLD_RESET_WORKFLOW?.createBatch || !env.WORLD_RESET_WORKFLOW?.get) {
@@ -353,7 +398,10 @@ async function readCanonicalWorldState(env, injectedNotion) {
   const notion = injectedNotion || new NotionClient(env);
   const tree = await notion.getPageTree(WORLD_PAGE_IDS.save, {
     maxDepth: 0,
-    maxNodes: 10,
+    // The save page grows with the story.  This preflight must follow Notion's
+    // pagination instead of assuming the canonical marker is within the first
+    // ten blocks, otherwise a healthy long-running world cannot be archived.
+    maxNodes: CANONICAL_STATE_MAX_NODES,
     concurrency: 1,
     includePage: false,
   });

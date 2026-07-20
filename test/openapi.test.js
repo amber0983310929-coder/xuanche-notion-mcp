@@ -5,7 +5,7 @@ import { buildOpenApi } from "../src/openapi.js";
 test("OpenAPI is bound to the deployed origin and exposes unique operation IDs", () => {
   const document = buildOpenApi("https://worker.example/openapi.json");
   assert.equal(document.openapi, "3.1.0");
-  assert.equal(document.info.version, "0.5.19");
+  assert.equal(document.info.version, "0.6.0");
   assert.equal(document.servers[0].url, "https://worker.example");
 
   const operationIds = Object.values(document.paths)
@@ -48,6 +48,10 @@ test("OpenAPI protects world reads and defines GPT Action request bodies", () =>
   assert.equal(
     document.paths["/world/update"].post.requestBody.content["application/json"].schema.$ref,
     "#/components/schemas/WorldUpdateRequest",
+  );
+  assert.equal(
+    document.paths["/world/turn/commit"].post.requestBody.content["application/json"].schema.$ref,
+    "#/components/schemas/WorldTurnCommitRequest",
   );
   assert.equal(
     document.paths["/world/archive-reset"].post.requestBody.content["application/json"].schema.$ref,
@@ -102,6 +106,15 @@ test("OpenAPI exposes only the safe world mutation routes", () => {
   assert.deepEqual(document.components.schemas.WorldArchiveResetRequest.required, ["confirmation", "expectedWorldId", "operationKey"]);
   assert.equal(document.paths["/world/initialize"].post.operationId, "initializeWorld");
   assert.equal(document.paths["/world/archive-reset"].post.operationId, "archiveAndResetWorld");
+  assert.equal(document.paths["/world/turn/commit"].post.operationId, "commitWorldTurn");
+  assert.equal(document.components.schemas.WorldTurnCommitRequest.properties.pageId, undefined);
+  assert.equal(
+    document.components.schemas.WorldTurnCommitRequest.properties.playerState.$ref,
+    "#/components/schemas/PlayerState",
+  );
+  assert.deepEqual(document.components.schemas.PlayerState.required, [
+    "name", "cultivation", "body", "equipment", "location", "constraints", "abilities",
+  ]);
   assert.ok(document.components.schemas.WorldUpdateRequest.properties.blockUpdates);
   assert.ok(document.components.schemas.WorldUpdateRequest.properties.mutations);
   assert.deepEqual(document.components.schemas.WorldPageKey.enum, [

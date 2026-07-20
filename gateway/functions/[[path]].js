@@ -9,7 +9,7 @@ const DEFAULT_UPSTREAM_NODES = 60;
 const MAX_UPSTREAM_NODES = 250;
 const DEFAULT_PAGE_NODES = 10;
 const MAX_PAGE_NODES = 20;
-const GATEWAY_VERSION = "0.5.15";
+const GATEWAY_VERSION = "0.6.0";
 
 const WORLD_PAGE_KEYS = [
   "save", "character", "timeline", "knowledge", "relationships",

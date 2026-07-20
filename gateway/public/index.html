@@ -1,13 +1,463 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Xuanche Engine Gateway</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#111310">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="玄澈修真世界——私人的持續世界敘事遊戲。">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/icons/xuanche.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/icons/xuanche-192.png">
+    <link rel="stylesheet" href="/app.css">
+    <title>玄澈 · 修真世界</title>
   </head>
   <body>
-    <h1>Xuanche Engine Gateway v0.5.15</h1>
-    <p>Safety-scoped GPT Actions gateway is online.</p>
-    <p><a href="/privacy">隱私權政策</a></p>
+    <div class="grain" aria-hidden="true"></div>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="玄澈首頁">
+        <span class="brand-seal">玄</span>
+        <span><strong>玄澈</strong><small>修真世界</small></span>
+      </a>
+      <div class="topbar-actions">
+        <button id="handbook-button" class="handbook-trigger" type="button">世界手冊</button>
+        <div class="topbar-status">
+          <span id="connection-dot" class="connection-dot" aria-hidden="true"></span>
+          <span id="connection-label">連線中</span>
+          <span id="tick-badge" class="tick-badge">T—</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="shell">
+      <aside id="character-quick-rail" class="character-quick-rail" aria-label="角色速覽">
+        <section class="quick-rail-card quick-character-card">
+          <div class="quick-character-heading">
+            <div>
+              <p class="eyebrow">角色速覽</p>
+              <h2 id="quick-profile-name">楚凌霄</h2>
+            </div>
+            <span id="quick-profile-age" class="quick-age">16歲</span>
+          </div>
+          <span id="quick-player-sync" class="sync-badge">待校準</span>
+          <dl class="quick-state-list">
+            <div><dt>修為</dt><dd id="quick-state-cultivation">—</dd></div>
+            <div><dt>身體</dt><dd id="quick-state-body">—</dd></div>
+            <div><dt>位置</dt><dd id="quick-state-location">—</dd></div>
+            <div><dt>限制</dt><dd id="quick-state-constraints">—</dd></div>
+            <div><dt>兵裝</dt><dd id="quick-state-equipment">—</dd></div>
+            <div><dt>能力</dt><dd id="quick-state-abilities">—</dd></div>
+          </dl>
+          <div class="quick-rail-actions">
+            <button type="button" data-open-handbook="inventory">查看行囊</button>
+            <button type="button" data-open-handbook="abilities">查看能力</button>
+          </div>
+        </section>
+
+        <section class="quick-rail-card quick-objective-card">
+          <p class="eyebrow">此行所求</p>
+          <h2>目前目標</h2>
+          <p id="quick-mainline">正在讀取唯一世界錨點……</p>
+          <dl class="quick-world-meta">
+            <div><dt>回合</dt><dd id="quick-tick">T—</dd></div>
+            <div><dt>修訂</dt><dd id="quick-revision">R—</dd></div>
+          </dl>
+        </section>
+      </aside>
+
+      <aside id="player-panel" class="world-panel" aria-label="角色與世界狀態儀表板">
+        <div id="status-panel-profile" class="status-panel">
+          <section class="panel-section character-card" aria-labelledby="profile-name">
+          <div class="portrait-frame">
+            <img id="protagonist-portrait" src="/images/chulingxiao-v1.webp" alt="楚凌霄立繪" width="720" height="900">
+            <span id="portrait-placeholder" class="portrait-placeholder" aria-hidden="true" hidden>待</span>
+            <span class="portrait-vignette" aria-hidden="true"></span>
+            <span id="profile-age" class="profile-age">16歲</span>
+          </div>
+          <div class="character-copy">
+            <p class="eyebrow">此世主角</p>
+            <h2 id="profile-name">楚凌霄</h2>
+            <p id="profile-intro" class="profile-intro">正在讀取角色資料……</p>
+            <p id="profile-motto" class="profile-motto"></p>
+          </div>
+          </section>
+        </div>
+
+        <div id="status-panel-player" class="status-panel">
+          <section class="panel-section status-card" aria-labelledby="status-title">
+            <div class="status-heading">
+              <div>
+                <p class="eyebrow">主角狀態</p>
+                <h2 id="status-title">此刻之身</h2>
+              </div>
+              <span id="player-state-sync" class="sync-badge">待校準</span>
+            </div>
+            <dl class="state-list">
+              <div><dt>修為境界</dt><dd id="state-cultivation">—</dd></div>
+              <div><dt>身體狀況</dt><dd id="state-body">—</dd></div>
+              <div class="equipment-state"><dt>武器裝備</dt><dd id="state-equipment">—</dd></div>
+              <div><dt>所在位置</dt><dd id="state-location">—</dd></div>
+              <div class="constraints-state"><dt>行動限制</dt><dd id="state-constraints">—</dd></div>
+              <div class="abilities-state"><dt>神通／能力</dt><dd id="state-abilities">—</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <div id="status-panel-world" class="status-panel">
+          <section class="panel-section pulse-card">
+            <p class="eyebrow">世界狀態</p>
+            <h2>當前主線</h2>
+            <p id="mainline">正在讀取唯一世界錨點……</p>
+            <dl class="world-meta">
+              <div><dt>世界</dt><dd id="world-id">—</dd></div>
+              <div><dt>修訂</dt><dd id="revision">—</dd></div>
+              <div><dt>存檔</dt><dd id="save-state">未載入</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <div id="status-panel-system" class="status-panel">
+          <section class="panel-section settings-card">
+            <p class="eyebrow">敘事調律</p>
+            <label for="style-select">筆調</label>
+            <select id="style-select">
+              <option value="immersive">沉浸小說</option>
+              <option value="austere">冷冽武俠</option>
+              <option value="swift">節奏緊湊</option>
+            </select>
+            <label for="length-select">篇幅</label>
+            <select id="length-select">
+              <option value="brief">精簡</option>
+              <option value="standard" selected>標準</option>
+              <option value="rich">細膩</option>
+            </select>
+            <p class="setting-note">只改變敘事表現，不改寫世界事實。</p>
+          </section>
+
+          <section class="panel-section world-controls-card" aria-label="世界管理">
+            <p class="eyebrow">世界管理</p>
+            <div class="world-control-grid">
+              <button id="continue-game-button" class="continue-game-button" type="button">繼續遊戲 <span aria-hidden="true">→</span></button>
+              <button id="new-game-button" class="quiet-button" type="button">新的遊戲</button>
+              <button id="restart-game-button" class="quiet-button" type="button">重新遊戲</button>
+              <button id="reset-world-button" class="quiet-button danger" type="button">重置世界</button>
+            </div>
+            <p class="control-note">新的遊戲會封存後進入角色建立；重新遊戲保留主角設定並回到序章；重置世界只封存並清空。</p>
+            <p id="world-control-status" class="world-control-status" role="status" aria-live="polite" hidden></p>
+          </section>
+
+          <div class="panel-actions">
+            <button id="install-button" class="quiet-button" type="button" hidden>安裝到裝置</button>
+            <button id="refresh-button" class="quiet-button" type="button">重新核對世界</button>
+            <button id="logout-button" class="quiet-button danger" type="button">鎖定</button>
+            <a class="privacy-link" href="/privacy">隱私與資料</a>
+          </div>
+        </div>
+      </aside>
+
+      <section class="play-panel" aria-label="遊戲敘事" aria-busy="true">
+        <div id="alert" class="alert" role="status" hidden></div>
+        <div id="story" class="story" aria-live="polite" aria-relevant="additions text">
+          <article class="scene-card loading-card" id="opening-card">
+            <p class="scene-kicker">載入世界</p>
+            <div class="loading-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+          </article>
+        </div>
+
+        <section id="decision-area" class="decision-area" aria-label="可選行動" aria-busy="true">
+          <div class="decision-heading">
+            <p class="eyebrow">此刻，你要——</p>
+            <span id="turn-status">等待世界載入</span>
+          </div>
+          <div id="choices" class="choices"></div>
+
+          <form id="action-form" class="action-form">
+            <label class="sr-only" for="action-input">輸入主角的行動</label>
+            <textarea
+              id="action-input"
+              name="action"
+              rows="2"
+              maxlength="800"
+              placeholder="輸入楚凌霄要做或要說的事……"
+              autocomplete="off"
+              required
+            ></textarea>
+            <button id="send-button" class="send-button" type="submit" disabled>
+              <span>推進世界</span><span aria-hidden="true">→</span>
+            </button>
+          </form>
+          <p class="composer-note">行動草稿會自動保留；送出後，伺服器會核對世界修訂，再生成並保存唯一結果。</p>
+        </section>
+      </section>
+    </main>
+
+    <nav id="mobile-nav" class="mobile-nav" aria-label="手機主要導覽">
+      <button type="button" data-mobile-target="story"><span aria-hidden="true">文</span>劇情</button>
+      <button type="button" data-mobile-target="player"><span aria-hidden="true">態</span>狀態</button>
+      <button type="button" data-mobile-target="handbook"><span aria-hidden="true">冊</span>手冊</button>
+      <button type="button" data-mobile-target="action"><span aria-hidden="true">行</span>行動</button>
+    </nav>
+
+    <dialog id="handbook-dialog" class="handbook-dialog" aria-labelledby="handbook-title">
+      <div class="handbook-shell">
+        <header class="handbook-header">
+          <div>
+            <p class="eyebrow">玩家已知資料</p>
+            <h2 id="handbook-title">世界手冊</h2>
+          </div>
+          <button id="handbook-close-button" class="handbook-close" type="button" aria-label="關閉世界手冊">×</button>
+        </header>
+        <div class="handbook-tabs" role="tablist" aria-label="世界手冊分類">
+          <button id="handbook-tab-inventory" type="button" role="tab" aria-selected="true" aria-controls="handbook-panel-inventory" data-handbook-tab="inventory">行囊</button>
+          <button id="handbook-tab-abilities" type="button" role="tab" aria-selected="false" aria-controls="handbook-panel-abilities" data-handbook-tab="abilities" tabindex="-1">能力</button>
+          <button id="handbook-tab-people" type="button" role="tab" aria-selected="false" aria-controls="handbook-panel-people" data-handbook-tab="people" tabindex="-1">人物</button>
+          <button id="handbook-tab-clues" type="button" role="tab" aria-selected="false" aria-controls="handbook-panel-clues" data-handbook-tab="clues" tabindex="-1">線索</button>
+          <button id="handbook-tab-journey" type="button" role="tab" aria-selected="false" aria-controls="handbook-panel-journey" data-handbook-tab="journey" tabindex="-1">旅程</button>
+        </div>
+        <div class="handbook-panels">
+          <section id="handbook-panel-inventory" role="tabpanel" aria-labelledby="handbook-tab-inventory">
+            <p class="handbook-section-lead">目前已確認的武器、裝備與重要隨身物。</p>
+            <div id="handbook-equipment" class="handbook-token-list"></div>
+          </section>
+          <section id="handbook-panel-abilities" role="tabpanel" aria-labelledby="handbook-tab-abilities" hidden>
+            <p class="handbook-section-lead">已掌握的神通、法術、功法與凡俗技能。</p>
+            <div id="handbook-abilities" class="handbook-token-list"></div>
+          </section>
+          <section id="handbook-panel-people" role="tabpanel" aria-labelledby="handbook-tab-people" hidden>
+            <p class="handbook-section-lead">只記錄主角已知且能確認的人物資料。</p>
+            <div id="handbook-people" class="handbook-entry-list"></div>
+          </section>
+          <section id="handbook-panel-clues" role="tabpanel" aria-labelledby="handbook-tab-clues" hidden>
+            <p class="handbook-section-lead">由已成功存檔回合累積的公開線索。</p>
+            <div id="handbook-clues" class="handbook-entry-list"></div>
+          </section>
+          <section id="handbook-panel-journey" role="tabpanel" aria-labelledby="handbook-tab-journey" hidden>
+            <p class="handbook-section-lead">這台裝置保存的近期已提交旅程。</p>
+            <div id="handbook-journey" class="handbook-entry-list journey-list"></div>
+          </section>
+        </div>
+        <p class="handbook-footnote">手冊不顯示導演資訊、未發生選項或尚未提交的推演。</p>
+      </div>
+    </dialog>
+
+    <dialog id="world-operation-dialog" class="modal-dialog operation-dialog" aria-labelledby="operation-title">
+      <form id="world-operation-form" method="dialog">
+        <p class="eyebrow">權威世界存檔</p>
+        <h2 id="operation-title">確認世界操作</h2>
+        <p id="operation-description" class="dialog-lead"></p>
+        <div class="operation-safety">
+          <p><strong>安全順序</strong>：完整封存 → 逐頁驗證 → 清空固定頁面 → 視操作建立新世界。</p>
+          <dl>
+            <div><dt>目前世界</dt><dd id="operation-world-id">—</dd></div>
+            <div><dt>失敗處理</dt><dd>保留檢查點，以同一識別碼續跑</dd></div>
+          </dl>
+        </div>
+        <label id="operation-confirmation-field" for="operation-confirmation">請輸入 <strong id="operation-confirmation-label">—</strong> 才能繼續</label>
+        <input id="operation-confirmation" name="confirmation" type="text" maxlength="12" autocomplete="off" spellcheck="false">
+        <p id="operation-progress" class="operation-progress" role="status" hidden></p>
+        <div class="dialog-actions">
+          <button id="operation-cancel-button" class="quiet-button" type="button">取消</button>
+          <button id="operation-confirm-button" class="danger-button" type="submit" disabled>確認</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="character-dialog" class="modal-dialog character-dialog" aria-labelledby="character-dialog-title">
+      <form id="character-form" method="dialog">
+        <p class="eyebrow">新世界 · 角色建立</p>
+        <h2 id="character-dialog-title">建立此世主角</h2>
+        <p class="dialog-lead">舊世界已安全封存。完成下列設定後才會建立新的 ACTIVE 世界；取消則維持空白世界。</p>
+        <p class="character-preset-note">每一欄都能從範例快速帶入，也能直接在輸入框自行填寫或改寫。</p>
+        <div class="character-form-grid">
+          <fieldset class="character-field">
+            <legend>姓名</legend>
+            <select class="character-preset" data-character-target="name" aria-label="姓名快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="楚凌霄">楚凌霄</option>
+              <option value="沈青禾">沈青禾</option>
+              <option value="顧長夜">顧長夜</option>
+              <option value="蘇晚照">蘇晚照</option>
+            </select>
+            <input name="name" maxlength="40" autocomplete="off" placeholder="自行輸入姓名" required>
+          </fieldset>
+          <fieldset class="character-field">
+            <legend>性別</legend>
+            <select class="character-preset" data-character-target="gender" aria-label="性別快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="男">男</option>
+              <option value="女">女</option>
+              <option value="未定">未定</option>
+            </select>
+            <input name="gender" maxlength="20" value="男" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field">
+            <legend>年齡</legend>
+            <select class="character-preset" data-character-target="age" aria-label="年齡快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="16歲">16歲</option>
+              <option value="18歲">18歲</option>
+              <option value="21歲">21歲</option>
+              <option value="25歲">25歲</option>
+            </select>
+            <input name="age" maxlength="20" value="16歲" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>外貌</legend>
+            <select class="character-preset" data-character-target="appearance" aria-label="外貌快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="眉目清俊，身形修長，常穿便於入山的素色短衣。">山村採藥者</option>
+              <option value="青衣束髮，腰背挺直，神色沉靜而目光鋒利。">冷靜劍客</option>
+              <option value="衣著乾淨素雅，隨身帶著書卷與舊木簪，氣質溫和。">遊學書生</option>
+            </select>
+            <textarea name="appearance" rows="2" maxlength="240" placeholder="外觀、衣著與氣質"></textarea>
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>性格關鍵詞</legend>
+            <select class="character-preset" data-character-target="personality" aria-label="性格快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="沉著、敏銳、重視家人">沉著守護型</option>
+              <option value="冷靜、果決、不輕信他人">冷靜果決型</option>
+              <option value="溫和、好奇、遇強不退">溫和堅韌型</option>
+            </select>
+            <input name="personality" maxlength="260" placeholder="沉著、敏銳、重視家人" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>身世背景</legend>
+            <select class="character-preset" data-character-target="background" aria-label="身世背景快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="出身幽靜山村的藥農之家，自幼辨草木、熟山路。">山村藥農</option>
+              <option value="出身衰敗修真世家，只留下殘缺傳承與未解舊案。">沒落世家</option>
+              <option value="在河港小城由商隊撫養長大，熟悉人情與遠行風險。">河港商隊</option>
+            </select>
+            <textarea name="background" rows="3" maxlength="500" placeholder="主角從何而來，珍視什麼"></textarea>
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>人生目標</legend>
+            <select class="character-preset" data-character-target="motivation" aria-label="人生目標快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="守護珍視之人並踏上修行之路">守護家人</option>
+              <option value="查清親人遇害真相，讓真正的兇手付出代價">追查真相</option>
+              <option value="尋得真正長生之道，親眼看遍九州山河">求道長生</option>
+            </select>
+            <input name="motivation" maxlength="240" placeholder="守護珍視之人並踏上修行之路" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>不可跨越的底線</legend>
+            <select class="character-preset" data-character-target="bottomLine" aria-label="底線快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="不主動傷害無辜，不背棄珍視之人">不傷無辜</option>
+              <option value="不以弱者性命換取自己的修為與生路">不以弱換強</option>
+              <option value="可以欺敵，但絕不背棄親口立下的承諾">信守承諾</option>
+            </select>
+            <input name="bottomLine" maxlength="240" placeholder="不主動傷害無辜，不背棄珍視之人" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>初始武器裝備</legend>
+            <select class="character-preset" data-character-target="equipment" aria-label="初始裝備快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="藥簍、採藥短刀、火摺子、粗布水囊">採藥行裝</option>
+              <option value="舊鐵劍、磨刀石、斗笠、三日乾糧">旅人劍裝</option>
+              <option value="短弓、六支獵箭、繩索、獸皮披肩">山林獵裝</option>
+            </select>
+            <input name="equipment" maxlength="240" placeholder="藥簍、短刀、火摺子" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>已知能力</legend>
+            <select class="character-preset" data-character-target="knownAbilities" aria-label="已知能力快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="辨識草藥、熟悉山路、攀爬與追蹤、簡單傷口處理">山野生存</option>
+              <option value="基礎劍術、步法、辨別兵器、臨敵觀察">凡俗劍術</option>
+              <option value="察言觀色、記帳估價、辨識貨物、熟悉水路">商旅見聞</option>
+            </select>
+            <input name="knownAbilities" maxlength="600" placeholder="辨識草藥、熟悉山路、攀爬與追蹤" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field">
+            <legend>初始位置</legend>
+            <select class="character-preset" data-character-target="location" aria-label="初始位置快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="山村外圍">山村外圍</option>
+              <option value="河港小城">河港小城</option>
+              <option value="邊境驛站">邊境驛站</option>
+              <option value="荒山古廟">荒山古廟</option>
+            </select>
+            <input name="location" maxlength="160" value="山村外圍" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field">
+            <legend>初始時間</legend>
+            <select class="character-preset" data-character-target="time" aria-label="初始時間快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="清晨">清晨</option>
+              <option value="正午">正午</option>
+              <option value="黃昏">黃昏</option>
+              <option value="深夜">深夜</option>
+            </select>
+            <input name="time" maxlength="80" value="清晨" autocomplete="off">
+          </fieldset>
+          <fieldset class="character-field wide">
+            <legend>開局前提</legend>
+            <select class="character-preset" data-character-target="premise" aria-label="開局前提快速選擇">
+              <option value="">快速選擇（可自行輸入）</option>
+              <option value="山中獸群反常逃竄，一件不屬於凡俗世界的異物隨之現世。">獸潮異物</option>
+              <option value="一名重傷修士倒在附近，臨死前將帶血信物交到主角手中。">修士遺物</option>
+              <option value="熟悉的人在一夜之間失蹤，只留下指向禁地的凌亂痕跡。">親友失蹤</option>
+            </select>
+            <textarea name="premise" rows="3" maxlength="600" placeholder="一場尚未發生的異變，即將把主角推向修行之路。"></textarea>
+          </fieldset>
+        </div>
+        <p id="character-error" class="form-error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="character-cancel-button" class="quiet-button" type="button">取消，維持空白</button>
+          <button id="character-submit-button" class="send-button" type="submit">建立世界</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="login-dialog" class="login-dialog">
+      <form id="login-form" method="dialog">
+        <span class="login-seal" aria-hidden="true">玄</span>
+        <p class="eyebrow">私人世界</p>
+        <h1>解鎖玄澈</h1>
+        <p>通行詞只用來建立這台裝置的安全工作階段，不會保存在瀏覽器。</p>
+        <label for="passphrase">通行詞</label>
+        <input id="passphrase" name="passphrase" type="password" autocomplete="current-password" required>
+        <p id="login-error" class="form-error" role="alert"></p>
+        <button class="send-button" type="submit">進入世界</button>
+      </form>
+    </dialog>
+
+    <template id="narrative-template">
+      <article class="scene-card narrative-card">
+        <header><span class="turn-label"></span><span class="card-status"></span></header>
+        <div class="narrative-text"></div>
+        <div class="card-actions"></div>
+      </article>
+    </template>
+
+    <template id="player-template">
+      <article class="player-action"><span>你的行動</span><p></p></article>
+    </template>
+
+    <template id="turn-change-template">
+      <section class="turn-change-card" aria-label="本回合已保存變化">
+        <header>
+          <div><p class="eyebrow">存檔確認</p><h3>本回合變化</h3></div>
+          <span class="turn-change-tick"></span>
+        </header>
+        <div class="turn-outcome-grid">
+          <article class="turn-outcome result"><span>可見結果</span><p></p></article>
+          <article class="turn-outcome cost"><span>可見代價</span><p></p></article>
+        </div>
+        <div class="turn-delta-section">
+          <h4>主角狀態</h4>
+          <ul class="turn-delta-list"></ul>
+        </div>
+        <div class="turn-facts-section">
+          <h4>新知與線索</h4>
+          <ul class="turn-facts-list"></ul>
+        </div>
+      </section>
+    </template>
+
+    <script type="module" src="/app.js"></script>
   </body>
 </html>

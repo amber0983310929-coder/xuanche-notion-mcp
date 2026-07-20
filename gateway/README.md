@@ -1,45 +1,49 @@
-# Xuanche Engine Gateway v0.5.15
+# Xuanche PWA and Gateway v0.6.0
 
-This Cloudflare Pages gateway keeps GPT Action responses below the payload limit and publishes a safety-scoped OpenAPI contract.
+This Cloudflare Pages project serves two compatible surfaces:
 
-## Public GPT Action operations
+- an installable private game at `/`;
+- the existing safety-scoped GPT Action gateway at `/gpt-action-openapi.json`.
 
-- getNotionTree
-- getNotionPage
-- loadWorldProfile
-- initializeWorld
-- archiveAndResetWorld
-- getArchiveAndResetStatus
-- updateWorldState
+The PWA loads the authoritative `turn_core` state through the XUANCHE_ENGINE service binding, calls the OpenAI Responses API only from a Pages Function, streams the `narrative` function argument to the browser, and then sends one fixed-shape payload to `/world/turn/commit`. API keys are never bundled into `public/`.
 
-Health diagnostics, broad administrative profiles, GitHub mirrors, arbitrary Notion page creation, raw block append, and page metadata mutation are excluded from the gameplay manifest. The compact `turn_core` and optional differential profiles remain available through `loadWorldProfile`.
+## Required Pages configuration
 
-The compact contract declares exact archive/reset status fields. `archiveAndResetWorld` returns HTTP 202 and must be followed only with `getArchiveAndResetStatus` using the original `operationKey`; `archiveId` and `workflowId` are never accepted as substitutes.
+| Binding or secret | Purpose |
+| --- | --- |
+| `XUANCHE_ENGINE` | Service binding to the Xuanche Worker |
+| `XUANCHE_API_KEY` | Same private key configured on the Worker |
+| `OPENAI_API_KEY` | Server-side Responses API credential |
+| `PWA_ACCESS_KEY` | Owner passphrase used only to create a signed session |
+| `PWA_SESSION_SECRET` | Independent HMAC secret for the HttpOnly session cookie |
 
-Character initialization explicitly preserves the defining motto, core desire, important bonds, weakness or fear, starting style, destiny talents, structured relationships, and director-only opening facts.
+Optional settings:
 
-World updates expose only stable fixed `pageKey` values and semantic `matchPrefix` block selectors. Raw Notion page IDs and block IDs are deliberately hidden from the gameplay contract so a player option number cannot be mistaken for an identifier.
+- `OPENAI_MODEL` defaults to `gpt-5.6-terra`.
+- `OPENAI_REASONING_EFFORT` defaults to `low`.
+- Cloudflare Access can additionally protect the complete Pages project at the platform edge; the in-app passphrase remains required.
 
-## Bounded reads
+Configure secrets separately for Preview and Production when using Pages preview deployments.
 
-- Page reads always send depth 0 upstream.
-- Page maxNodes defaults to 10 and is clamped to 20.
-- maxChars defaults to 72,000 and is capped at 85,000.
-- Continue the same page with data.cursor until data.has_more is false.
-- The gateway reports any size reduction through data.truncated and _gateway.truncated.
+## PWA routes
 
-Directory reads are shallow and only discover child-page links. Normal gameplay uses one cached `turn_core` profile load; `/page` batches remain a fallback for one exact page.
+- `GET|POST|DELETE /api/session`
+- `GET /api/game/state`
+- `POST /api/game/turn` (SSE narrative stream followed by authoritative commit)
+- `POST /api/game/commit` (replay a locally retained pending-save checkpoint)
 
-## Cloudflare Pages settings
+All state-changing browser requests require same-origin requests and an authenticated HttpOnly/SameSite session. The browser stores only display preferences, recent prose for offline reading, and a pending fixed-shape checkpoint when a generated turn needs a save retry.
 
-- Project: xuanche-engine-gateway
-- Root directory: gateway
+## GPT Action compatibility
+
+The compact manifest still publishes seven operations: bounded Notion reads, profile load, world initialization, archive/reset start and status, and the legacy safe world update. It does not expose the PWA commit endpoint, raw Notion writes, secrets, or broad administrative routes.
+
+## Pages project settings
+
+- Project: `xuanche-engine-gateway`
+- Root directory: `gateway`
 - Build command: blank
-- Build output directory: public
-- Service binding: XUANCHE_ENGINE to the Xuanche Worker
+- Build output directory: `public`
+- Service binding: `XUANCHE_ENGINE`
 
-After deployment, re-import `https://xuanche-engine-gateway.pages.dev/gpt-action-openapi.json` into GPT Actions and use `/privacy` as the privacy-policy URL. Confirm that the compact document reports version 0.5.15, contains exactly seven operations, declares archive HTTP 202, and exposes the structured status response.
-
-## Verification
-
-Run npm test in this directory, or run the root test suite.
+Run `npm test` in this directory, or run the root test suite.
