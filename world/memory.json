@@ -1,10 +1,10 @@
 {
   "version": 3,
-  "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-20T10:10:01.335Z",
+  "schema": "SAVE_V3.3",
+  "updatedAt": "2026-07-20T10:13:01.061Z",
   "worldState": "ACTIVE",
   "worldId": "W20260720-6A7CF63D",
-  "simTick": 0,
+  "simTick": 1,
   "purgeId": "A-W20260719-9E6FAA5A-C48C56E2",
   "events": [
     {
@@ -20,6 +20,42 @@
       "summary": "Initialized world for 沐聽雨",
       "saveKey": "pwa-new_game-1784517925633-11d7f7a0-4e59-41ee-bf8f-5022d6770158",
       "worldId": "W20260720-6A7CF63D"
+    },
+    {
+      "timestamp": "2026-07-20T10:13:01.061Z",
+      "type": "gameplay_turn",
+      "actionKey": "e9945850-78dc-4e9f-a871-0f9ef7807f65",
+      "saveKey": "turn-W20260720-6A7CF63D-t1-pwa-e9945850-78dc-4e9f-a871-0f9ef7807f65",
+      "worldId": "W20260720-6A7CF63D",
+      "simTick": 1,
+      "playerAction": "搭弓瞄準門口修真者並朝自己觀察到的弱點射擊",
+      "summary": "楚凌霄以獵箭射穿青袍修真者右腕，打斷其施法；對方仍持黃符與灰鈴守在家門前，家人尚在屋內。",
+      "facts": [
+        "楚凌霄親眼確認門前青袍人能以白霧般的術法施術。",
+        "楚凌霄射穿了青袍人的右腕，令其手中術法潰散。",
+        "青袍人仍持有一張帶朱砂紋路的黃符，腳邊有一枚灰黑小鈴。",
+        "屋內家人仍在，村中方向傳來焦味與哭聲。"
+      ],
+      "playerState": {
+        "name": "楚凌霄",
+        "cultivation": "凡人，尚未引氣入體",
+        "body": "健康",
+        "equipment": "短劍、短弓、獵箭19支、箭筒、繩索、獸皮披肩；一支獵箭留在敵人右腕",
+        "location": "山村外圍，自家庭院外的坡地上",
+        "constraints": "家人受門前修真者直接威脅；敵方術法與器物作用未知",
+        "abilities": "絕世悟性；絕世根骨；絕世體質；劍心通明；辨草木、熟山路、狩獵射術"
+      }
     }
-  ]
+  ],
+  "revision": 2,
+  "lastSaveKey": "turn-W20260720-6A7CF63D-t1-pwa-e9945850-78dc-4e9f-a871-0f9ef7807f65",
+  "playerState": {
+    "name": "楚凌霄",
+    "cultivation": "凡人，尚未引氣入體",
+    "body": "健康",
+    "equipment": "短劍、短弓、獵箭19支、箭筒、繩索、獸皮披肩；一支獵箭留在敵人右腕",
+    "location": "山村外圍，自家庭院外的坡地上",
+    "constraints": "家人受門前修真者直接威脅；敵方術法與器物作用未知",
+    "abilities": "絕世悟性；絕世根骨；絕世體質；劍心通明；辨草木、熟山路、狩獵射術"
+  }
 }
