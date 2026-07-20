@@ -1,9 +1,9 @@
 {
   "version": 3,
   "schema": "SAVE_V3.2",
-  "updatedAt": "2026-07-20T09:57:23.987Z",
-  "worldState": "EMPTY",
-  "worldId": "PENDING",
+  "updatedAt": "2026-07-20T10:10:01.335Z",
+  "worldState": "ACTIVE",
+  "worldId": "W20260720-6A7CF63D",
   "simTick": 0,
   "purgeId": "A-W20260719-9E6FAA5A-C48C56E2",
   "events": [
@@ -13,6 +13,13 @@
       "summary": "Archived and reset W20260719-9E6FAA5A",
       "worldId": "W20260719-9E6FAA5A",
       "archiveId": "A-W20260719-9E6FAA5A-C48C56E2"
+    },
+    {
+      "timestamp": "2026-07-20T10:10:01.335Z",
+      "type": "world_initialize",
+      "summary": "Initialized world for 沐聽雨",
+      "saveKey": "pwa-new_game-1784517925633-11d7f7a0-4e59-41ee-bf8f-5022d6770158",
+      "worldId": "W20260720-6A7CF63D"
     }
   ]
 }
