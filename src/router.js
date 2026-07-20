@@ -27,6 +27,8 @@ import {
   requireReadApiKey,
 } from "./utils.js";
 
+const CANONICAL_STATE_MAX_NODES = 5_000;
+
 export function createRouter(dependencies = {}) {
   return async function route(request, env = {}, ctx = {}) {
     const id = requestId(request);
@@ -396,7 +398,10 @@ async function readCanonicalWorldState(env, injectedNotion) {
   const notion = injectedNotion || new NotionClient(env);
   const tree = await notion.getPageTree(WORLD_PAGE_IDS.save, {
     maxDepth: 0,
-    maxNodes: 10,
+    // The save page grows with the story.  This preflight must follow Notion's
+    // pagination instead of assuming the canonical marker is within the first
+    // ten blocks, otherwise a healthy long-running world cannot be archived.
+    maxNodes: CANONICAL_STATE_MAX_NODES,
     concurrency: 1,
     includePage: false,
   });

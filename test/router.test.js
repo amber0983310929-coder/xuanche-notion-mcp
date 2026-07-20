@@ -97,6 +97,57 @@ test("archive reset is queued into a durable workflow and exposes an inspectable
   assert.equal(statusPayload.data.workflowStatus, "queued");
 });
 
+test("archive reset preflight paginates a canonical save page larger than ten blocks", async () => {
+  const records = new Map();
+  let receivedOptions;
+  const workflow = {
+    async createBatch() { return [{ id: "workflow-large-save" }]; },
+    async get(id) {
+      return { id, async status() { return { status: "queued" }; } };
+    },
+  };
+  const cache = {
+    kv: {},
+    async get(key) { return records.get(key); },
+    async put(key, value) { records.set(key, value); return value; },
+    async delete(key) { records.delete(key); },
+    async deletePrefix() { return 0; },
+  };
+  const children = [
+    ...Array.from({ length: 12 }, (_, index) => ({
+      type: "paragraph",
+      paragraph: { rich_text: [{ plain_text: `turn summary ${index + 1}` }] },
+    })),
+    { type: "paragraph", paragraph: { rich_text: [{ plain_text: "WORLD_STATE：ACTIVE" }] } },
+    { type: "paragraph", paragraph: { rich_text: [{ plain_text: "WORLD_ID：W20260719-9E6FAA5A" }] } },
+  ];
+  const notion = {
+    configured: true,
+    async getPageTree(_pageId, options) {
+      receivedOptions = options;
+      if (options.maxNodes < children.length) {
+        throw new Error(`Notion tree exceeds the ${options.maxNodes} node safety limit`);
+      }
+      return { children };
+    },
+  };
+  const route = createRouter({ cache, notion });
+  const response = await route(new Request("https://example.test/world/archive-reset", {
+    method: "POST",
+    headers: { "content-type": "application/json", "X-API-Key": "required" },
+    body: JSON.stringify({
+      confirmation: "ARCHIVE_AND_RESET",
+      expectedWorldId: "W20260719-9E6FAA5A",
+      operationKey: "archive-reset-large-save-001",
+    }),
+  }), { XUANCHE_API_KEY: "required", WORLD_RESET_WORKFLOW: workflow });
+
+  assert.equal(response.status, 202);
+  assert.equal(receivedOptions.maxDepth, 0);
+  assert.equal(receivedOptions.maxNodes, 5_000);
+  assert.equal(receivedOptions.includePage, false);
+});
+
 test("archive reset refuses to run synchronously without its durable workflow", async () => {
   const route = createRouter();
   const response = await route(new Request("https://example.test/world/archive-reset", {
