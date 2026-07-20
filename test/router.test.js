@@ -20,6 +20,7 @@ test("health reports integrations without exposing secrets", async () => {
   assert.equal(body.capabilities.semanticBlockTargets, true);
   assert.equal(body.capabilities.idempotentRevisionReplay, true);
   assert.equal(body.capabilities.batchedArchiveReset, true);
+  assert.equal(body.capabilities.isolatedArchiveBatchInvocations, false);
   assert.equal(JSON.stringify(body).includes("secret"), false);
 });
 

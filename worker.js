@@ -1,5 +1,6 @@
 import { createRouter } from "./src/router.js";
 export { WorldArchiveResetWorkflow } from "./src/archive-reset-workflow.js";
+export { WorldArchiveStepExecutor } from "./src/archive-step-executor.js";
 export { WorldTurnCoordinator } from "./src/turn-coordinator.js";
 
 const router = createRouter();

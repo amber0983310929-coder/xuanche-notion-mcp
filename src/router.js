@@ -81,6 +81,7 @@ export function createRouter(dependencies = {}) {
             atomicWorldInitialization: true,
             verifiedWorldArchiveAndReset: true,
             batchedArchiveReset: true,
+            isolatedArchiveBatchInvocations: Boolean(env.WORLD_ARCHIVE_STEP_EXECUTOR),
             durableArchiveReset: Boolean(env.WORLD_RESET_WORKFLOW?.createBatch),
           },
           protectedReads: readsRequireApiKey(env),

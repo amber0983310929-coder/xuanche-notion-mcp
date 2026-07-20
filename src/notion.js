@@ -1,7 +1,7 @@
 import { ApiError, mapLimit, normalizeNotionId, retryDelay, sleep } from "./utils.js";
 
 export class NotionClient {
-  constructor(env = {}, fetchImpl = fetch) {
+  constructor(env = {}, fetchImpl = fetch, options = {}) {
     this.token = env.NOTION_TOKEN;
     this.version = env.NOTION_VERSION || "2022-06-28";
     this.baseUrl = env.NOTION_API_BASE_URL || "https://api.notion.com/v1";
@@ -12,6 +12,10 @@ export class NotionClient {
     this.minimumRequestIntervalMs = Number.isFinite(configuredInterval)
       ? Math.min(2_000, Math.max(0, configuredInterval))
       : 400;
+    const configuredAttempts = Number(options.maxRequestAttempts ?? env.NOTION_MAX_REQUEST_ATTEMPTS ?? 4);
+    this.maxRequestAttempts = Number.isFinite(configuredAttempts)
+      ? Math.min(4, Math.max(1, Math.trunc(configuredAttempts)))
+      : 4;
     this.nextRequestAt = 0;
     this.requestSlot = Promise.resolve();
   }
@@ -23,7 +27,7 @@ export class NotionClient {
   async request(path, { method = "GET", body, headers = {} } = {}) {
     if (!this.token) throw new ApiError(503, "NOTION_TOKEN is not configured");
     let response;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    for (let attempt = 0; attempt < this.maxRequestAttempts; attempt += 1) {
       await this.waitForRequestSlot();
       response = await this.fetch(`${this.baseUrl}${path}`, {
         method,
@@ -35,7 +39,10 @@ export class NotionClient {
         },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
-      if (![429, 500, 502, 503, 504, 529].includes(response.status) || attempt === 3) break;
+      if (
+        ![429, 500, 502, 503, 504, 529].includes(response.status) ||
+        attempt === this.maxRequestAttempts - 1
+      ) break;
       await sleep(retryDelay(response, attempt));
     }
     const payload = await response.json().catch(() => ({}));

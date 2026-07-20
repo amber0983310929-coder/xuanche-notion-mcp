@@ -35,6 +35,14 @@ class_name = "WorldArchiveResetWorkflow"
 name = "WORLD_TURN_COORDINATOR"
 class_name = "WorldTurnCoordinator"
 
+[[durable_objects.bindings]]
+name = "WORLD_ARCHIVE_STEP_EXECUTOR"
+class_name = "WorldArchiveStepExecutor"
+
 [[migrations]]
 tag = "v0.6.0"
 new_sqlite_classes = ["WorldTurnCoordinator"]
+
+[[migrations]]
+tag = "v0.6.1"
+new_sqlite_classes = ["WorldArchiveStepExecutor"]

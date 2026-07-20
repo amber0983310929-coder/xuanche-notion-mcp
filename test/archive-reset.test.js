@@ -315,7 +315,7 @@ test("a large fixed page is archived in cursor-checkpointed 100-block batches", 
   );
 });
 
-test("clearing a large fixed page archives at most 30 blocks per resumable step", async () => {
+test("clearing a large fixed page archives at most 40 blocks per resumable step", async () => {
   const { notion, pages, stats } = createNotionMock();
   const key = "save";
   pages.get(WORLD_PAGE_IDS[key]).children.push(
@@ -346,8 +346,8 @@ test("clearing a large fixed page archives at most 30 blocks per resumable step"
   }
   await markStagedPageEmpty({}, request, key, deps);
 
-  assert.equal(batchSizes.length, 3);
-  assert.equal(Math.max(...batchSizes) <= 30, true);
+  assert.equal(batchSizes.length, 2);
+  assert.equal(Math.max(...batchSizes) <= 40, true);
   assert.equal(batchSizes.reduce((sum, value) => sum + value, 0), 74);
   const live = pages.get(WORLD_PAGE_IDS[key]).children.filter((item) => !item.archived);
   assert.equal(live.length, 1);

@@ -77,7 +77,7 @@ Call POST /world/initialize exactly once after explicit character confirmation. 
 
 ## Deployment
 
-Store NOTION_TOKEN, GITHUB_TOKEN, and XUANCHE_API_KEY as Worker secrets. Keep compatibility_date current, keep observability enabled, bind XUANCHE_CACHE, and deploy the configured WORLD_TURN_COORDINATOR Durable Object migration.
+Store NOTION_TOKEN, GITHUB_TOKEN, and XUANCHE_API_KEY as Worker secrets. Keep compatibility_date current, keep observability enabled, bind XUANCHE_CACHE, and deploy the configured WORLD_TURN_COORDINATOR and WORLD_ARCHIVE_STEP_EXECUTOR Durable Object migrations.
 
 NOTION_MIN_REQUEST_INTERVAL_MS defaults to 400 so one Worker instance stays below Notion's documented average of three requests per second. The client also honors Retry-After for HTTP 429 and 529 responses.
 

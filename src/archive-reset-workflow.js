@@ -1,24 +1,16 @@
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import {
-  beginStagedPageArchive,
-  captureStagedPageBatch,
-  clearStagedPageBatch,
-  clearStagedWorldCacheBatch,
-  finalizeStagedPageArchive,
-  finalizeStagedArchiveReset,
-  markStagedPageEmpty,
-  markStagedPageResetting,
-  prepareStagedArchiveReset,
-  verifyStagedArchive,
-} from "./archive-reset-staged.js";
+  ARCHIVE_RESET_STEPS,
+  executeArchiveResetStepThroughBinding,
+} from "./archive-reset-step.js";
 import { CacheStore } from "./cache.js";
 import { ACTIVE_RESET_LOCK, getActiveReset } from "./reset-lock.js";
 import { STATE_PAGE_KEYS } from "./world-state.js";
 
 /**
- * Every Workflow step is intentionally page-scoped.  Workflows protect total
- * elapsed time, while page-scoping also keeps each Worker invocation under
- * Cloudflare's subrequest ceiling.
+ * The Free plan counts external subrequests across an entire Workflow
+ * instance. Every step therefore delegates one bounded batch to a Durable
+ * Object invocation, while the Workflow only spends internal-service calls.
  */
 export class WorldArchiveResetWorkflow extends WorkflowEntrypoint {
   async run(event, step) {
@@ -26,42 +18,48 @@ export class WorldArchiveResetWorkflow extends WorkflowEntrypoint {
       retries: { limit: 2, delay: "5 seconds", backoff: "exponential" },
       timeout: "15 minutes",
     };
+    const runStep = (operation, key) => executeArchiveResetStepThroughBinding(
+      this.env.WORLD_ARCHIVE_STEP_EXECUTOR,
+      event.payload,
+      operation,
+      key,
+    );
     try {
       await step.do("prepare archive checkpoint", options, () =>
-        prepareStagedArchiveReset(this.env, event.payload));
+        runStep(ARCHIVE_RESET_STEPS.PREPARE));
 
       for (const key of STATE_PAGE_KEYS) {
         let archiveState = await step.do("begin archive " + key, options, () =>
-          beginStagedPageArchive(this.env, event.payload, key));
+          runStep(ARCHIVE_RESET_STEPS.BEGIN_PAGE, key));
         let batchIndex = archiveState.batchIndex || 0;
         while (!archiveState.done) {
           const currentBatch = batchIndex;
           archiveState = await step.do("capture archive " + key + " batch " + currentBatch, options, () =>
-            captureStagedPageBatch(this.env, event.payload, key));
+            runStep(ARCHIVE_RESET_STEPS.CAPTURE_PAGE_BATCH, key));
           batchIndex = archiveState.batchIndex;
           if (batchIndex > 50) throw new Error("Archive batch safety limit exceeded for " + key);
         }
         await step.do("finalize archive " + key, options, () =>
-          finalizeStagedPageArchive(this.env, event.payload, key));
+          runStep(ARCHIVE_RESET_STEPS.FINALIZE_PAGE, key));
       }
 
       await step.do("verify complete archive", options, () =>
-        verifyStagedArchive(this.env, event.payload));
+        runStep(ARCHIVE_RESET_STEPS.VERIFY_ARCHIVE));
 
       for (const key of STATE_PAGE_KEYS) {
         await step.do("mark resetting " + key, options, () =>
-          markStagedPageResetting(this.env, event.payload, key));
+          runStep(ARCHIVE_RESET_STEPS.MARK_PAGE_RESETTING, key));
         let clearState = { done: false };
         let clearBatch = 0;
         while (!clearState.done) {
           const currentBatch = clearBatch;
           clearState = await step.do("clear world blocks " + key + " batch " + currentBatch, options, () =>
-            clearStagedPageBatch(this.env, event.payload, key));
+            runStep(ARCHIVE_RESET_STEPS.CLEAR_PAGE_BATCH, key));
           clearBatch += 1;
           if (clearBatch > 200) throw new Error("Reset batch safety limit exceeded for " + key);
         }
         await step.do("mark empty " + key, options, () =>
-          markStagedPageEmpty(this.env, event.payload, key));
+          runStep(ARCHIVE_RESET_STEPS.MARK_PAGE_EMPTY, key));
       }
 
       let cacheState = { done: false };
@@ -69,13 +67,13 @@ export class WorldArchiveResetWorkflow extends WorkflowEntrypoint {
       while (!cacheState.done) {
         const currentBatch = cacheBatch;
         cacheState = await step.do("clear world cache batch " + currentBatch, options, () =>
-          clearStagedWorldCacheBatch(this.env, event.payload));
+          runStep(ARCHIVE_RESET_STEPS.CLEAR_CACHE_BATCH));
         cacheBatch += 1;
         if (cacheBatch > 100) throw new Error("Cache reset batch safety limit exceeded");
       }
 
       const result = await step.do("finalize reset", options, () =>
-        finalizeStagedArchiveReset(this.env, event.payload));
+        runStep(ARCHIVE_RESET_STEPS.FINALIZE_RESET));
 
       return {
         archiveVerified: result.archived === true,

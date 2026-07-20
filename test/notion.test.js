@@ -142,6 +142,20 @@ test("Notion client spaces concurrent requests to stay below the configured rate
   assert.ok(starts[1] - starts[0] >= 15);
 });
 
+test("Notion client can leave transient retries to an outer Workflow invocation", async () => {
+  let calls = 0;
+  const notion = new NotionClient({
+    NOTION_TOKEN: "test",
+    NOTION_MIN_REQUEST_INTERVAL_MS: "0",
+  }, async () => {
+    calls += 1;
+    return response({ message: "try again" }, 503);
+  }, { maxRequestAttempts: 1 });
+
+  await assert.rejects(notion.listBlockChildren(PAGE), (error) => error.status === 503);
+  assert.equal(calls, 1);
+});
+
 function response(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }

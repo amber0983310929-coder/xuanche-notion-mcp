@@ -26,8 +26,10 @@ const SNAPSHOT_CHUNK_SIZE = 1_500;
 const MARKER_SCAN_MAX_NODES = 100;
 const ARCHIVE_PAGE_BATCH_SIZE = 100;
 const MAX_ARCHIVE_BATCHES = Math.ceil(MAX_SNAPSHOT_NODES / ARCHIVE_PAGE_BATCH_SIZE);
-const CLEAR_BATCH_SIZE = 30;
+const CLEAR_BATCH_SIZE = 40;
 const LOCK_TTL_SECONDS = 86_400;
+const ARCHIVE_PARENT_SCAN_MAX_NODES = 500;
+const MAX_STATUS_MIRROR_UPDATES = 12;
 
 /**
  * The legacy archive implementation performed every page copy, verification,
@@ -708,8 +710,26 @@ async function findOrCreateChildPage(notion, parentPageId, title) {
 }
 
 async function findChildPage(notion, parentPageId, title) {
-  const children = await notion.listAllBlockChildren(parentPageId, { maxNodes: 5_000 });
-  return children.find((block) => block.type === "child_page" && block.child_page?.title === title) || null;
+  const listed = typeof notion.listBlockChildrenUpTo === "function"
+    ? await notion.listBlockChildrenUpTo(parentPageId, {
+      maxNodes: ARCHIVE_PARENT_SCAN_MAX_NODES,
+    })
+    : {
+      results: await notion.listAllBlockChildren(parentPageId, {
+        maxNodes: ARCHIVE_PARENT_SCAN_MAX_NODES,
+      }),
+      truncated: false,
+    };
+  const found = listed.results.find((block) =>
+    block.type === "child_page" && block.child_page?.title === title) || null;
+  if (!found && listed.truncated) {
+    throw new ApiError(422, "Archive parent exceeds the bounded child-page discovery limit", {
+      parentPageId,
+      maxNodes: ARCHIVE_PARENT_SCAN_MAX_NODES,
+      title,
+    });
+  }
+  return found;
 }
 
 async function appendTextBlocks(notion, pageId, lines) {
@@ -741,6 +761,13 @@ async function mirrorEmptyWorldStatus(notion) {
           next = "目前世界狀態：EMPTY。沒有可續接角色或劇情。";
         }
         if (next && next !== current) {
+          if (updates >= MAX_STATUS_MIRROR_UPDATES) {
+            return {
+              status: "pending",
+              updates,
+              error: "Status mirror update limit reached; core world reset is complete",
+            };
+          }
           await notion.updateBlock(block.id, { type: block.type, text: next });
           updates += 1;
         }
